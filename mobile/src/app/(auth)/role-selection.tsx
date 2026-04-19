@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView, Dimensions, Platform } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -125,13 +125,21 @@ export default function RoleSelectionScreen() {
   const insets = useSafeAreaInsets();
   const setUserRole = useAuthStore((state) => state.setUserRole);
 
+  const screenOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    screenOpacity.value = withTiming(1, { duration: 600 });
+  }, []);
+
   const handleRoleSelect = (role: 'parent' | 'child') => {
     setUserRole(role);
     router.push('/login');
   };
 
+  const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
+
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, animatedScreenStyle]}>
       <ScrollView contentContainerStyle={[styles.scrollCanvas, { paddingTop: Math.max(insets.top, 24) }]} showsVerticalScrollIndicator={false}>
         {/* Top Header */}
         <View style={styles.header}>
@@ -143,6 +151,7 @@ export default function RoleSelectionScreen() {
 
         <View style={styles.titleContainer}>
           <Text style={styles.titleText}>Who is joining the{"\n"}<Text style={styles.titleItalic}>sanctuary</Text> today?</Text>
+          <Text style={styles.titleSubtitle}>A Shared Digital Experience</Text>
         </View>
 
         <View style={styles.roleGrid}>
@@ -150,20 +159,9 @@ export default function RoleSelectionScreen() {
           <ChildRoleNode onPress={() => handleRoleSelect('child')} />
         </View>
 
-        <View style={styles.indicatorContainer}>
-          <Svg width={1} height={96} viewBox="0 0 1 96" style={styles.indicatorLine}>
-            <Defs>
-              <LinearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="96">
-                <Stop offset="0" stopColor="#44674d" stopOpacity="0.3" />
-                <Stop offset="100" stopColor="#44674d" stopOpacity="0" />
-              </LinearGradient>
-            </Defs>
-            <Rect width={1} height={96} fill="url(#lineGrad)" />
-          </Svg>
-          <Text style={styles.indicatorText}>A Shared Digital Experience</Text>
-        </View>
+        {/* Removed indicator container (vertical line) as requested */}
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -214,8 +212,18 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     textAlign: 'center',
   },
+  titleSubtitle: {
+    color: '#807a6d',
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontWeight: '500',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 2.4,
+    marginTop: 16,
+    textAlign: 'center',
+  },
   titleItalic: {
-    color: '#44674d', // text-primary primary color mapping
+    color: '#44674d',
     fontStyle: 'italic',
   },
   roleGrid: {
@@ -273,19 +281,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 16,
   },
-  indicatorContainer: {
-    marginTop: 80, // mt-20
-    alignItems: 'center',
-  },
-  indicatorLine: {
-    marginBottom: 32, // mb-8
-  },
-  indicatorText: {
-    color: '#807a6d', // text-outline
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 2.4, // tracking-[0.2em]
-  }
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, KeyboardAvoidingView, Platform, TextInput, Image } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -6,61 +6,8 @@ import { MaterialIcons, AntDesign } from '@expo/vector-icons';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import Svg, { Path } from 'react-native-svg';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
-const CustomInput = ({
-  label,
-  icon,
-  placeholder,
-  value,
-  onChangeText,
-  secureTextEntry
-}: any) => {
-  const [isFocused, setIsFocused] = useState(false);
-  const focusProgress = useSharedValue(0);
-
-  const handleFocus = () => {
-    setIsFocused(true);
-    focusProgress.value = withTiming(1, { duration: 300 });
-  };
-
-  const handleBlur = () => {
-    setIsFocused(false);
-    focusProgress.value = withTiming(0, { duration: 300 });
-  };
-
-  const animatedRing = useAnimatedStyle(() => ({
-    opacity: focusProgress.value,
-  }));
-
-  return (
-    <View style={styles.inputWrapper}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.inputContainer}>
-        {/* Animated focus ring */}
-        <View style={[StyleSheet.absoluteFill, styles.inputBaseElement]} />
-        <Animated.View style={[StyleSheet.absoluteFill, styles.inputFocusElement, animatedRing]} pointerEvents="none" />
-
-        <TextInput
-          placeholder={placeholder}
-          placeholderTextColor="#b9b1a3" // text-outline-variant approximating placeholder:text-outline
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          style={styles.textInput}
-          autoCapitalize="none"
-        />
-        <MaterialIcons
-          name={icon}
-          size={24}
-          color={isFocused ? "#44674d" : "rgba(68,103,77,0.4)"}
-          style={styles.inputIcon}
-        />
-      </View>
-    </View>
-  );
-};
 
 // Generic Hearth Shape overlapping blob exactly matching the stitch CSS shape map
 const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
@@ -70,107 +17,117 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  const screenOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    screenOpacity.value = withTiming(1, { duration: 600 });
+  }, []);
+
   const handleLogin = async () => {
     // Simulate login
     setIsAuthenticated(true);
-    if (userRole === 'parent' && !useAuthStore.getState().hasCompletedOnboarding) {
+    if (!useAuthStore.getState().hasCompletedOnboarding) {
       router.replace('/onboarding');
     } else {
-      router.replace('/home');
+      router.replace('/(tabs)/home');
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      {/* Background SVG Blobs mimicking complex layout boundaries perfectly mapping the hearth-shape */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        {/* Top Left Blob w-48 h-48 bg-primary-container/30 hearth-shape */}
-        <Svg width={192} height={192} viewBox="0 0 256 256" style={{ position: 'absolute', top: -64, left: -48, opacity: 0.15 }}>
-          <Path d={hearthShapeBlock} fill="#c5eccc" />
-        </Svg>
-        {/* Top Right Blob w-64 h-64 bg-secondary-container/20 hearth-shape */}
-        <Svg width={256} height={256} viewBox="0 0 256 256" style={{ position: 'absolute', top: 0, right: -128, marginTop: -128, opacity: 0.15, transform: [{ rotate: '45deg' }] }}>
-          <Path d={hearthShapeBlock} fill="#ffdad3" />
-        </Svg>
-        {/* Bottom Left Blob w-96 h-96 bg-tertiary-container/20 hearth-shape */}
-        <Svg width={384} height={384} viewBox="0 0 256 256" style={{ position: 'absolute', bottom: -192, left: -192, opacity: 0.15, transform: [{ rotate: '120deg' }] }}>
-          <Path d={hearthShapeBlock} fill="#d3fbda" />
-        </Svg>
-      </View>
+  const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
 
-      <View style={styles.fixedContent}>
-        {/* Header Identity */}
-        <View style={styles.headerArea}>
-          <View style={styles.headerLogoCircle}>
-            <MaterialIcons name="spa" size={32} color="#e8ffea" />
-          </View>
-          <Text style={styles.welcomeText}>Welcome Back</Text>
-          <Text style={styles.subWelcomeText}>Enter your sanctuary</Text>
+  return (
+    <Animated.View style={[styles.container, animatedScreenStyle]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.innerContainer}
+      >
+        {/* Background SVG Blobs mimicking complex layout boundaries perfectly mapping the hearth-shape */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {/* Top Left Blob w-48 h-48 bg-primary-container/30 hearth-shape */}
+          <Svg width={192} height={192} viewBox="0 0 256 256" style={{ position: 'absolute', top: -64, left: -48, opacity: 0.15 }}>
+            <Path d={hearthShapeBlock} fill="#c5eccc" />
+          </Svg>
+          {/* Top Right Blob w-64 h-64 bg-secondary-container/20 hearth-shape */}
+          <Svg width={256} height={256} viewBox="0 0 256 256" style={{ position: 'absolute', top: 0, right: -128, marginTop: -128, opacity: 0.15, transform: [{ rotate: '45deg' }] }}>
+            <Path d={hearthShapeBlock} fill="#ffdad3" />
+          </Svg>
+          {/* Bottom Left Blob w-96 h-96 bg-tertiary-container/20 hearth-shape */}
+          <Svg width={384} height={384} viewBox="0 0 256 256" style={{ position: 'absolute', bottom: -192, left: -192, opacity: 0.15, transform: [{ rotate: '120deg' }] }}>
+            <Path d={hearthShapeBlock} fill="#d3fbda" />
+          </Svg>
         </View>
 
-        {/* Form Module */}
-        <View style={styles.formArea}>
-          <CustomInput
-            label="Email Address"
-            placeholder="hello@sanctuary.com"
-            icon="mail"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <View style={styles.passwordWrapper}>
-            <CustomInput
-              label="Password"
-              placeholder="••••••••"
-              icon="lock"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-            <Pressable style={styles.forgotBtn}>
-              <Text style={styles.forgotBtnText}>Forgot Password?</Text>
-            </Pressable>
+        <View style={styles.fixedContent}>
+          {/* Header Identity */}
+          <View style={styles.headerArea}>
+            <View style={styles.headerLogoCircle}>
+              <MaterialIcons name="spa" size={32} color="#e8ffea" />
+            </View>
+            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.subWelcomeText}>Enter your sanctuary</Text>
           </View>
 
-          {/* Core Action */}
-          <View style={styles.actionsBox}>
-            <Button
-              title="Login"
-              onPress={handleLogin}
-              icon="arrow-forward"
+          {/* Form Module */}
+          <View style={styles.formArea}>
+            <Input
+              label="Email Address"
+              placeholder="hello@sanctuary.com"
+              icon="mail"
+              value={email}
+              onChangeText={setEmail}
             />
 
-            <View style={styles.createAccountBox}>
-              <Text style={styles.newToText}>New to Nurturing Atelier?</Text>
-              <Pressable onPress={() => router.push('/register')}>
-                <Text style={styles.createAccountLink}>Create an Account</Text>
+            <View style={styles.passwordWrapper}>
+              <Input
+                label="Password"
+                placeholder="••••••••"
+                icon="lock"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
+              <Pressable style={styles.forgotBtn}>
+                <Text style={styles.forgotBtnText}>Forgot Password?</Text>
               </Pressable>
+            </View>
+
+            {/* Core Action */}
+            <View style={styles.actionsBox}>
+              <Button
+                title="Login"
+                onPress={handleLogin}
+                icon="arrow-forward"
+              />
+
+              <View style={styles.createAccountBox}>
+                <Text style={styles.newToText}>New to Nurturing Atelier?</Text>
+                <Pressable onPress={() => router.push('/register')}>
+                  <Text style={styles.createAccountLink}>Create an Account</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+
+          {/* Social Links Footer - Google Only via instruction */}
+          <View style={styles.footerArea}>
+            <View style={styles.dividerBox}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Or Sanctuary Access</Text>
+              <View style={styles.dividerLine} />
+            </View>
+            <View style={styles.socialGrid}>
+              <Button 
+                 imageSource={{ uri: 'https://img.icons8.com/color/48/000000/google-logo.png' }}
+                 onPress={() => {}}
+                 variant="secondary"
+                 style={styles.socialBtnSingle}
+              />
             </View>
           </View>
         </View>
 
-        {/* Social Links Footer - Google Only via instruction */}
-        <View style={styles.footerArea}>
-          <View style={styles.dividerBox}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Or Sanctuary Access</Text>
-            <View style={styles.dividerLine} />
-          </View>
-          <View style={styles.socialGrid}>
-            <Button 
-               imageSource={{ uri: 'https://img.icons8.com/color/48/000000/google-logo.png' }}
-               onPress={() => {}}
-               variant="secondary"
-               style={styles.socialBtnSingle}
-            />
-          </View>
-        </View>
-      </View>
-
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </Animated.View>
   );
 }
 
@@ -178,6 +135,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff8f0', // AuthColors.surface
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
   },
   fixedContent: {
     flex: 1,
@@ -224,48 +185,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 448,
     gap: 20, // space-y-5
-  },
-  inputWrapper: {
-    width: '100%',
-  },
-  inputLabel: {
-    color: 'rgba(100, 94, 83, 0.7)', // text-on-surface-variant/70
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-    fontSize: 12, // text-xs
-    textTransform: 'uppercase',
-    letterSpacing: 2.4, // tracking-widest
-    marginBottom: 8, // mb-2
-    marginLeft: 16, // ml-4
-  },
-  inputContainer: {
-    width: '100%',
-    height: 64, // h-16
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 16, // rounded-lg
-    paddingHorizontal: 24, // px-6
-  },
-  inputBaseElement: {
-    backgroundColor: '#faf3e7', // bg-surface-container-low
-    borderRadius: 16,
-  },
-  inputFocusElement: {
-    backgroundColor: '#faf3e7',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(68,103,77,0.2)', // focus:ring-primary/20
-  },
-  textInput: {
-    flex: 1,
-    height: '100%',
-    color: '#363228', // text-on-surface
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 16,
-  },
-  inputIcon: {
-    marginLeft: 16,
   },
   passwordWrapper: {
     width: '100%',

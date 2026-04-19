@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView, Dimensions, Image as RNImage } from 'react-native';
 import { router } from 'expo-router';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Path, Defs, RadialGradient, Stop, Circle, ClipPath, Image as SvgImage, LinearGradient, Rect } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +27,13 @@ const COVER_IMG_URL = "https://lh3.googleusercontent.com/aida-public/AB6AXuDMwCM
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { setHasCompletedOnboarding, setIsAuthenticated } = useAuthStore();
-  
+
+  const screenOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    screenOpacity.value = withTiming(1, { duration: 600 });
+  }, []);
+
   const handleBeginJourney = async () => {
     setHasCompletedOnboarding(true);
     setIsAuthenticated(true);
@@ -39,8 +45,10 @@ export default function OnboardingScreen() {
     console.log('Learn more');
   };
 
+  const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
+
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, animatedScreenStyle]}>
       {/* Global Decorative Blurs */}
       <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }]}>
         <Svg height="100%" width="100%">
@@ -61,7 +69,7 @@ export default function OnboardingScreen() {
         </Svg>
       </View>
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={{ paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }}
         showsVerticalScrollIndicator={false}
       >
@@ -90,56 +98,56 @@ export default function OnboardingScreen() {
           <View style={styles.heroContainer}>
             {/* Background small decorative blurs relative to the image bounding box */}
             <View style={[StyleSheet.absoluteFill, { zIndex: -1 }]}>
-               <Svg height="100%" width="100%" style={{ overflow: 'visible' }}>
-                  <Defs>
-                    <RadialGradient id="imgTopLeft" cx="50%" cy="50%" r="50%">
-                       <Stop offset="0%" stopColor="#d3fbda" stopOpacity="0.3" />
-                       <Stop offset="100%" stopColor="#d3fbda" stopOpacity="0" />
-                    </RadialGradient>
-                    <RadialGradient id="imgBottomRight" cx="50%" cy="50%" r="50%">
-                       <Stop offset="0%" stopColor="#ffdad3" stopOpacity="0.2" />
-                       <Stop offset="100%" stopColor="#ffdad3" stopOpacity="0" />
-                    </RadialGradient>
-                  </Defs>
-                  {/* -top-10 -left-10 w-48 h-48 */}
-                  <Circle cx="-20" cy="-20" r="100" fill="url(#imgTopLeft)" />
-                  {/* -bottom-10 -right-10 w-64 h-64 */}
-                  <Circle cx={SCREEN_WIDTH * 0.8 + 20} cy={SCREEN_WIDTH * 0.8 + 20} r="130" fill="url(#imgBottomRight)" />
-               </Svg>
+              <Svg height="100%" width="100%" style={{ overflow: 'visible' }}>
+                <Defs>
+                  <RadialGradient id="imgTopLeft" cx="50%" cy="50%" r="50%">
+                    <Stop offset="0%" stopColor="#d3fbda" stopOpacity="0.3" />
+                    <Stop offset="100%" stopColor="#d3fbda" stopOpacity="0" />
+                  </RadialGradient>
+                  <RadialGradient id="imgBottomRight" cx="50%" cy="50%" r="50%">
+                    <Stop offset="0%" stopColor="#ffdad3" stopOpacity="0.2" />
+                    <Stop offset="100%" stopColor="#ffdad3" stopOpacity="0" />
+                  </RadialGradient>
+                </Defs>
+                {/* -top-10 -left-10 w-48 h-48 */}
+                <Circle cx="-20" cy="-20" r="100" fill="url(#imgTopLeft)" />
+                {/* -bottom-10 -right-10 w-64 h-64 */}
+                <Circle cx={SCREEN_WIDTH * 0.8 + 20} cy={SCREEN_WIDTH * 0.8 + 20} r="130" fill="url(#imgBottomRight)" />
+              </Svg>
             </View>
 
             {/* The Hearth Container & SVG Mas */}
             <View style={styles.hearthAssetContainer}>
-               <Svg width="100%" height="100%" viewBox="0 0 256 256">
-                  <Defs>
-                    <ClipPath id="imgHearthClip">
-                        <Path d={blobPath} />
-                    </ClipPath>
-                    <LinearGradient id="heroGradOverlay" x1="0%" y1="100%" x2="100%" y2="0%">
-                        <Stop offset="0%" stopColor="#44674d" stopOpacity={0.2} />
-                        <Stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
-                    </LinearGradient>
-                  </Defs>
-                  {/* We set a very similar scale as object-cover using slice */}
-                  <SvgImage 
-                    href={{ uri: COVER_IMG_URL }}
-                    width="256" height="256"
-                    preserveAspectRatio="xMidYMid slice"
-                    clipPath="url(#imgHearthClip)"
-                    opacity={0.8}
-                  />
-                  <Rect width="256" height="256" fill="url(#heroGradOverlay)" clipPath="url(#imgHearthClip)" />
-               </Svg>
+              <Svg width="100%" height="100%" viewBox="0 0 256 256">
+                <Defs>
+                  <ClipPath id="imgHearthClip">
+                    <Path d={blobPath} />
+                  </ClipPath>
+                  <LinearGradient id="heroGradOverlay" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <Stop offset="0%" stopColor="#44674d" stopOpacity={0.2} />
+                    <Stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                  </LinearGradient>
+                </Defs>
+                {/* We set a very similar scale as object-cover using slice */}
+                <SvgImage
+                  href={{ uri: COVER_IMG_URL }}
+                  width="256" height="256"
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath="url(#imgHearthClip)"
+                  opacity={0.8}
+                />
+                <Rect width="256" height="256" fill="url(#heroGradOverlay)" clipPath="url(#imgHearthClip)" />
+              </Svg>
             </View>
 
             {/* Floating Support Badge */}
             <View style={styles.floatingBadge}>
               <View style={styles.floatingIcon}>
-                 <MaterialIcons name="favorite" size={20} color="#ffffff" />
+                <MaterialIcons name="favorite" size={20} color="#ffffff" />
               </View>
               <View style={styles.floatingTexts}>
-                 <Text style={styles.floatingTitle}>Gentle Care</Text>
-                 <Text style={styles.floatingSubtitle}>For your loved ones</Text>
+                <Text style={styles.floatingTitle}>Gentle Care</Text>
+                <Text style={styles.floatingSubtitle}>For your loved ones</Text>
               </View>
             </View>
           </View>
@@ -147,33 +155,33 @@ export default function OnboardingScreen() {
           {/* Text Instruction Block */}
           <View style={styles.textBlock}>
             <Text style={styles.welcomeLabel}>Welcome to the sanctuary</Text>
-            
+
             <Text style={styles.heroTitle}>Your family’s <Text style={{ color: AuthColors.primary, fontStyle: 'italic' }}>digital sanctuary</Text></Text>
-            
+
             <Text style={styles.heroSubtitle}>
               A space for mindful connections and gentle monitoring. We help you nurture growth without intruding on privacy.
             </Text>
 
             {/* Action Buttons */}
             <View style={styles.buttonRow}>
-               <Button 
-                  title="Begin Your Journey"
-                  onPress={handleBeginJourney}
-                  icon="arrow-forward"
-               />
-               <Button 
-                  title="Learn More"
-                  onPress={handleLearnMore}
-                  variant="secondary"
-               />
+              <Button
+                title="Begin Your Journey"
+                onPress={handleBeginJourney}
+                icon="arrow-forward"
+              />
+              <Button
+                title="Learn More"
+                onPress={handleLearnMore}
+                variant="secondary"
+              />
             </View>
 
             {/* Social Proof */}
             <View style={styles.socialProof}>
               <View style={styles.avatarCluster}>
-                 <RNImage source={{ uri: AVATAR_URLS[0] }} style={styles.avatar} />
-                 <RNImage source={{ uri: AVATAR_URLS[1] }} style={[styles.avatar, styles.overlapAvatar]} />
-                 <RNImage source={{ uri: AVATAR_URLS[2] }} style={[styles.avatar, styles.overlapAvatar]} />
+                <RNImage source={{ uri: AVATAR_URLS[0] }} style={styles.avatar} />
+                <RNImage source={{ uri: AVATAR_URLS[1] }} style={[styles.avatar, styles.overlapAvatar]} />
+                <RNImage source={{ uri: AVATAR_URLS[2] }} style={[styles.avatar, styles.overlapAvatar]} />
               </View>
               <Text style={styles.socialProofText}>Trusted by 2,000+ families</Text>
             </View>
@@ -182,16 +190,16 @@ export default function OnboardingScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-           <Text style={styles.copyrightText}>© 2024 Nurturing Atelier. All rights reserved.</Text>
-           <View style={styles.footerLinks}>
-              <Text style={styles.footerLink}>Privacy First</Text>
-              <Text style={styles.footerLink}>Our Values</Text>
-              <Text style={styles.footerLink}>Help Center</Text>
-           </View>
+          <Text style={styles.copyrightText}>© 2024 Nurturing Atelier. All rights reserved.</Text>
+          <View style={styles.footerLinks}>
+            <Text style={styles.footerLink}>Privacy First</Text>
+            <Text style={styles.footerLink}>Our Values</Text>
+            <Text style={styles.footerLink}>Help Center</Text>
+          </View>
         </View>
 
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -257,7 +265,7 @@ const styles = StyleSheet.create({
   floatingBadge: {
     position: 'absolute',
     bottom: 24,
-    right: -16, 
+    right: -16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
@@ -299,7 +307,7 @@ const styles = StyleSheet.create({
     fontSize: 12, // `text-xs`
   },
   textBlock: {
-    width: '100%', 
+    width: '100%',
     maxWidth: 420,
     alignItems: 'center',
   },

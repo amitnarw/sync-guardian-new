@@ -8,19 +8,19 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
+  runOnJS,
 } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient, Stop, RadialGradient as SvgRadialGradient, Circle } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { StatusBar } from 'expo-status-bar';
-import { useAuthTheme } from '@/hooks/use-auth-theme';
 import { AuthColors } from '@/constants/auth-theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Organic blob path approximating web border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%
-const blobPath = "M107.52 0 L148.48 0 C207.87 0 256 51.53 256 115.2 L256 140.8 C256 204.47 196.2 256 122.88 256 L76.8 256 C34.38 256 0 204.47 0 140.8 L0 115.2 C0 51.53 48.12 0 107.52 0 Z";
+// Exact blob path from border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%
+const blobPath = "M107.52 0 A148.48 115.2 0 0 1 256 115.2 A179.2 140.8 0 0 1 76.8 256 A76.8 140.8 0 0 1 0 115.2 A107.52 115.2 0 0 1 107.52 0 Z";
 
 export default function SplashScreen() {
   const insets = useSafeAreaInsets();
@@ -29,7 +29,15 @@ export default function SplashScreen() {
   const containerOpacity = useSharedValue(0);
   const blobScale = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
-  const progressWidth = useSharedValue(0);
+
+  const navigate = () => {
+    ExpoSplashScreen.hideAsync().catch(() => {});
+    if (isAuthenticated) {
+      router.replace('/(tabs)/home'); 
+    } else {
+      router.replace('/role-selection');
+    }
+  };
 
   useEffect(() => {
     ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
@@ -37,25 +45,22 @@ export default function SplashScreen() {
     containerOpacity.value = withTiming(1, { duration: 300 });
     blobScale.value = withDelay(200, withTiming(1, { duration: 800, easing: Easing.out(Easing.back(1.5)) }));
     contentOpacity.value = withDelay(600, withTiming(1, { duration: 600 }));
-    // Load bar goes up to 33% (1/3 of text container w-32)
-    progressWidth.value = withDelay(1000, withTiming(42.6, { duration: 800, easing: Easing.inOut(Easing.ease) }));
 
-    const rootTimeout = setTimeout(() => {
-      ExpoSplashScreen.hideAsync().catch(() => {});
-      if (isAuthenticated) {
-        router.replace('/(tabs)/home'); 
-      } else {
-        router.replace('/role-selection');
-      }
-    }, 2500);
+    const exitTimeout = setTimeout(() => {
+      // Exit Animation: Fade out
+      containerOpacity.value = withTiming(0, { duration: 400 }, (finished) => {
+        if (finished) {
+          runOnJS(navigate)();
+        }
+      });
+    }, 2800);
 
-    return () => clearTimeout(rootTimeout);
+    return () => clearTimeout(exitTimeout);
   }, []);
 
   const animatedContainerStyle = useAnimatedStyle(() => ({ opacity: containerOpacity.value }));
   const animatedBlobStyle = useAnimatedStyle(() => ({ transform: [{ scale: blobScale.value }] }));
   const animatedContentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
-  const animatedProgressStyle = useAnimatedStyle(() => ({ width: progressWidth.value }));
 
   return (
     <Animated.View style={[styles.container, animatedContainerStyle, { paddingTop: Math.max(insets.top, 64), paddingBottom: Math.max(insets.bottom, 64) }]}>
@@ -74,9 +79,7 @@ export default function SplashScreen() {
               <Stop offset="100%" stopColor="#ffdad3" stopOpacity="0" />
             </SvgRadialGradient>
           </Defs>
-          {/* Bottom Left Circle (w-80 h-80 = 320x320) fixed -bottom-32 -left-32 */}
           <Circle cx="-32" cy={SCREEN_HEIGHT + 32} r="250" fill="url(#bottomLeftGlow)" />
-          {/* Top Right Circle (w-64 h-64 = 256x256) fixed -top-20 -right-20 */}
           <Circle cx={SCREEN_WIDTH + 80} cy="-80" r="200" fill="url(#topRightGlow)" />
         </Svg>
       </View>
@@ -118,11 +121,6 @@ export default function SplashScreen() {
       <Animated.View style={[styles.footer, animatedContentStyle]}>
         <Text style={styles.title}>Nurturing Atelier</Text>
         <Text style={styles.subtitle}>Cultivate your digital sanctuary.</Text>
-        
-        {/* Loading Indicator */}
-        <View style={styles.loadingTrack}>
-          <Animated.View style={[styles.loadingFill, animatedProgressStyle]} />
-        </View>
       </Animated.View>
 
     </Animated.View>

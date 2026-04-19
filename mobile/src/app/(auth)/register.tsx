@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, KeyboardAvoidingView, Platform, TextInput, Image } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -6,63 +6,8 @@ import { MaterialIcons, AntDesign } from '@expo/vector-icons';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import Svg, { Path } from 'react-native-svg';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-const CustomInput = ({
-  label,
-  icon,
-  placeholder,
-  value,
-  onChangeText,
-  secureTextEntry
-}: any) => {
-  const [isFocused, setIsFocused] = useState(false);
-  const focusProgress = useSharedValue(0);
-
-  const handleFocus = () => {
-    setIsFocused(true);
-    focusProgress.value = withTiming(1, { duration: 300 });
-  };
-
-  const handleBlur = () => {
-    setIsFocused(false);
-    focusProgress.value = withTiming(0, { duration: 300 });
-  };
-
-  const animatedRing = useAnimatedStyle(() => ({
-    opacity: focusProgress.value,
-  }));
-
-  return (
-    <View style={styles.inputWrapper}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.inputContainer}>
-        {/* Animated focus ring */}
-        <View style={[StyleSheet.absoluteFill, styles.inputBaseElement]} />
-        <Animated.View style={[StyleSheet.absoluteFill, styles.inputFocusElement, animatedRing]} pointerEvents="none" />
-
-        <TextInput
-          placeholder={placeholder}
-          placeholderTextColor="#b9b1a3" // text-outline-variant
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          style={styles.textInput}
-          autoCapitalize="none"
-        />
-        <MaterialIcons
-          name={icon}
-          size={24}
-          color={isFocused ? "#44674d" : "rgba(68,103,77,0.4)"}
-          style={styles.inputIcon}
-        />
-      </View>
-    </View>
-  );
-};
 
 // Generic Hearth Shape
 const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
@@ -73,23 +18,28 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  const screenOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    screenOpacity.value = withTiming(1, { duration: 600 });
+  }, []);
+
   const handleRegister = async () => {
     // Simulate registration
     setIsAuthenticated(true);
     setHasCompletedOnboarding(false); // New users go through onboarding
 
-    if (userRole === 'parent') {
-      router.replace('/onboarding');
-    } else {
-      router.replace('/(tabs)/home');
-    }
+    router.replace('/onboarding');
   };
 
+  const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
+    <Animated.View style={[styles.container, animatedScreenStyle]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.innerContainer}
+      >
       {/* Background SVG Blobs */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <Svg width={192} height={192} viewBox="0 0 256 256" style={{ position: 'absolute', top: -64, left: -48, opacity: 0.15 }}>
@@ -115,21 +65,21 @@ export default function RegisterScreen() {
 
         {/* Form Module */}
         <View style={styles.formArea}>
-          <CustomInput
+          <Input
             label="Full Name"
             placeholder="John Doe"
             icon="person"
             value={name}
             onChangeText={setName}
           />
-          <CustomInput
+          <Input
             label="Email Address"
             placeholder="hello@sanctuary.com"
             icon="mail"
             value={email}
             onChangeText={setEmail}
           />
-          <CustomInput
+          <Input
             label="Password"
             placeholder="••••••••"
             icon="lock"
@@ -174,6 +124,7 @@ export default function RegisterScreen() {
       </View>
 
     </KeyboardAvoidingView>
+  </Animated.View>
   );
 }
 
@@ -227,48 +178,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 448,
     gap: 16, // Reduced gap as requested
-  },
-  inputWrapper: {
-    width: '100%',
-  },
-  inputLabel: {
-    color: 'rgba(100, 94, 83, 0.7)',
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 2.4,
-    marginBottom: 8,
-    marginLeft: 16,
-  },
-  inputContainer: {
-    width: '100%',
-    height: 60, // Slightly shorter to fit content
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 16,
-    paddingHorizontal: 24,
-  },
-  inputBaseElement: {
-    backgroundColor: '#faf3e7',
-    borderRadius: 16,
-  },
-  inputFocusElement: {
-    backgroundColor: '#faf3e7',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(68,103,77,0.2)',
-  },
-  textInput: {
-    flex: 1,
-    height: '100%',
-    color: '#363228',
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 16,
-  },
-  inputIcon: {
-    marginLeft: 16,
   },
   actionsBox: {
     width: '100%',
@@ -329,5 +238,9 @@ const styles = StyleSheet.create({
     borderRadius: 25, // Standardized to half of height for rounded look
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
   },
 });

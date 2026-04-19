@@ -9,6 +9,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AuthColors, AuthFonts, AuthSpacing, AuthRadius, AuthGradients, AuthShadows } from '@/constants/auth-theme';
 import { Button } from '@/components/ui/button';
+import { SymbolView } from 'expo-symbols';
+
+const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
 
 export default function HomeScreen() {
   return (
@@ -33,44 +36,66 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Daily Rhythm Hero */}
-          <View style={styles.heroSection}>
-            <ThemedText style={styles.flowLabel}>MORNING FLOW</ThemedText>
-            <ThemedText style={styles.heroTitle}>
-              Gentle rhythm for{'\n'}
-              <ThemedText style={styles.heroTitlePrimary}>Leo's Wednesday</ThemedText>
-            </ThemedText>
-            <ThemedText style={styles.heroDescription}>
-              Currently in 'Creative Exploration' block. The digital sanctuary is maintaining a calm focus environment.
-            </ThemedText>
+          {/* Daily Rhythm Hero Redesign */}
+          <View style={styles.newHeroSection}>
+            <View style={styles.heroTextContent}>
+              <ThemedText style={styles.newFlowLabel}>MORNING FLOW</ThemedText>
+              <ThemedText style={styles.newHeroTitle}>
+                Gentle rhythm for{'\n'}
+                <ThemedText style={styles.newHeroTitlePrimary}>Leo's Wednesday</ThemedText>
+              </ThemedText>
+              <ThemedText style={styles.newHeroDescription}>
+                Currently in "Creative Exploration" block. The digital sanctuary is maintaining a soft focus environment.
+              </ThemedText>
 
-            <View style={styles.buttonRow}>
-              <Button 
-                title="Adjust Rhythm"
-                onPress={() => {}}
-                style={styles.homeBtn}
-              />
-              <Button 
-                title="View Schedule"
-                onPress={() => {}}
-                variant="secondary"
-                style={styles.homeBtn}
-              />
-            </View>
-          </View>
-
-          {/* Sync Orb Section */}
-          <View style={styles.orbContainer}>
-            <View style={styles.orbStack}>
-              {/* Outer Glows/Circles */}
-              <View style={[styles.orbCircle, styles.orbOuter, { backgroundColor: AuthColors.surfaceContainer }]} />
-              <View style={[styles.orbCircle, styles.orbMiddle, { backgroundColor: AuthColors.primaryFixed }]} />
-              <View style={[styles.orbCircle, styles.orbInner, { backgroundColor: AuthColors.primaryFixedDim }]}>
-                <Ionicons name="shield-checkmark" size={48} color={AuthColors.primary} />
+              <View style={styles.newButtonRow}>
+                <TouchableOpacity style={[styles.newPrimaryButton, styles.shadowPrimary]}>
+                  <ThemedText style={styles.newPrimaryButtonText}>Adjust Rhythm</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.newSecondaryButton}>
+                  <ThemedText style={styles.newSecondaryButtonText}>View Schedule</ThemedText>
+                </TouchableOpacity>
               </View>
             </View>
-            <View style={styles.timeLabelContainer}>
-              <ThemedText style={styles.timeLabel}>1h 12m Remaining</ThemedText>
+
+            <View style={styles.visualContainer}>
+              {/* Hearth Shape Visual */}
+              <View style={styles.hearthVisualStack}>
+                <LinearGradient
+                  colors={[AuthColors.primary, AuthColors.primaryContainer]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.hearthGradient}
+                >
+                  <Svg width={200} height={200} viewBox="0 0 256 256" style={styles.hearthSvg}>
+                    <Path d={hearthShapeBlock} fill="rgba(255,255,255,0.2)" />
+                  </Svg>
+                  <View style={styles.hearthIconOverlay}>
+                    <View style={styles.hearthIconInner}>
+                      <SymbolView 
+                        name="shield_with_heart" 
+                        size={64} 
+                        type="monochrome"
+                        tintColor="#ffffff" 
+                      />
+                    </View>
+                  </View>
+                </LinearGradient>
+                
+                {/* Decorative Blur Background Element */}
+                <View style={styles.decorativeBlob} />
+
+                {/* Floating Overlay Card */}
+                <View style={styles.floatingTimerCard}>
+                  <View style={styles.timerHeader}>
+                    <SymbolView name="timer" size={20} tintColor={AuthColors.secondary} />
+                    <ThemedText style={styles.timerText}>1h 12m Remaining</ThemedText>
+                  </View>
+                  <View style={styles.timerProgressBar}>
+                    <View style={styles.timerProgressFill} />
+                  </View>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -228,82 +253,157 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: AuthColors.surfaceContainerLowest,
   },
-  heroSection: {
-    marginBottom: AuthSpacing.xl,
+  newHeroSection: {
+    marginBottom: AuthSpacing.xxl,
   },
-  flowLabel: {
+  heroTextContent: {
+    marginBottom: AuthSpacing.xl,
+    gap: AuthSpacing.md,
+  },
+  newFlowLabel: {
     ...AuthFonts.labelMedium,
     color: AuthColors.secondary,
-    letterSpacing: 1.5,
-    marginBottom: AuthSpacing.xs,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
-  heroTitle: {
+  newHeroTitle: {
     ...AuthFonts.displaySmall,
     color: AuthColors.onSurface,
     lineHeight: 40,
-    marginBottom: AuthSpacing.sm,
+    fontWeight: '800',
   },
-  heroTitlePrimary: {
+  newHeroTitlePrimary: {
     color: AuthColors.primary,
     fontStyle: 'italic',
   },
-  heroDescription: {
-    ...AuthFonts.bodyMedium,
+  newHeroDescription: {
+    ...AuthFonts.bodyLarge,
     color: AuthColors.onSurfaceVariant,
-    lineHeight: 20,
-    marginBottom: AuthSpacing.lg,
+    lineHeight: 24,
+    maxWidth: 320,
   },
-  buttonRow: {
+  newButtonRow: {
     flexDirection: 'row',
     gap: AuthSpacing.md,
+    marginTop: AuthSpacing.sm,
   },
-  homeBtn: {
-    flex: 1,
-    height: 56,
-  },
-  orbContainer: {
+  newPrimaryButton: {
+    backgroundColor: AuthColors.primary,
+    paddingHorizontal: AuthSpacing.xl,
+    paddingVertical: AuthSpacing.md,
+    borderRadius: AuthRadius.full,
     alignItems: 'center',
-    marginBottom: AuthSpacing.xxl,
-  },
-  orbStack: {
-    width: 240,
-    height: 240,
     justifyContent: 'center',
+  },
+  newPrimaryButtonText: {
+    ...AuthFonts.labelLarge,
+    color: AuthColors.onPrimary,
+    fontWeight: '700',
+  },
+  newSecondaryButton: {
+    backgroundColor: AuthColors.surfaceContainerHigh,
+    paddingHorizontal: AuthSpacing.xl,
+    paddingVertical: AuthSpacing.md,
+    borderRadius: AuthRadius.full,
     alignItems: 'center',
-  },
-  orbCircle: {
-    position: 'absolute',
-    borderRadius: 120,
-  },
-  orbOuter: {
-    width: 280,
-    height: 280,
-    opacity: 0.3,
-  },
-  orbMiddle: {
-    width: 220,
-    height: 220,
-    opacity: 0.5,
-  },
-  orbInner: {
-    width: 160,
-    height: 160,
     justifyContent: 'center',
+  },
+  newSecondaryButtonText: {
+    ...AuthFonts.labelLarge,
+    color: AuthColors.onSurface,
+    fontWeight: '700',
+  },
+  shadowPrimary: {
+    shadowColor: AuthColors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  visualContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: AuthSpacing.lg,
+  },
+  hearthVisualStack: {
+    width: 300,
+    height: 300,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hearthGradient: {
+    width: 260,
+    height: 260,
+    borderRadius: AuthRadius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
     ...AuthShadows.float,
   },
-  timeLabelContainer: {
-    backgroundColor: AuthColors.surfaceContainerLowest,
-    paddingHorizontal: AuthSpacing.md,
-    paddingVertical: AuthSpacing.xs,
-    borderRadius: AuthRadius.full,
-    marginTop: -20,
-    ...AuthShadows.ambient,
+  hearthSvg: {
+    position: 'absolute',
+    opacity: 0.2,
   },
-  timeLabel: {
-    ...AuthFonts.labelMedium,
-    color: AuthColors.error,
-    fontWeight: '700',
+  hearthIconOverlay: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  hearthIconInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  decorativeBlob: {
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    width: 80,
+    height: 80,
+    backgroundColor: 'rgba(159, 64, 45, 0.1)',
+    borderRadius: 40,
+    zIndex: -1,
+  },
+  floatingTimerCard: {
+    position: 'absolute',
+    bottom: 20,
+    left: -20,
+    backgroundColor: AuthColors.surfaceContainerLowest,
+    padding: AuthSpacing.md,
+    borderRadius: AuthRadius.md,
+    minWidth: 180,
+    ...AuthShadows.ambient,
+    borderWidth: 1,
+    borderColor: 'rgba(67, 72, 61, 0.1)',
+  },
+  timerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AuthSpacing.sm,
+    marginBottom: AuthSpacing.sm,
+  },
+  timerText: {
+    ...AuthFonts.labelLarge,
+    color: AuthColors.onSurface,
+    fontWeight: '800',
+  },
+  timerProgressBar: {
+    height: 6,
+    width: '100%',
+    backgroundColor: AuthColors.surfaceContainerHigh,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  timerProgressFill: {
+    height: '100%',
+    backgroundColor: AuthColors.secondary,
+    width: '66%',
+    borderRadius: 3,
   },
   childCard: {
     backgroundColor: AuthColors.surfaceContainerLowest,
