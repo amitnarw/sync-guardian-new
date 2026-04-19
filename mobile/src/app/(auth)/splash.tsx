@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet, View, Text, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import Animated, {
@@ -9,186 +9,230 @@ import Animated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
-import Svg, { Path, Defs, LinearGradient, Stop, RadialGradient, Ellipse } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop, RadialGradient as SvgRadialGradient, Circle } from 'react-native-svg';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuthStore } from '@/hooks/use-auth-store';
+import { StatusBar } from 'expo-status-bar';
+import { useAuthTheme } from '@/hooks/use-auth-theme';
+import { AuthColors } from '@/constants/auth-theme';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Organic blob path approximating web border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%
+const blobPath = "M107.52 0 L148.48 0 C207.87 0 256 51.53 256 115.2 L256 140.8 C256 204.47 196.2 256 122.88 256 L76.8 256 C34.38 256 0 204.47 0 140.8 L0 115.2 C0 51.53 48.12 0 107.52 0 Z";
 
 export default function SplashScreen() {
-  const logoScale = useSharedValue(0);
-  const logoOpacity = useSharedValue(0);
-  const textOpacity = useSharedValue(0);
-  const taglineOpacity = useSharedValue(0);
-  const progressOpacity = useSharedValue(0);
-  const backgroundOpacity = useSharedValue(0);
+  const insets = useSafeAreaInsets();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const routerRef = useRef(router);
-  void routerRef;
+  const containerOpacity = useSharedValue(0);
+  const blobScale = useSharedValue(0);
+  const contentOpacity = useSharedValue(0);
+  const progressWidth = useSharedValue(0);
 
   useEffect(() => {
     ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
 
-    backgroundOpacity.value = withTiming(1, { duration: 300 });
-    logoScale.value = withTiming(1, { duration: 800, easing: Easing.elastic(0.8) });
-    logoOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
-    textOpacity.value = withDelay(800, withTiming(1, { duration: 400 }));
-    taglineOpacity.value = withDelay(1000, withTiming(1, { duration: 400 }));
-    progressOpacity.value = withDelay(1200, withTiming(1, { duration: 400 }));
+    containerOpacity.value = withTiming(1, { duration: 300 });
+    blobScale.value = withDelay(200, withTiming(1, { duration: 800, easing: Easing.out(Easing.back(1.5)) }));
+    contentOpacity.value = withDelay(600, withTiming(1, { duration: 600 }));
+    // Load bar goes up to 33% (1/3 of text container w-32)
+    progressWidth.value = withDelay(1000, withTiming(42.6, { duration: 800, easing: Easing.inOut(Easing.ease) }));
 
-    const hideTimeout = setTimeout(() => {
+    const rootTimeout = setTimeout(() => {
       ExpoSplashScreen.hideAsync().catch(() => {});
+      if (isAuthenticated) {
+        router.replace('/(tabs)/home'); 
+      } else {
+        router.replace('/role-selection');
+      }
     }, 2500);
 
-    const timeout = setTimeout(() => {
-      router.replace('/role-selection');
-    }, 2500);
+    return () => clearTimeout(rootTimeout);
+  }, []);
 
-    return () => {
-      clearTimeout(timeout);
-      clearTimeout(hideTimeout);
-    };
-  }, [logoScale, logoOpacity, textOpacity, taglineOpacity, progressOpacity, backgroundOpacity]);
-
-  const logoAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: logoScale.value }],
-    opacity: logoOpacity.value,
-  }));
-
-  const textAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: textOpacity.value,
-  }));
-
-  const taglineAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: taglineOpacity.value,
-  }));
-
-  const progressAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: progressOpacity.value,
-  }));
-
-  const backgroundAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: backgroundOpacity.value,
-  }));
+  const animatedContainerStyle = useAnimatedStyle(() => ({ opacity: containerOpacity.value }));
+  const animatedBlobStyle = useAnimatedStyle(() => ({ transform: [{ scale: blobScale.value }] }));
+  const animatedContentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
+  const animatedProgressStyle = useAnimatedStyle(() => ({ width: progressWidth.value }));
 
   return (
-    <View style={styles.container}>
-      {/* Radial glow effect */}
-      <View style={styles.radialGlow} />
-
-      {/* Logo - organic blob shape */}
-      <Animated.View style={[styles.logoWrapper, logoAnimatedStyle]}>
-        <Svg width={185} height={285} viewBox="0 0 185 285" style={styles.logoBlob}>
+    <Animated.View style={[styles.container, animatedContainerStyle, { paddingTop: Math.max(insets.top, 64), paddingBottom: Math.max(insets.bottom, 64) }]}>
+      <StatusBar style="dark" />
+      
+      {/* Decorative Fixed Background Blur Elements */}
+      <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', pointerEvents: 'none' }]}>
+        <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
           <Defs>
-            <LinearGradient id="blobGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#5B7C61" />
-              <Stop offset="100%" stopColor="#9FC4A9" />
-            </LinearGradient>
-            <RadialGradient id="innerGlow" cx="50%" cy="30%" r="60%">
-              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.15" />
-              <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-            </RadialGradient>
+            <SvgRadialGradient id="bottomLeftGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+              <Stop offset="0%" stopColor="#c5eccc" stopOpacity="0.2" />
+              <Stop offset="100%" stopColor="#c5eccc" stopOpacity="0" />
+            </SvgRadialGradient>
+            <SvgRadialGradient id="topRightGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+              <Stop offset="0%" stopColor="#ffdad3" stopOpacity="0.1" />
+              <Stop offset="100%" stopColor="#ffdad3" stopOpacity="0" />
+            </SvgRadialGradient>
           </Defs>
-          {/* Main organic blob */}
-          <Path
-            fill="url(#blobGradient)"
-            d="M92.5 10c55 0 85 30 92.5 85 7.5 55-30 95-85 105-55 10-110-10-130-55-20-45 5-135 122.5-135z"
-          />
-          {/* Inner leaf overlay */}
-          <Ellipse cx={92.5} cy={85} rx={55} ry={55} fill="url(#innerGlow)" />
-          {/* Core sprout - three petals */}
-          <Path
-            fill="#E6F2EA"
-            fillOpacity="0.9"
-            d="M92.5 65c0 15-12 25-25 25s-25-10-25-25c0-15 25-35 25-35s25 20 25 35z"
-          />
-          <Path
-            fill="#E6F2EA"
-            fillOpacity="0.9"
-            d="M65 90c0-15 10-25 25-25s25 10 25 25c0 15-10 25-25 25s-25-10-25-25z"
-          />
-          <Path
-            fill="#E6F2EA"
-            fillOpacity="0.9"
-            d="M67.5 72.5c10-10 25-10 25 0s-15 25-25 25-25-10-25-25c0-10 15-10 25 0z"
-          />
+          {/* Bottom Left Circle (w-80 h-80 = 320x320) fixed -bottom-32 -left-32 */}
+          <Circle cx="-32" cy={SCREEN_HEIGHT + 32} r="250" fill="url(#bottomLeftGlow)" />
+          {/* Top Right Circle (w-64 h-64 = 256x256) fixed -top-20 -right-20 */}
+          <Circle cx={SCREEN_WIDTH + 80} cy="-80" r="200" fill="url(#topRightGlow)" />
         </Svg>
-      </Animated.View>
+      </View>
 
-      {/* Title */}
-      <Animated.Text style={[styles.title, textAnimatedStyle, { color: '#2D342E' }]}>
-        Nurturing Atelier
-      </Animated.Text>
+      <View style={styles.topSpacer} />
 
-      {/* Tagline */}
-      <Animated.Text style={[styles.tagline, taglineAnimatedStyle, { color: '#8C8C84' }]}>
-        Cultivate your digital sanctuary.
-      </Animated.Text>
+      <View style={styles.centerCluster}>
+        {/* Soft Shadow Backing */}
+        <Animated.View style={[styles.hearthShadow, animatedBlobStyle]}>
+          <Svg width={320} height={320} viewBox="0 0 256 256">
+            <Path d={blobPath} fill="#363228" opacity={0.04} />
+          </Svg>
+        </Animated.View>
 
-      {/* Progress bar */}
-      <Animated.View style={[styles.progressContainer, progressAnimatedStyle]}>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { backgroundColor: '#5B7C61' }]} />
+        <Animated.View style={[animatedContentStyle, styles.floatersContainer]}>
+           <View style={styles.floaterTopRight} />
+           <View style={styles.floaterBottomLeft} />
+        </Animated.View>
+
+        {/* Logo Container (Organic Blob) */}
+        <Animated.View style={[styles.logoBlobContainer, animatedBlobStyle]}>
+          <Svg width={256} height={256} viewBox="0 0 256 256" style={styles.svgContainer}>
+            <Defs>
+              <LinearGradient id="hearthGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <Stop offset="0%" stopColor="#44674d" />
+                <Stop offset="100%" stopColor="#c5eccc" />
+              </LinearGradient>
+            </Defs>
+            <Path d={blobPath} fill="url(#hearthGrad)" />
+          </Svg>
+          
+          <View style={styles.iconCluster}>
+            <MaterialIcons name="eco" size={192} color="#e8ffea" style={styles.bgIcon} />
+            <MaterialIcons name="spa" size={72} color="#e8ffea" style={styles.fgIcon} />
+          </View>
+        </Animated.View>
+      </View>
+
+      <Animated.View style={[styles.footer, animatedContentStyle]}>
+        <Text style={styles.title}>Nurturing Atelier</Text>
+        <Text style={styles.subtitle}>Cultivate your digital sanctuary.</Text>
+        
+        {/* Loading Indicator */}
+        <View style={styles.loadingTrack}>
+          <Animated.View style={[styles.loadingFill, animatedProgressStyle]} />
         </View>
       </Animated.View>
-    </View>
+
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
+    backgroundColor: AuthColors.background,
     alignItems: 'center',
-    backgroundColor: '#FAF7F2',
-    paddingHorizontal: 32,
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
   },
-  radialGlow: {
+  topSpacer: {
+    width: '100%',
+    height: 48,
+  },
+  centerCluster: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hearthShadow: {
     position: 'absolute',
-    top: '20%',
-    width: 400,
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: '#F0F4F1',
-    opacity: 0.5,
+    transform: [{ scale: 1.25 }],
+    zIndex: 0,
   },
-  logoWrapper: {
-    shadowColor: '#5B7C61',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
+  floatersContainer: {
+    position: 'absolute',
+    width: 256,
+    height: 256,
+    zIndex: 1,
+  },
+  floaterTopRight: {
+    position: 'absolute',
+    top: -32,
+    right: -32,
+    width: 64,
+    height: 64,
+    backgroundColor: '#c5eccc',
+    borderRadius: 32,
+    opacity: 0.4,
+  },
+  floaterBottomLeft: {
+    position: 'absolute',
+    bottom: -40,
+    left: -40,
+    width: 96,
+    height: 96,
+    backgroundColor: '#d3fbda',
+    borderRadius: 48,
+    opacity: 0.3,
+  },
+  logoBlobContainer: {
+    width: 256,
+    height: 256,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 32 },
+    shadowOpacity: 0.08,
+    shadowRadius: 32,
     elevation: 8,
-    marginBottom: 115,
   },
-  logoBlob: {
-    width: 185,
-    height: 285,
+  svgContainer: {
+    position: 'absolute',
+  },
+  iconCluster: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fgIcon: {
+    zIndex: 2,
+  },
+  bgIcon: {
+    position: 'absolute',
+    opacity: 0.2,
+    transform: [{ scale: 1.5 }, { rotate: '12deg' }],
+    zIndex: 1,
+  },
+  footer: {
+    alignItems: 'center',
   },
   title: {
+    color: '#363228',
     fontSize: 24,
     fontWeight: '700',
     letterSpacing: -0.5,
-    marginBottom: 15,
+    opacity: 0.9,
+    marginBottom: 8,
   },
-  tagline: {
-    fontSize: 12,
-    fontWeight: '400',
-    fontStyle: 'normal',
-    marginBottom: 15,
+  subtitle: {
+    color: '#645e53',
+    fontSize: 14,
+    letterSpacing: 0.5,
+    opacity: 0.6,
   },
-  progressContainer: {
-    width: 92,
+  loadingTrack: {
+    marginTop: 48,
+    width: 128,
     height: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressTrack: {
-    width: 92,
-    height: 3,
-    backgroundColor: '#E3D9CC',
-    borderRadius: 1.5,
-    flexDirection: 'row',
+    backgroundColor: '#eae1d2',
+    borderRadius: 2,
     overflow: 'hidden',
   },
-  progressFill: {
-    width: 46,
-    height: 3,
-    borderRadius: 1.5,
+  loadingFill: {
+    height: '100%',
+    backgroundColor: '#44674d',
+    borderRadius: 2,
   },
 });

@@ -7,6 +7,8 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 import Svg, { Path } from 'react-native-svg';
 import { Button } from '@/components/ui/button';
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 const CustomInput = ({
   label,
   icon,
@@ -42,7 +44,7 @@ const CustomInput = ({
 
         <TextInput
           placeholder={placeholder}
-          placeholderTextColor="#b9b1a3" // text-outline-variant approximating placeholder:text-outline
+          placeholderTextColor="#b9b1a3" // text-outline-variant
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry}
@@ -62,21 +64,24 @@ const CustomInput = ({
   );
 };
 
-// Generic Hearth Shape overlapping blob exactly matching the stitch CSS shape map
+// Generic Hearth Shape
 const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
 
-export default function LoginScreen() {
-  const { userRole, setIsAuthenticated } = useAuthStore();
+export default function RegisterScreen() {
+  const { userRole, setIsAuthenticated, setHasCompletedOnboarding } = useAuthStore();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = async () => {
-    // Simulate login
+  const handleRegister = async () => {
+    // Simulate registration
     setIsAuthenticated(true);
-    if (userRole === 'parent' && !useAuthStore.getState().hasCompletedOnboarding) {
+    setHasCompletedOnboarding(false); // New users go through onboarding
+
+    if (userRole === 'parent') {
       router.replace('/onboarding');
     } else {
-      router.replace('/home');
+      router.replace('/(tabs)/home');
     }
   };
 
@@ -85,17 +90,14 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      {/* Background SVG Blobs mimicking complex layout boundaries perfectly mapping the hearth-shape */}
+      {/* Background SVG Blobs */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        {/* Top Left Blob w-48 h-48 bg-primary-container/30 hearth-shape */}
         <Svg width={192} height={192} viewBox="0 0 256 256" style={{ position: 'absolute', top: -64, left: -48, opacity: 0.15 }}>
           <Path d={hearthShapeBlock} fill="#c5eccc" />
         </Svg>
-        {/* Top Right Blob w-64 h-64 bg-secondary-container/20 hearth-shape */}
         <Svg width={256} height={256} viewBox="0 0 256 256" style={{ position: 'absolute', top: 0, right: -128, marginTop: -128, opacity: 0.15, transform: [{ rotate: '45deg' }] }}>
           <Path d={hearthShapeBlock} fill="#ffdad3" />
         </Svg>
-        {/* Bottom Left Blob w-96 h-96 bg-tertiary-container/20 hearth-shape */}
         <Svg width={384} height={384} viewBox="0 0 256 256" style={{ position: 'absolute', bottom: -192, left: -192, opacity: 0.15, transform: [{ rotate: '120deg' }] }}>
           <Path d={hearthShapeBlock} fill="#d3fbda" />
         </Svg>
@@ -107,12 +109,19 @@ export default function LoginScreen() {
           <View style={styles.headerLogoCircle}>
             <MaterialIcons name="spa" size={32} color="#e8ffea" />
           </View>
-          <Text style={styles.welcomeText}>Welcome Back</Text>
-          <Text style={styles.subWelcomeText}>Enter your sanctuary</Text>
+          <Text style={styles.welcomeText}>Join the Sanctuary</Text>
+          <Text style={styles.subWelcomeText}>Create your family account</Text>
         </View>
 
         {/* Form Module */}
         <View style={styles.formArea}>
+          <CustomInput
+            label="Full Name"
+            placeholder="John Doe"
+            icon="person"
+            value={name}
+            onChangeText={setName}
+          />
           <CustomInput
             label="Email Address"
             placeholder="hello@sanctuary.com"
@@ -120,43 +129,37 @@ export default function LoginScreen() {
             value={email}
             onChangeText={setEmail}
           />
-
-          <View style={styles.passwordWrapper}>
-            <CustomInput
-              label="Password"
-              placeholder="••••••••"
-              icon="lock"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-            <Pressable style={styles.forgotBtn}>
-              <Text style={styles.forgotBtnText}>Forgot Password?</Text>
-            </Pressable>
-          </View>
+          <CustomInput
+            label="Password"
+            placeholder="••••••••"
+            icon="lock"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
 
           {/* Core Action */}
           <View style={styles.actionsBox}>
             <Button
-              title="Login"
-              onPress={handleLogin}
+              title="Create Account"
+              onPress={handleRegister}
               icon="arrow-forward"
             />
 
             <View style={styles.createAccountBox}>
-              <Text style={styles.newToText}>New to Nurturing Atelier?</Text>
-              <Pressable onPress={() => router.push('/register')}>
-                <Text style={styles.createAccountLink}>Create an Account</Text>
+              <Text style={styles.newToText}>Already have an account?</Text>
+              <Pressable onPress={() => router.push('/login')}>
+                <Text style={styles.createAccountLink}>Login to Sanctuary</Text>
               </Pressable>
             </View>
           </View>
         </View>
 
-        {/* Social Links Footer - Google Only via instruction */}
+        {/* Social Links Footer */}
         <View style={styles.footerArea}>
           <View style={styles.dividerBox}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Or Sanctuary Access</Text>
+            <Text style={styles.dividerText}>Quick Access</Text>
             <View style={styles.dividerLine} />
           </View>
           <View style={styles.socialGrid}>
@@ -187,19 +190,19 @@ const styles = StyleSheet.create({
   },
   headerArea: {
     width: '100%',
-    maxWidth: 448, // max-w-md
+    maxWidth: 448,
     alignItems: 'flex-start',
-    marginBottom: 40, // space-y-12
+    marginBottom: 32, // Slightly reduced to fit 3 inputs
   },
   headerLogoCircle: {
-    width: 56, // w-14
-    height: 56, // h-14
+    width: 56,
+    height: 56,
     borderRadius: 28,
-    backgroundColor: '#44674d', // bg-primary
+    backgroundColor: '#44674d',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16, // mb-4
-    shadowColor: '#44674d', // shadow-lg equivalent
+    marginBottom: 16,
+    shadowColor: '#44674d',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -209,97 +212,82 @@ const styles = StyleSheet.create({
     color: '#363228',
     fontFamily: 'PlusJakartaSans-ExtraBold',
     fontWeight: '800',
-    fontSize: 36, // text-4xl
-    lineHeight: 40,
-    letterSpacing: -0.5, // tracking-tight
-    marginBottom: 8,
+    fontSize: 32, // Slightly smaller to fit content
+    lineHeight: 38,
+    letterSpacing: -0.5,
+    marginBottom: 4,
   },
   subWelcomeText: {
-    color: '#645e53', // text-on-surface-variant
+    color: '#645e53',
     fontFamily: 'PlusJakartaSans-Medium',
     fontWeight: '500',
-    fontSize: 18, // text-lg
+    fontSize: 16,
   },
   formArea: {
     width: '100%',
     maxWidth: 448,
-    gap: 20, // space-y-5
+    gap: 16, // Reduced gap as requested
   },
   inputWrapper: {
     width: '100%',
   },
   inputLabel: {
-    color: 'rgba(100, 94, 83, 0.7)', // text-on-surface-variant/70
+    color: 'rgba(100, 94, 83, 0.7)',
     fontFamily: 'PlusJakartaSans-Bold',
     fontWeight: '700',
-    fontSize: 12, // text-xs
+    fontSize: 12,
     textTransform: 'uppercase',
-    letterSpacing: 2.4, // tracking-widest
-    marginBottom: 8, // mb-2
-    marginLeft: 16, // ml-4
+    letterSpacing: 2.4,
+    marginBottom: 8,
+    marginLeft: 16,
   },
   inputContainer: {
     width: '100%',
-    height: 64, // h-16
+    height: 60, // Slightly shorter to fit content
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 16, // rounded-lg
-    paddingHorizontal: 24, // px-6
+    borderRadius: 16,
+    paddingHorizontal: 24,
   },
   inputBaseElement: {
-    backgroundColor: '#faf3e7', // bg-surface-container-low
+    backgroundColor: '#faf3e7',
     borderRadius: 16,
   },
   inputFocusElement: {
     backgroundColor: '#faf3e7',
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: 'rgba(68,103,77,0.2)', // focus:ring-primary/20
+    borderColor: 'rgba(68,103,77,0.2)',
   },
   textInput: {
     flex: 1,
     height: '100%',
-    color: '#363228', // text-on-surface
+    color: '#363228',
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 16,
   },
   inputIcon: {
     marginLeft: 16,
   },
-  passwordWrapper: {
-    width: '100%',
-    marginTop: 16,
-  },
-  forgotBtn: {
-    alignSelf: 'flex-end',
-    marginTop: 12, // mt-3
-    paddingHorizontal: 8, // px-2
-  },
-  forgotBtnText: {
-    color: '#44674d', // text-primary
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-    fontSize: 12, // text-xs
-  },
   actionsBox: {
     width: '100%',
-    paddingTop: 16, // pt-4
-    gap: 24, // space-y-6
+    paddingTop: 16,
+    gap: 20,
   },
   createAccountBox: {
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 16,
+    gap: 8,
   },
   newToText: {
-    color: 'rgba(100, 94, 83, 0.6)', // text-on-surface-variant/60
+    color: 'rgba(100, 94, 83, 0.6)',
     fontFamily: 'PlusJakartaSans-Medium',
     fontWeight: '500',
-    fontSize: 14, // text-sm
+    fontSize: 14,
   },
   createAccountLink: {
-    color: '#44674d', // text-primary
+    color: '#44674d',
     fontFamily: 'PlusJakartaSans-Bold',
     fontWeight: '700',
     fontSize: 14,
@@ -308,27 +296,27 @@ const styles = StyleSheet.create({
   footerArea: {
     width: '100%',
     maxWidth: 448,
-    marginTop: 32,
-    gap: 24,
+    marginTop: 24,
+    gap: 16,
   },
   dividerBox: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    gap: 16, // gap-4
+    gap: 16,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#eae1d2', // bg-surface-container-highest
+    backgroundColor: '#eae1d2',
   },
   dividerText: {
-    color: '#807a6d', // text-outline
+    color: '#807a6d',
     fontFamily: 'PlusJakartaSans-Bold',
     fontWeight: '700',
-    fontSize: 12, // text-xs
+    fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 2.4, // tracking-[0.2em]
+    letterSpacing: 2.4,
   },
   socialGrid: {
     flexDirection: 'row',
@@ -336,9 +324,9 @@ const styles = StyleSheet.create({
   },
   socialBtnSingle: {
     flex: 1,
-    height: 56, // h-14
-    backgroundColor: '#eae1d2', // bg-surface-container-highest
-    borderRadius: 32, // Simplified to match Button look while keeping layout
+    height: 50,
+    backgroundColor: '#eae1d2',
+    borderRadius: 25, // Standardized to half of height for rounded look
     alignItems: 'center',
     justifyContent: 'center',
   },

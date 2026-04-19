@@ -37,8 +37,8 @@ export const AuthColors = {
   onTertiaryFixedVariant: '#5b403c',
 
   // Surface hierarchy - Cream based
-  surface: '#fbfbe2',
-  surfaceBright: '#fbfbe2',
+  surface: '#fff8f0',
+  surfaceBright: '#fff8f0',
   surfaceContainer: '#efefd7',
   surfaceContainerHigh: '#eaead1',
   surfaceContainerHighest: '#e4e4cc',
@@ -68,7 +68,7 @@ export const AuthColors = {
   onErrorContainer: '#93000a',
 
   // Background
-  background: '#fbfbe2',
+  background: '#fff8f0',
   onBackground: '#1b1d0e',
 } as const;
 
