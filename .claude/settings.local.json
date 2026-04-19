@@ -43,12 +43,19 @@
       "WebFetch(domain:lh3.googleusercontent.com)",
       "Bash(curl -s http://localhost:8081)",
       "mcp__MiniMax__web_search",
-      "mcp__MiniMax__understand_image"
+      "mcp__MiniMax__understand_image",
+      "Bash(git submodule *)",
+      "Bash(git add *)",
+      "Bash(git check-ignore *)",
+      "Bash(git rm *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Narwal\\Desktop\\sync-guardian\\.claude\\skills",
       "c:\\Users\\Narwal\\Desktop\\sync-guardian\\.claude\\skills\\expo",
-      "c:\\Users\\Narwal\\Desktop\\sync-guardian\\.claude\\skills\\expo\\skills\\human-ui-design"
+      "c:\\Users\\Narwal\\Desktop\\sync-guardian\\.claude\\skills\\expo\\skills\\human-ui-design",
+      "c:\\Users\\Narwal\\Desktop\\sync-guardian\\mobile\\.git"
     ]
   }
 }
