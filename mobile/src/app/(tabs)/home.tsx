@@ -1,174 +1,228 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import { router } from 'expo-router';
 
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { AuthColors, AuthFonts, AuthSpacing, AuthRadius, AuthGradients, AuthShadows } from '@/constants/auth-theme';
-import { Button } from '@/components/ui/button';
 import { SymbolView } from 'expo-symbols';
 
-const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
+const { width: SCREEN_W } = Dimensions.get('window');
+
+// ============================================================
+// EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
+// ============================================================
+const C = {
+  primary: '#44674d',
+  primaryContainer: '#c5eccc',
+  onPrimary: '#e8ffea',
+  secondary: '#a0412d',
+  secondaryContainer: '#ffdad3',
+  onSecondary: '#fff7f6',
+  tertiary: '#44674e',
+  tertiaryContainer: '#d3fbda',
+  surface: '#fff8f0',
+  surfaceBright: '#fff8f0',
+  surfaceContainer: '#f5ede0',
+  surfaceContainerLow: '#faf3e7',
+  surfaceContainerHigh: '#efe7da',
+  surfaceContainerHighest: '#eae1d2',
+  surfaceContainerLowest: '#ffffff',
+  surfaceVariant: '#eae1d2',
+  onSurface: '#363228',
+  onSurfaceVariant: '#645e53',
+  outline: '#807a6d',
+  outlineVariant: '#b9b1a3',
+  error: '#a83836',
+  white: '#ffffff',
+} as const;
+
+const apps = [
+  { name: 'Khan Academy', duration: '45m', color: C.primary, icon: 'school-outline' as const, width: '85%' },
+  { name: 'YouTube Kids', duration: '20m', color: C.secondary, icon: 'logo-youtube' as const, width: '40%' },
+  { name: 'Duolingo', duration: '15m', color: '#87a96b', icon: 'language-outline' as const, width: '30%' },
+];
+
+const navItems = [
+  { key: 'dashboard', icon: 'grid' as const, label: 'Dashboard', active: true },
+  { key: 'activity', icon: 'analytics' as const, label: 'Activity', active: false },
+  { key: 'insights', icon: 'bulb' as const, label: 'Insights', active: false },
+  { key: 'rules', icon: 'shield-checkmark' as const, label: 'Rules', active: false },
+  { key: 'settings', icon: 'settings' as const, label: 'Settings', active: false },
+];
 
 export default function HomeScreen() {
+  const scale = useSharedValue(1);
+
+  React.useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.03, { duration: 3000 }),
+        withTiming(1, { duration: 3000 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedBlobStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent}
+    <ThemedView style={s.container}>
+      <SafeAreaView style={s.safeArea} edges={['top']}>
+        {/* Floating Glass Header */}
+        <View style={s.header}>
+          <View style={s.headerLeft}>
+            <Image
+              source={require('@/assets/images/mother_avatar.png')}
+              style={s.headerAvatar}
+            />
+            <Text style={s.headerTitle}>Nurturing Atelier</Text>
+          </View>
+          <TouchableOpacity 
+            style={s.headerButton}
+            onPress={() => router.push('/notifications')}
+          >
+            <Ionicons name="notifications-outline" size={22} color={C.onSurface} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Dashboard Header */}
-          <View style={styles.header}>
-            <View style={styles.profileArea}>
-              <Image 
-                source={require('@/assets/images/mother_avatar.png')} 
-                style={styles.avatar} 
-              />
-              <ThemedText style={styles.profileName}>Nurturing Mother</ThemedText>
-            </View>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Ionicons name="notifications-outline" size={24} color={AuthColors.onSurface} />
-              <View style={styles.notificationBadge} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Daily Rhythm Hero Redesign */}
-          <View style={styles.newHeroSection}>
-            <View style={styles.heroTextContent}>
-              <ThemedText style={styles.newFlowLabel}>MORNING FLOW</ThemedText>
-              <ThemedText style={styles.newHeroTitle}>
+          {/* ========== HERO SECTION (v2) ========== */}
+          <View style={s.heroSection}>
+            {/* Text block */}
+            <View style={s.heroTextBlock}>
+              <Text style={s.flowLabel}>MORNING FLOW</Text>
+              <Text style={s.heroTitle}>
                 Gentle rhythm for{'\n'}
-                <ThemedText style={styles.newHeroTitlePrimary}>Leo's Wednesday</ThemedText>
-              </ThemedText>
-              <ThemedText style={styles.newHeroDescription}>
+                <Text style={s.heroTitleAccent}>Leo's Wednesday</Text>
+              </Text>
+              <Text style={s.heroDescription}>
                 Currently in "Creative Exploration" block. The digital sanctuary is maintaining a soft focus environment.
-              </ThemedText>
-
-              <View style={styles.newButtonRow}>
-                <TouchableOpacity style={[styles.newPrimaryButton, styles.shadowPrimary]}>
-                  <ThemedText style={styles.newPrimaryButtonText}>Adjust Rhythm</ThemedText>
+              </Text>
+              <View style={s.heroButtons}>
+                <TouchableOpacity style={s.primaryBtn}>
+                  <Text style={s.primaryBtnText}>Adjust Rhythm</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.newSecondaryButton}>
-                  <ThemedText style={styles.newSecondaryButtonText}>View Schedule</ThemedText>
+                <TouchableOpacity style={s.secondaryBtn}>
+                  <Text style={s.secondaryBtnText}>View Schedule</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.visualContainer}>
-              {/* Hearth Shape Visual */}
-              <View style={styles.hearthVisualStack}>
-                <LinearGradient
-                  colors={[AuthColors.primary, AuthColors.primaryContainer]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.hearthGradient}
-                >
-                  <Svg width={200} height={200} viewBox="0 0 256 256" style={styles.hearthSvg}>
-                    <Path d={hearthShapeBlock} fill="rgba(255,255,255,0.2)" />
-                  </Svg>
-                  <View style={styles.hearthIconOverlay}>
-                    <View style={styles.hearthIconInner}>
-                      <SymbolView 
-                        name="shield_with_heart" 
-                        size={64} 
-                        type="monochrome"
-                        tintColor="#ffffff" 
-                      />
-                    </View>
-                  </View>
-                </LinearGradient>
-                
-                {/* Decorative Blur Background Element */}
-                <View style={styles.decorativeBlob} />
+            {/* Visual block */}
+            <View style={s.visualBlock}>
+              {/* Decorative blurred blob behind hearth */}
+              <View style={s.decoBlobBehind} />
 
-                {/* Floating Overlay Card */}
-                <View style={styles.floatingTimerCard}>
-                  <View style={styles.timerHeader}>
-                    <SymbolView name="timer" size={20} tintColor={AuthColors.secondary} />
-                    <ThemedText style={styles.timerText}>1h 12m Remaining</ThemedText>
-                  </View>
-                  <View style={styles.timerProgressBar}>
-                    <View style={styles.timerProgressFill} />
-                  </View>
+              {/* Hearth Blob */}
+              <AnimatedLinearGradient
+                colors={[C.primary, C.primaryContainer]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[s.hearthBlob, animatedBlobStyle]}
+              >
+                <View style={s.hearthInner}>
+                  <SymbolView
+                    name={"shield_with_heart" as any}
+                    size={72}
+                    type="monochrome"
+                    tintColor="#ffffff"
+                  />
+                </View>
+              </AnimatedLinearGradient>
+
+              {/* Floating Timer Card */}
+              <View style={s.timerCard}>
+                <View style={s.timerHeader}>
+                  <SymbolView name="timer" size={20} tintColor={C.secondary} />
+                  <Text style={s.timerText}>1h 12m Remaining</Text>
+                </View>
+                <View style={s.timerTrack}>
+                  <View style={s.timerFill} />
                 </View>
               </View>
             </View>
           </View>
 
-          {/* Leo is Online Card */}
-          <ThemedView style={styles.childCard}>
-            <View style={styles.childHeader}>
-              <View style={styles.childProfileContainer}>
-                <Image 
-                  source={require('@/assets/images/leo_avatar.png')} 
-                  style={styles.childAvatar} 
+          {/* ========== LEO STATUS CARD (v1) ========== */}
+          <View style={s.leoCard}>
+            <View style={s.leoRow}>
+              <View style={s.leoAvatarWrap}>
+                <Image
+                  source={require('@/assets/images/leo_avatar.png')}
+                  style={s.leoAvatar}
                 />
-                <View style={styles.onlineBadge} />
+                <View style={s.leoOnlineDot}>
+                  <View style={s.leoOnlineDotInner} />
+                </View>
               </View>
-              <View style={styles.childInfo}>
-                <ThemedText style={styles.childName}>Leo is Online</ThemedText>
-                <ThemedText style={styles.childActivity}>Currently using <ThemedText style={styles.appStrong}>Khan Academy</ThemedText></ThemedText>
+              <View style={s.leoInfo}>
+                <Text style={s.leoName}>Leo is Online</Text>
+                <Text style={s.leoActivity}>
+                  Currently using <Text style={s.leoAppName}>Khan Academy</Text>
+                </Text>
+                <View style={s.leoBadges}>
+                  <View style={s.badge}>
+                    <Ionicons name="battery-charging" size={14} color={C.primary} />
+                    <Text style={s.badgeText}>84%</Text>
+                  </View>
+                  <View style={s.badge}>
+                    <Ionicons name="location-outline" size={14} color={C.primary} />
+                    <Text style={s.badgeText}>Home</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={s.harmonyBlock}>
+                <Text style={s.harmonyStat}>92%</Text>
+                <Text style={s.harmonyLabel}>Harmony Sync</Text>
               </View>
             </View>
-            
-            <View style={styles.childStats}>
-              <View style={styles.statBadge}>
-                <Ionicons name="battery-charging" size={16} color={AuthColors.primary} />
-                <ThemedText style={styles.statText}>92%</ThemedText>
-              </View>
-              <View style={styles.statBadge}>
-                <Ionicons name="home-outline" size={16} color={AuthColors.primary} />
-                <ThemedText style={styles.statText}>Home</ThemedText>
-              </View>
-            </View>
+          </View>
 
-            <View style={styles.syncPercentage}>
-              <ThemedText style={styles.percentageText}>92%</ThemedText>
-              <ThemedText style={styles.percentageLabel}>Harmony Level</ThemedText>
+          {/* ========== BEDTIME ROUTINE CARD (v1) ========== */}
+          <View style={s.bedtimeCard}>
+            <Ionicons name="sparkles" size={28} color={C.onPrimary} />
+            <View style={s.bedtimeTextBlock}>
+              <Text style={s.bedtimeTitle}>Bedtime Routine starts in 2h</Text>
+              <Text style={s.bedtimeSub}>
+                Devices will automatically enter Focus Mode at 8:00 PM.
+              </Text>
             </View>
-          </ThemedView>
+          </View>
 
-          {/* Routine Card */}
-          <TouchableOpacity>
-            <View style={styles.routineCard}>
-              <View style={styles.routineIconContainer}>
-                <Ionicons name="moon" size={24} color={AuthColors.onPrimary} />
-              </View>
-              <ThemedText style={styles.routineTitle}>Bedtime Routine starts in 2h</ThemedText>
-              <Ionicons name="chevron-forward" size={20} color={AuthColors.onPrimary} style={{ opacity: 0.6 }} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Most Active Apps */}
-          <View style={styles.appsSection}>
-            <View style={styles.sectionHeader}>
-              <ThemedText style={styles.sectionTitle}>Most active apps</ThemedText>
+          {/* ========== MOST ACTIVE APPS (v1) ========== */}
+          <View style={s.appsSection}>
+            <View style={s.appsHeader}>
+              <Text style={s.appsTitle}>Most active apps</Text>
               <TouchableOpacity>
-                <ThemedText style={styles.viewAllText}>View all</ThemedText>
+                <Text style={s.viewAll}>View all</Text>
               </TouchableOpacity>
             </View>
-
-            <View style={styles.appList}>
-              {[
-                { name: 'Khan Academy', duration: '45m', color: '#486730', icon: 'school-outline' },
-                { name: 'YouTube Kids', duration: '20m', color: '#E2725B', icon: 'logo-youtube' },
-                { name: 'Duolingo', duration: '15m', color: '#87A96B', icon: 'language-outline' },
-              ].map((app, index) => (
-                <View key={index} style={styles.appItem}>
-                  <View style={[styles.appIconContainer, { backgroundColor: AuthColors.surfaceContainerLow }]}>
-                    <Ionicons name={app.icon as any} size={20} color={AuthColors.primary} />
+            <View style={s.appsList}>
+              {apps.map((app, i) => (
+                <View key={i} style={s.appItem}>
+                  <View style={[s.appIconBox, { backgroundColor: C.surfaceContainerHighest }]}>
+                    <Ionicons name={app.icon} size={20} color={C.primary} />
                   </View>
-                  <View style={styles.appDetails}>
-                    <View style={styles.appHeader}>
-                      <ThemedText style={styles.appName}>{app.name}</ThemedText>
-                      <ThemedText style={styles.appDuration}>{app.duration}</ThemedText>
+                  <View style={s.appDetails}>
+                    <View style={s.appMeta}>
+                      <Text style={s.appName}>{app.name}</Text>
+                      <Text style={s.appDuration}>{app.duration}</Text>
                     </View>
-                    <View style={styles.progressBarContainer}>
-                      <View style={[styles.progressBarFill, { width: app.duration === '45m' ? '70%' : app.duration === '20m' ? '40%' : '25%', backgroundColor: app.color }]} />
+                    <View style={s.appTrack}>
+                      <View style={[s.appFill, { width: app.width as any, backgroundColor: app.color }]} />
                     </View>
                   </View>
                 </View>
@@ -176,436 +230,589 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Daily Insights Card */}
-          <ThemedView style={styles.insightsCard}>
-            <View style={styles.insightsHeader}>
-              <ThemedText style={styles.dailyInsightsLabel}>DAILY INSIGHTS</ThemedText>
-              <MaterialCommunityIcons name="chart-bell-curve" size={24} color={AuthColors.tertiary} />
+          {/* ========== DAILY INSIGHTS CARD (v1) ========== */}
+          <View style={s.insightsCard}>
+            <View style={s.insightsLabelRow}>
+              <View style={s.insightsLabelPill}>
+                <Text style={s.insightsLabelText}>Daily Insights</Text>
+              </View>
+              <MaterialCommunityIcons name="chart-bell-curve" size={24} color={C.tertiary} />
             </View>
-            <ThemedText style={styles.insightsTitle}>Healthy Balance{'\n'}Achieved Today.</ThemedText>
-            <ThemedText style={styles.insightsDescription}>
-              Educational content outpaced entertainment by 2.1 hours. Great job guiding Leo's journey!
-            </ThemedText>
-            <Button 
-               title="Explore Detailed Insights"
-               onPress={() => {}}
-               variant="secondary"
-            />
-          </ThemedView>
+            <Text style={s.insightsTitle}>Healthy Balance{'\n'}Achieved Today.</Text>
+            <Text style={s.insightsDesc}>
+              Educational content outpaced entertainment by 3:1 today. Great job guiding Leo's journey!
+            </Text>
+            <TouchableOpacity style={s.insightsCta}>
+              <Text style={s.insightsCtaText}>Explore Detailed Insights</Text>
+            </TouchableOpacity>
 
-          <View style={{ height: 100 }} />
+            {/* Decorative blurred circle */}
+            <View style={s.insightsBlob} />
+            {/* Icon watermark */}
+            <View style={s.insightsWatermark}>
+              <MaterialCommunityIcons name="chart-bell-curve" size={96} color={C.primary} />
+            </View>
+          </View>
+
+          <View style={s.bottomSpacer} />
         </ScrollView>
       </SafeAreaView>
+
     </ThemedView>
   );
 }
 
-const styles = StyleSheet.create({
+// ============================================================
+// STYLES — mapped precisely from Stitch Tailwind
+// ============================================================
+const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AuthColors.surface,
+    backgroundColor: C.surface,
   },
   safeArea: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: AuthSpacing.lg,
-    paddingTop: AuthSpacing.md,
+    paddingHorizontal: 24,
+    paddingTop: 8,
   },
+
+  /* ---------- Header ---------- */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: AuthSpacing.xl,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(255,248,240,0.80)',
   },
-  profileArea: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: AuthSpacing.sm,
+    gap: 12,
   },
-  avatar: {
+  headerAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: AuthColors.surfaceContainer,
+    borderWidth: 2,
+    borderColor: 'rgba(68,103,77,0.12)',
+    backgroundColor: C.surfaceContainerHighest,
   },
-  profileName: {
-    ...AuthFonts.titleSmall,
-    color: AuthColors.onSurface,
+  headerTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 18,
+    lineHeight: 24,
+    color: C.onSurface,
+    letterSpacing: -0.2,
   },
-  notificationButton: {
+  headerButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: AuthColors.surfaceContainerLowest,
+    backgroundColor: C.surfaceContainerLowest,
     justifyContent: 'center',
     alignItems: 'center',
-    ...AuthShadows.ambient,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
   },
-  notificationBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: AuthColors.secondary,
-    borderWidth: 2,
-    borderColor: AuthColors.surfaceContainerLowest,
+
+  /* ---------- Hero Section ---------- */
+  heroSection: {
+    marginBottom: 48,
+    gap: 24,
   },
-  newHeroSection: {
-    marginBottom: AuthSpacing.xxl,
+  heroTextBlock: {
+    gap: 16,
   },
-  heroTextContent: {
-    marginBottom: AuthSpacing.xl,
-    gap: AuthSpacing.md,
-  },
-  newFlowLabel: {
-    ...AuthFonts.labelMedium,
-    color: AuthColors.secondary,
-    fontWeight: '700',
-    letterSpacing: 2,
+  flowLabel: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    letterSpacing: 2.5,
+    color: C.secondary,
     textTransform: 'uppercase',
   },
-  newHeroTitle: {
-    ...AuthFonts.displaySmall,
-    color: AuthColors.onSurface,
-    lineHeight: 40,
-    fontWeight: '800',
+  heroTitle: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 40,
+    lineHeight: 48,
+    color: C.onSurface,
+    letterSpacing: -1,
   },
-  newHeroTitlePrimary: {
-    color: AuthColors.primary,
-    fontStyle: 'italic',
+  heroTitleAccent: {
+    fontFamily: 'PlusJakartaSans-ExtraBoldItalic',
+    fontSize: 40,
+    lineHeight: 48,
+    color: C.primary,
+    letterSpacing: -1,
   },
-  newHeroDescription: {
-    ...AuthFonts.bodyLarge,
-    color: AuthColors.onSurfaceVariant,
+  heroDescription: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 16,
     lineHeight: 24,
+    color: C.onSurfaceVariant,
     maxWidth: 320,
   },
-  newButtonRow: {
+  heroButtons: {
     flexDirection: 'row',
-    gap: AuthSpacing.md,
-    marginTop: AuthSpacing.sm,
+    gap: 12,
+    marginTop: 8,
   },
-  newPrimaryButton: {
-    backgroundColor: AuthColors.primary,
-    paddingHorizontal: AuthSpacing.xl,
-    paddingVertical: AuthSpacing.md,
-    borderRadius: AuthRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newPrimaryButtonText: {
-    ...AuthFonts.labelLarge,
-    color: AuthColors.onPrimary,
-    fontWeight: '700',
-  },
-  newSecondaryButton: {
-    backgroundColor: AuthColors.surfaceContainerHigh,
-    paddingHorizontal: AuthSpacing.xl,
-    paddingVertical: AuthSpacing.md,
-    borderRadius: AuthRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newSecondaryButtonText: {
-    ...AuthFonts.labelLarge,
-    color: AuthColors.onSurface,
-    fontWeight: '700',
-  },
-  shadowPrimary: {
-    shadowColor: AuthColors.primary,
+  primaryBtn: {
+    backgroundColor: C.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 9999,
+    shadowColor: C.primary,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  primaryBtnText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: C.onPrimary,
+  },
+  secondaryBtn: {
+    backgroundColor: C.surfaceContainerHigh,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 9999,
+  },
+  secondaryBtnText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: C.onSurface,
+  },
+
+  /* Visual block */
+  visualBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginTop: 16,
+    height: 340,
+  },
+  decoBlobBehind: {
+    position: 'absolute',
+    top: -24,
+    left: -32,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(160,65,45,0.10)',
+    zIndex: 0,
+  },
+  hearthBlob: {
+    width: 288,
+    height: 288,
+    borderTopLeftRadius: 170,
+    borderTopRightRadius: 110,
+    borderBottomLeftRadius: 90,
+    borderBottomRightRadius: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.20,
     shadowRadius: 20,
     elevation: 5,
+    zIndex: 1,
   },
-  visualContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: AuthSpacing.lg,
-  },
-  hearthVisualStack: {
-    width: 300,
-    height: 300,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hearthGradient: {
-    width: 260,
-    height: 260,
-    borderRadius: AuthRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    ...AuthShadows.float,
-  },
-  hearthSvg: {
-    position: 'absolute',
-    opacity: 0.2,
-  },
-  hearthIconOverlay: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  hearthInner: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.20)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  hearthIconInner: {
+    borderColor: 'rgba(255,255,255,0.30)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  decorativeBlob: {
-    position: 'absolute',
-    top: -20,
-    left: -20,
-    width: 80,
-    height: 80,
-    backgroundColor: 'rgba(159, 64, 45, 0.1)',
-    borderRadius: 40,
-    zIndex: -1,
-  },
-  floatingTimerCard: {
+
+  /* Timer card */
+  timerCard: {
     position: 'absolute',
     bottom: 20,
-    left: -20,
-    backgroundColor: AuthColors.surfaceContainerLowest,
-    padding: AuthSpacing.md,
-    borderRadius: AuthRadius.md,
-    minWidth: 180,
-    ...AuthShadows.ambient,
+    left: -12,
+    backgroundColor: C.surfaceContainerLowest,
+    padding: 24,
+    borderRadius: 32,
+    minWidth: 200,
+    shadowColor: C.onSurface,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: 'rgba(67, 72, 61, 0.1)',
+    borderColor: 'rgba(234,225,210,0.20)',
+    zIndex: 2,
   },
   timerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: AuthSpacing.sm,
-    marginBottom: AuthSpacing.sm,
+    gap: 10,
+    marginBottom: 8,
   },
   timerText: {
-    ...AuthFonts.labelLarge,
-    color: AuthColors.onSurface,
-    fontWeight: '800',
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: C.onSurface,
   },
-  timerProgressBar: {
+  timerTrack: {
     height: 6,
     width: '100%',
-    backgroundColor: AuthColors.surfaceContainerHigh,
+    backgroundColor: C.surfaceContainerHigh,
     borderRadius: 3,
     overflow: 'hidden',
   },
-  timerProgressFill: {
+  timerFill: {
     height: '100%',
-    backgroundColor: AuthColors.secondary,
     width: '66%',
+    backgroundColor: C.secondary,
     borderRadius: 3,
   },
-  childCard: {
-    backgroundColor: AuthColors.surfaceContainerLowest,
-    borderRadius: AuthRadius.xl,
-    padding: AuthSpacing.lg,
-    marginBottom: AuthSpacing.md,
-    ...AuthShadows.ambient,
+
+  /* ---------- Leo Card ---------- */
+  leoCard: {
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 32,
+    padding: 32,
+    marginBottom: 16,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  childHeader: {
-    flexDirection: 'row',
+  leoRow: {
+    flexDirection: 'column',
     alignItems: 'center',
-    marginBottom: AuthSpacing.lg,
+    gap: 32,
   },
-  childProfileContainer: {
+  leoAvatarWrap: {
     position: 'relative',
+    padding: 4,
+    borderWidth: 4,
+    borderColor: C.primaryContainer,
+    borderRadius: 64,
   },
-  childAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: AuthColors.surfaceContainer,
+  leoAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: C.surfaceContainer,
   },
-  onlineBadge: {
+  leoOnlineDot: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#4CAF50',
+    bottom: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: C.primary,
     borderWidth: 2,
-    borderColor: AuthColors.surfaceContainerLowest,
-  },
-  childInfo: {
-    marginLeft: AuthSpacing.md,
-    flex: 1,
-  },
-  childName: {
-    ...AuthFonts.titleLarge,
-    color: AuthColors.onSurface,
-    fontWeight: '700',
-  },
-  childActivity: {
-    ...AuthFonts.bodySmall,
-    color: AuthColors.onSurfaceVariant,
-  },
-  appStrong: {
-    fontWeight: '700',
-    color: AuthColors.primary,
-  },
-  childStats: {
-    flexDirection: 'row',
-    gap: AuthSpacing.sm,
-    marginBottom: AuthSpacing.xl,
-  },
-  statBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: AuthColors.surfaceContainerLow,
-    paddingHorizontal: AuthSpacing.sm,
-    paddingVertical: 4,
-    borderRadius: AuthRadius.full,
-  },
-  statText: {
-    ...AuthFonts.labelSmall,
-    color: AuthColors.primary,
-  },
-  syncPercentage: {
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: AuthColors.outlineVariant,
-    paddingTop: AuthSpacing.md,
-  },
-  percentageText: {
-    ...AuthFonts.displayMedium,
-    color: AuthColors.primary,
-    lineHeight: 48,
-  },
-  percentageLabel: {
-    ...AuthFonts.labelSmall,
-    color: AuthColors.onSurfaceVariant,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  routineCard: {
-    backgroundColor: AuthColors.primary,
-    borderRadius: AuthRadius.lg,
-    padding: AuthSpacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: AuthSpacing.md,
-    marginBottom: AuthSpacing.xxl,
-  },
-  routineIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: C.surfaceContainerLowest,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  routineTitle: {
-    ...AuthFonts.titleMedium,
-    color: AuthColors.onPrimary,
-    flex: 1,
+  leoOnlineDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
   },
+  leoInfo: {
+    alignItems: 'center',
+    gap: 16,
+  },
+  leoName: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 24,
+    lineHeight: 32,
+    color: C.onSurface,
+  },
+  leoActivity: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 16,
+    lineHeight: 24,
+    color: C.onSurfaceVariant,
+  },
+  leoAppName: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    color: C.primary,
+  },
+  leoBadges: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.surfaceContainer,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 9999,
+  },
+  badgeText: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.primary,
+  },
+  harmonyBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  harmonyStat: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 36,
+    lineHeight: 40,
+    color: C.secondary,
+  },
+  harmonyLabel: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 10,
+    lineHeight: 14,
+    color: C.onSurfaceVariant,
+    opacity: 0.6,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+
+  /* ---------- Bedtime Card ---------- */
+  bedtimeCard: {
+    backgroundColor: C.primary,
+    borderRadius: 32,
+    padding: 32,
+    marginBottom: 48,
+    gap: 16,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  bedtimeTextBlock: {
+    gap: 6,
+  },
+  bedtimeTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 20,
+    lineHeight: 26,
+    color: C.onPrimary,
+  },
+  bedtimeSub: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.primaryContainer,
+  },
+
+  /* ---------- Apps Section ---------- */
   appsSection: {
-    marginBottom: AuthSpacing.xxl,
+    marginBottom: 48,
   },
-  sectionHeader: {
+  appsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: AuthSpacing.md,
+    marginBottom: 16,
   },
-  sectionTitle: {
-    ...AuthFonts.titleMedium,
-    color: AuthColors.onSurface,
-    fontWeight: '700',
+  appsTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 18,
+    lineHeight: 24,
+    color: C.onSurface,
   },
-  viewAllText: {
-    ...AuthFonts.labelMedium,
-    color: AuthColors.primary,
+  viewAll: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.primary,
   },
-  appList: {
-    gap: AuthSpacing.md,
+  appsList: {
+    gap: 16,
   },
   appItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: AuthSpacing.md,
+    gap: 16,
   },
-  appIconContainer: {
+  appIconBox: {
     width: 48,
     height: 48,
-    borderRadius: AuthRadius.md,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   appDetails: {
     flex: 1,
   },
-  appHeader: {
+  appMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
   appName: {
-    ...AuthFonts.labelLarge,
-    color: AuthColors.onSurface,
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.onSurface,
   },
   appDuration: {
-    ...AuthFonts.labelMedium,
-    color: AuthColors.onSurfaceVariant,
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.onSurfaceVariant,
   },
-  progressBarContainer: {
+  appTrack: {
     height: 6,
-    backgroundColor: AuthColors.surfaceContainer,
+    backgroundColor: C.surfaceContainer,
     borderRadius: 3,
     overflow: 'hidden',
   },
-  progressBarFill: {
+  appFill: {
     height: '100%',
     borderRadius: 3,
   },
+
+  /* ---------- Insights Card ---------- */
   insightsCard: {
-    backgroundColor: AuthColors.surfaceContainerHigh,
-    borderRadius: AuthRadius.xl,
-    padding: AuthSpacing.lg,
-    ...AuthShadows.ambient,
+    backgroundColor: C.surfaceContainerHighest,
+    borderRadius: 32,
+    padding: 32,
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  insightsHeader: {
+  insightsLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: AuthSpacing.sm,
+    marginBottom: 12,
   },
-  dailyInsightsLabel: {
-    ...AuthFonts.labelSmall,
-    color: AuthColors.tertiary,
-    letterSpacing: 1.5,
+  insightsLabelPill: {
+    backgroundColor: C.surfaceContainerLowest,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 9999,
+  },
+  insightsLabelText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 1,
+    color: C.onSurfaceVariant,
+    textTransform: 'uppercase',
   },
   insightsTitle: {
-    ...AuthFonts.headlineSmall,
-    color: AuthColors.onSurface,
-    marginBottom: AuthSpacing.sm,
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 24,
+    lineHeight: 30,
+    color: C.onSurface,
+    marginBottom: 8,
+    letterSpacing: -0.3,
   },
-  insightsDescription: {
-    ...AuthFonts.bodyMedium,
-    color: AuthColors.onSurfaceVariant,
+  insightsDesc: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
     lineHeight: 20,
-    marginBottom: AuthSpacing.lg,
+    color: C.onSurfaceVariant,
+    marginBottom: 20,
   },
-  exploreButton: {
-    backgroundColor: AuthColors.surfaceContainerLowest,
-    paddingVertical: AuthSpacing.md,
-    borderRadius: AuthRadius.full,
+  insightsCta: {
+    backgroundColor: C.onSurface,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 9999,
+    alignSelf: 'flex-start',
+  },
+  insightsCtaText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.surface,
+  },
+  insightsBlob: {
+    position: 'absolute',
+    right: -48,
+    bottom: -48,
+    width: 192,
+    height: 192,
+    borderRadius: 96,
+    backgroundColor: 'rgba(68,103,77,0.08)',
+  },
+  insightsWatermark: {
+    position: 'absolute',
+    top: 32,
+    right: 32,
+    opacity: 0.15,
+  },
+
+  /* ---------- Bottom Spacer ---------- */
+  bottomSpacer: {
+    height: 130,
+  },
+
+  /* ---------- Bottom Nav ---------- */
+  navSafeArea: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: 20,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 32,
+    elevation: 8,
   },
-  exploreButtonText: {
-    ...AuthFonts.labelLarge,
-    color: AuthColors.onSurface,
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 2,
+  },
+  navItemActive: {
+    backgroundColor: C.surfaceContainer,
+    borderRadius: 9999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  navLabel: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 0.5,
+    color: 'rgba(54,50,40,0.5)',
+    textTransform: 'uppercase',
+  },
+  navLabelActive: {
+    color: C.primary,
   },
 });

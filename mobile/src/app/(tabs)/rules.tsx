@@ -1,0 +1,1 @@
+import { View, Text } from 'react-native'; export default function RulesScreen() { return <View><Text>Rules</Text></View>; }

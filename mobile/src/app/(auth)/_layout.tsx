@@ -9,12 +9,6 @@ import { useAuthTheme } from '@/hooks/use-auth-theme';
 export default function AuthLayout() {
   const colors = useAuthTheme();
 
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      NavigationBar.setBackgroundColorAsync(colors.background);
-      NavigationBar.setButtonStyleAsync('dark');
-    }
-  }, [colors.background]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
