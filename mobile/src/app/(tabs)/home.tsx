@@ -5,11 +5,11 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { router } from 'expo-router';
-
-const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SymbolView } from 'expo-symbols';
+
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 const { width: SCREEN_W } = Dimensions.get('window');
 

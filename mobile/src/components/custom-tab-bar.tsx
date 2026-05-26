@@ -1,79 +1,98 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect } from 'react';
+import { Text, TouchableOpacity, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { BlurView } from 'expo-blur';
+import { useRouter, usePathname } from 'expo-router';
+import Animated, { useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
 
 const C = {
   primary: '#44674d',
-  surfaceContainer: '#f5ede0',
+  selectedPill: '#dcebd2',
 } as const;
 
-export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+const ROUTES = [
+  { name: 'home', label: 'Dashboard', icon: 'dashboard' as const, href: '/(tabs)/home' },
+  { name: 'activity', label: 'Activity', icon: 'analytics' as const, href: '/(tabs)/activity' },
+  { name: 'insights', label: 'Insights', icon: 'insights' as const, href: '/(tabs)/insights' },
+  { name: 'rules', label: 'Rules', icon: 'gavel' as const, href: '/(tabs)/rules' },
+  { name: 'settings', label: 'Settings', icon: 'settings' as const, href: '/(tabs)/settings' },
+];
+
+const SPRING_CONFIG = { stiffness: 350, damping: 25, mass: 0.8 };
+
+interface CustomTabBarProps {
+  blurTargetRef: React.RefObject<View>;
+}
+
+function TabItem({
+  route,
+  isFocused,
+  onPress,
+}: {
+  route: typeof ROUTES[number];
+  isFocused: boolean;
+  onPress: () => void;
+}) {
+  const scale = useSharedValue(isFocused ? 1 : 0.92);
+  const opacity = useSharedValue(isFocused ? 1 : 0.6);
+
+  useEffect(() => {
+    scale.value = withSpring(isFocused ? 1 : 0.92, SPRING_CONFIG);
+    opacity.value = withSpring(isFocused ? 1 : 0.6, SPRING_CONFIG);
+  }, [isFocused, scale, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
   return (
-    <SafeAreaView style={s.navSafeArea} edges={['bottom']}>
-      <View style={s.bottomNav}>
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const label =
-            options.tabBarLabel !== undefined
-              ? options.tabBarLabel
-              : options.title !== undefined
-              ? options.title
-              : route.name;
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityState={isFocused ? { selected: true } : {}}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Animated.View style={[s.navItem, isFocused ? s.navItemActive : s.navItemInactive, animatedStyle]}>
+        <MaterialIcons
+          name={route.icon}
+          size={22}
+          color={isFocused ? C.primary : 'rgba(54,50,40,0.5)'}
+        />
+        <Text style={[s.navLabel, isFocused && s.navLabelActive]}>
+          {route.label}
+        </Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
 
-          const isFocused = state.index === index;
+export default function CustomTabBar({ blurTargetRef }: CustomTabBarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name, route.params);
-            }
-          };
-
-          const onLongPress = () => {
-            navigation.emit({
-              type: 'tabLongPress',
-              target: route.key,
-            });
-          };
-
-          let iconName: any = 'help';
-          if (route.name === 'home') iconName = 'dashboard';
-          else if (route.name === 'activity') iconName = 'analytics';
-          else if (route.name === 'insights') iconName = 'insights';
-          else if (route.name === 'rules') iconName = 'gavel';
-          else if (route.name === 'settings') iconName = 'settings';
+  return (
+    <BlurView intensity={80} tint="light" blurTarget={blurTargetRef} blurMethod="dimezisBlurView" style={s.navSafeArea}>
+      <SafeAreaView edges={['bottom']} style={s.bottomNav}>
+        {ROUTES.map((route) => {
+          const isFocused = pathname.includes(route.name);
 
           return (
-            <TouchableOpacity
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-              testID={options.tabBarButtonTestID}
-              onPress={onPress}
-              onLongPress={onLongPress}
-              style={[s.navItem, isFocused ? s.navItemActive : s.navItemInactive]}
-            >
-              <MaterialIcons
-                name={iconName}
-                size={22}
-                color={isFocused ? C.primary : 'rgba(54,50,40,0.5)'}
-              />
-              <Text style={[s.navLabel, isFocused && s.navLabelActive]}>
-                {label as string}
-              </Text>
-            </TouchableOpacity>
+            <TabItem
+              key={route.name}
+              route={route}
+              isFocused={isFocused}
+              onPress={() => {
+                if (!isFocused) {
+                  router.replace(route.href as any);
+                }
+              }}
+            />
           );
         })}
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </BlurView>
   );
 }
 
@@ -83,14 +102,9 @@ const s = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(255,255,255,0.72)',
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 32,
-    elevation: 8,
+    overflow: 'hidden',
   },
   bottomNav: {
     flexDirection: 'row',
@@ -98,7 +112,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 20,
   },
   navItem: {
     alignItems: 'center',
@@ -107,7 +120,7 @@ const s = StyleSheet.create({
     gap: 2,
   },
   navItemActive: {
-    backgroundColor: C.surfaceContainer,
+    backgroundColor: C.selectedPill,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
