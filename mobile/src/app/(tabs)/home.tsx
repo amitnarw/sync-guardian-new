@@ -48,7 +48,7 @@ const apps = [
 ];
 
 const navItems = [
-  { key: 'dashboard', icon: 'grid' as const, label: 'Dashboard', active: true },
+  { key: 'home', icon: 'grid' as const, label: 'Home', active: true },
   { key: 'activity', icon: 'analytics' as const, label: 'Activity', active: false },
   { key: 'insights', icon: 'bulb' as const, label: 'Insights', active: false },
   { key: 'rules', icon: 'shield-checkmark' as const, label: 'Rules', active: false },
@@ -82,7 +82,7 @@ export default function HomeScreen() {
         <View style={s.header}>
           <View style={s.headerLeft}>
             <Image
-              source={require('@/assets/images/mother_avatar.png')}
+              source={require('@/assets/images/mother_avatar.jpg')}
               style={s.headerAvatar}
             />
             <Text style={s.headerTitle}>Nurturing Atelier</Text>
@@ -161,7 +161,7 @@ export default function HomeScreen() {
             <View style={s.leoRow}>
               <View style={s.leoAvatarWrap}>
                 <Image
-                  source={require('@/assets/images/leo_avatar.png')}
+                  source={require('@/assets/images/leo_avatar.jpg')}
                   style={s.leoAvatar}
                 />
                 <View style={s.leoOnlineDot}>

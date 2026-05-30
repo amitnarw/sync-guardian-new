@@ -1,6 +1,6 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import React, { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthTheme } from '@/hooks/use-auth-theme';
@@ -19,8 +19,16 @@ import {
 
 SplashScreen.preventAutoHideAsync();
 
+const LightTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: '#ffffff',
+    card: '#ffffff',
+  },
+};
+
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const authTheme = useAuthTheme();
 
   const [loaded, error] = useFonts({
@@ -45,14 +53,16 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: authTheme.background },
-        }}
-      />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={LightTheme}>
+        <StatusBar style="dark" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: authTheme.background },
+          }}
+        />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

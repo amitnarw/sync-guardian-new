@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-container": "#a900a9",
+                        "surface-variant": "#262626",
+                        "on-primary-container": "#005d5d",
+                        "on-primary-fixed": "#004343",
+                        "background": "#0e0e0e",
+                        "outline": "#757575",
+                        "error": "#ff716c",
+                        "tertiary-container": "#7000ff",
+                        "inverse-primary": "#006a6a",
+                        "surface-dim": "#0e0e0e",
+                        "on-error-container": "#ffa8a3",
+                        "on-secondary": "#400040",
+                        "surface-container-lowest": "#000000",
+                        "on-secondary-container": "#fff5f9",
+                        "on-surface-variant": "#ababab",
+                        "surface-container-highest": "#262626",
+                        "on-background": "#ffffff",
+                        "on-primary-fixed-variant": "#006262",
+                        "primary-fixed": "#00f5f5",
+                        "surface-bright": "#2c2c2c",
+                        "inverse-on-surface": "#555555",
+                        "primary-fixed-dim": "#00e6e6",
+                        "primary": "#c1fffe",
+                        "error-container": "#9f0519",
+                        "surface-container-low": "#131313",
+                        "on-primary": "#006767",
+                        "inverse-surface": "#f9f9f9",
+                        "error-dim": "#d7383b",
+                        "on-tertiary": "#290067",
+                        "tertiary-dim": "#874cff",
+                        "primary-dim": "#00e6e6",
+                        "on-surface": "#ffffff",
+                        "on-secondary-fixed": "#620061",
+                        "outline-variant": "#484848",
+                        "surface": "#0e0e0e",
+                        "secondary-dim": "#ff51fa",
+                        "surface-container": "#191919",
+                        "secondary": "#ff51fa",
+                        "surface-tint": "#c1fffe",
+                        "tertiary": "#ac89ff",
+                        "primary-container": "#00ffff",
+                        "tertiary-fixed": "#bda1ff",
+                        "secondary-fixed": "#ffbdf3",
+                        "secondary-fixed-dim": "#ffa6f3",
+                        "on-tertiary-fixed-variant": "#4700a7",
+                        "tertiary-fixed-dim": "#b190ff",
+                        "on-error": "#490006",
+                        "surface-container-high": "#1f1f1f",
+                        "on-secondary-fixed-variant": "#920091",
+                        "on-tertiary-container": "#f8f1ff",
+                        "on-tertiary-fixed": "#1f0052"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Manrope"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+        }
+        .aurora-blur {
+            filter: blur(80px);
+            opacity: 0.4;
+        }
+        .glass-panel {
+            background: rgba(25, 25, 25, 0.4);
+            backdrop-filter: blur(20px);
+        }
+        .integrity-sphere {
+            background: radial-gradient(circle at 30% 30%, #c1fffe 0%, #ac89ff 40%, #000000 100%);
+            box-shadow: 0 0 80px rgba(193, 255, 254, 0.4), inset -20px -20px 50px rgba(0, 0, 0, 0.8);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-lowest text-on-surface font-body selection:bg-primary selection:text-on-primary-fixed overflow-x-hidden">
+<!-- Top Navigation Anchor -->
+<header class="fixed top-0 z-50 w-full flex justify-between items-center px-6 py-4 bg-black/80 backdrop-blur-xl shadow-[0_0_30px_-10px_rgba(0,255,255,0.3)]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-white/5">
+<img alt="Parental Profile" class="w-full h-full object-cover" data-alt="User profile avatar silhouette" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwrC0yS6LDXM0FNgziSeyVFRJPm2Ad3ZO2C4d0AXeuUM7w0Wg9ztONx1UKmewPTE3_DYtz3wd56le05BJDMfHiXf0apSkIMtMNhZMsLl9e3CuGKPQlOwKq9GZbT6wAbzWyo14pKT_Pc7LO8Ch2gQCKciraUAcwz4200haHVcotcsL3AEMRJ-8NcI7MKWElvlG7CQpvPrc3Gfm1uF4wtedXR7JX7h6QrdjK9TbqNZsFO7Jpyi9-4YZ16XTm6toPZ4V5TkwJs_WdYcd2"/>
+</div>
+<span class="font-headline uppercase tracking-[0.2em] font-black text-lg text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-purple-500">NEBULA</span>
+</div>
+<div class="hidden md:flex gap-8">
+<button class="text-cyan-300 font-headline uppercase tracking-widest text-sm hover:scale-105 transition-transform duration-300">Dashboard</button>
+<button class="text-zinc-500 font-headline uppercase tracking-widest text-sm hover:text-cyan-200 transition-colors">Network</button>
+<button class="text-zinc-500 font-headline uppercase tracking-widest text-sm hover:text-cyan-200 transition-colors">Alerts</button>
+</div>
+<button class="text-cyan-400 hover:scale-105 transition-transform duration-300">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</header>
+<!-- Background Aurora Blobs -->
+<div class="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
+<div class="absolute -top-24 -left-24 w-[600px] h-[600px] bg-primary aurora-blur rounded-full"></div>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-tertiary aurora-blur rounded-full opacity-20"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-secondary aurora-blur rounded-full"></div>
+</div>
+<main class="relative pt-28 pb-32 px-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+<!-- Left Column: technical readout -->
+<div class="lg:col-span-3 flex flex-col gap-6 order-2 lg:order-1">
+<div class="p-6 rounded-3xl glass-panel border border-white/5">
+<p class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant mb-4">Signal Integrity</p>
+<div class="flex items-baseline gap-2">
+<span class="font-headline text-4xl font-light text-primary">99.98</span>
+<span class="font-label text-xs text-primary/60">mHz</span>
+</div>
+<div class="mt-6 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-secondary w-[88%]"></div>
+</div>
+</div>
+<div class="p-6 rounded-3xl glass-panel border border-white/5 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-20">
+<span class="material-symbols-outlined text-4xl" data-icon="shield">shield</span>
+</div>
+<p class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant mb-1">Active Scans</p>
+<p class="font-headline text-2xl font-bold text-on-surface">1,242</p>
+<div class="mt-4 flex flex-col gap-3">
+<div class="flex justify-between items-center text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+<span>Threat Neutralization</span>
+<span class="text-primary">82%</span>
+</div>
+<div class="flex justify-between items-center text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+<span>System Latency</span>
+<span class="text-secondary">4ms</span>
+</div>
+</div>
+</div>
+<div class="p-6 rounded-3xl glass-panel border border-white/5">
+<p class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant mb-4">Node Distribution</p>
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-4">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<span class="font-label text-[10px] uppercase tracking-widest flex-1">Orbital-Alpha</span>
+<span class="font-label text-[10px] text-zinc-500">42%</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-2 h-2 rounded-full bg-secondary"></div>
+<span class="font-label text-[10px] uppercase tracking-widest flex-1">Void-Relay</span>
+<span class="font-label text-[10px] text-zinc-500">31%</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-2 h-2 rounded-full bg-tertiary"></div>
+<span class="font-label text-[10px] uppercase tracking-widest flex-1">Core-Sync</span>
+<span class="font-label text-[10px] text-zinc-500">27%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Center Column: The Integrity Sphere -->
+<div class="lg:col-span-6 flex flex-col items-center justify-center min-h-[500px] order-1 lg:order-2 relative">
+<!-- Orbiting Metrics -->
+<div class="absolute top-[10%] left-[10%] p-4 glass-panel rounded-2xl border border-white/5 shadow-2xl scale-90">
+<span class="font-label text-[10px] uppercase tracking-[0.2em] text-primary block">Safety Factor</span>
+<span class="font-headline text-2xl font-black">0.982</span>
+</div>
+<div class="absolute bottom-[20%] right-[5%] p-4 glass-panel rounded-2xl border border-white/5 shadow-2xl scale-90">
+<span class="font-label text-[10px] uppercase tracking-[0.2em] text-secondary block">Entropy</span>
+<span class="font-headline text-2xl font-black">Low</span>
+</div>
+<!-- The Sphere Container -->
+<div class="relative w-72 h-72 md:w-96 md:h-96 flex items-center justify-center">
+<!-- Radial Progress Arcs -->
+<svg class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewbox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="48" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"></circle>
+<circle cx="50" cy="50" fill="none" r="48" stroke="url(#grad1)" stroke-dasharray="210 300" stroke-linecap="round" stroke-width="2"></circle>
+<circle cx="50" cy="50" fill="none" r="44" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"></circle>
+<circle cx="50" cy="50" fill="none" r="44" stroke="url(#grad2)" stroke-dasharray="140 300" stroke-linecap="round" stroke-width="1.5"></circle>
+<defs>
+<lineargradient id="grad1" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" style="stop-color:#c1fffe;stop-opacity:1"></stop>
+<stop offset="100%" style="stop-color:#ff51fa;stop-opacity:1"></stop>
+</lineargradient>
+<lineargradient id="grad2" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" style="stop-color:#ff51fa;stop-opacity:1"></stop>
+<stop offset="100%" style="stop-color:#ac89ff;stop-opacity:1"></stop>
+</lineargradient>
+</defs>
+</svg>
+<!-- Central Sphere -->
+<div class="integrity-sphere w-48 h-48 md:w-64 md:h-64 rounded-full flex flex-col items-center justify-center z-10">
+<span class="font-label text-[10px] uppercase tracking-[0.3em] text-black/60 font-black mb-2">Integrity</span>
+<span class="font-headline text-5xl md:text-7xl font-black text-black tracking-tighter">94%</span>
+</div>
+</div>
+<!-- Technical Coordinate Labels -->
+<div class="mt-8 flex gap-12">
+<div class="text-center">
+<p class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest">LAT_COORD</p>
+<p class="font-label text-xs font-medium text-primary mt-1">40.7128° N</p>
+</div>
+<div class="text-center">
+<p class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest">LON_COORD</p>
+<p class="font-label text-xs font-medium text-secondary mt-1">74.0060° W</p>
+</div>
+<div class="text-center">
+<p class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest">ALT_MSL</p>
+<p class="font-label text-xs font-medium text-tertiary mt-1">124.5 M</p>
+</div>
+</div>
+</div>
+<!-- Right Column: Activity Trends -->
+<div class="lg:col-span-3 flex flex-col gap-6 order-3">
+<div class="p-6 rounded-3xl glass-panel border border-white/5 min-h-[300px] flex flex-col">
+<p class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant mb-6">Activity Horizon</p>
+<div class="flex-1 flex items-end gap-2 pb-2">
+<div class="flex-1 bg-surface-container-highest rounded-t-lg h-[40%] hover:bg-primary/40 transition-colors"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-lg h-[65%] hover:bg-primary/40 transition-colors"></div>
+<div class="flex-1 bg-primary/20 rounded-t-lg h-[90%] border-t-2 border-primary hover:bg-primary/40 transition-colors"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-lg h-[55%] hover:bg-primary/40 transition-colors"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-lg h-[75%] hover:bg-primary/40 transition-colors"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-lg h-[45%] hover:bg-primary/40 transition-colors"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-lg h-[30%] hover:bg-primary/40 transition-colors"></div>
+</div>
+<div class="flex justify-between mt-2 font-label text-[9px] uppercase tracking-tighter text-zinc-600">
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span>Sat</span>
+<span>Sun</span>
+</div>
+</div>
+<div class="p-6 rounded-3xl glass-panel border border-white/5">
+<p class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant mb-4">Live Protocols</p>
+<div class="space-y-4">
+<div class="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-white/5">
+<span class="font-label text-[10px] uppercase tracking-widest text-on-surface">Stealth-Mode</span>
+<div class="w-8 h-4 bg-primary/20 rounded-full relative">
+<div class="absolute right-1 top-1 w-2 h-2 bg-primary rounded-full"></div>
+</div>
+</div>
+<div class="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-white/5 opacity-50">
+<span class="font-label text-[10px] uppercase tracking-widest text-on-surface">Data-Mirror</span>
+<div class="w-8 h-4 bg-white/5 rounded-full relative">
+<div class="absolute left-1 top-1 w-2 h-2 bg-zinc-500 rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-auto flex justify-end">
+<button class="flex items-center gap-3 px-6 py-3 rounded-full bg-gradient-to-tr from-cyan-400 to-purple-500 text-black font-label text-xs font-black uppercase tracking-widest shadow-[0_0_20px_rgba(0,255,255,0.3)] hover:scale-105 transition-transform">
+                    System Audit
+                    <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Shell -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-50 flex justify-around items-center py-2 bg-zinc-900/40 backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.8),0_0_20px_rgba(193,255,254,0.1)]">
+<a class="flex items-center justify-center bg-gradient-to-tr from-cyan-400 to-purple-500 text-black rounded-full p-3 shadow-[0_0_15px_rgba(0,255,255,0.6)] scale-110" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+</a>
+<a class="flex items-center justify-center text-zinc-400 p-3 hover:text-cyan-200 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="location_on">location_on</span>
+</a>
+<a class="flex items-center justify-center text-zinc-400 p-3 hover:text-cyan-200 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="notifications_active">notifications_active</span>
+</a>
+<a class="flex items-center justify-center text-zinc-400 p-3 hover:text-cyan-200 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="shield">shield</span>
+</a>
+</nav>
+<!-- Floating Background Textures (Hidden imagery requirement) -->
+<div class="fixed top-1/4 -right-20 w-80 h-80 rounded-full bg-secondary aurora-blur pointer-events-none"></div>
+<div class="fixed bottom-1/4 -left-20 w-80 h-80 rounded-full bg-tertiary aurora-blur pointer-events-none"></div>
+</body></html>

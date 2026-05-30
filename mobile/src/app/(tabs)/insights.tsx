@@ -52,7 +52,7 @@ export default function InsightsScreen() {
         <View style={s.header}>
           <View style={s.headerLeft}>
             <Image
-              source={require('@/assets/images/mother_avatar.png')}
+              source={require('@/assets/images/mother_avatar.jpg')}
               style={s.headerAvatar}
             />
             <Text style={s.headerTitle}>Nurturing Atelier</Text>

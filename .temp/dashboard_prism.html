@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tactical Analysis Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-dim": "#6063ee",
+              "surface-container-high": "#141f38",
+              "primary-fixed": "#9396ff",
+              "on-error-container": "#ffb2b9",
+              "background": "#060e20",
+              "on-primary-fixed-variant": "#0e009d",
+              "tertiary-container": "#69f6b8",
+              "surface-variant": "#192540",
+              "on-primary-fixed": "#000000",
+              "on-secondary-fixed-variant": "#724700",
+              "secondary-dim": "#e79400",
+              "outline-variant": "#40485d",
+              "inverse-primary": "#494bd7",
+              "error-dim": "#d73357",
+              "secondary": "#f8a010",
+              "on-tertiary-fixed": "#00452d",
+              "tertiary-fixed": "#69f6b8",
+              "secondary-container": "#855300",
+              "tertiary-fixed-dim": "#58e7ab",
+              "on-secondary-container": "#fff6f0",
+              "on-background": "#dee5ff",
+              "secondary-fixed-dim": "#ffb554",
+              "primary-fixed-dim": "#8387ff",
+              "on-secondary": "#4a2c00",
+              "on-surface": "#dee5ff",
+              "surface-tint": "#a3a6ff",
+              "inverse-surface": "#faf8ff",
+              "tertiary": "#9bffce",
+              "surface-container-low": "#091328",
+              "primary-container": "#9396ff",
+              "surface-container-highest": "#192540",
+              "on-surface-variant": "#a3aac4",
+              "on-secondary-fixed": "#4c2e00",
+              "secondary-fixed": "#ffc885",
+              "surface-dim": "#060e20",
+              "outline": "#6d758c",
+              "error": "#ff6e84",
+              "error-container": "#a70138",
+              "surface-bright": "#1f2b49",
+              "surface": "#060e20",
+              "primary": "#a3a6ff",
+              "on-tertiary": "#006443",
+              "surface-container-lowest": "#000000",
+              "on-error": "#490013",
+              "tertiary-dim": "#58e7ab",
+              "on-primary": "#0f00a4",
+              "on-tertiary-fixed-variant": "#006544",
+              "surface-container": "#0f1930",
+              "on-tertiary-container": "#005a3c",
+              "inverse-on-surface": "#4d556b",
+              "on-primary-container": "#0a0081"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Space Grotesk"]
+            },
+            borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glow-primary {
+        filter: drop-shadow(0 0 8px rgba(163, 166, 255, 0.4));
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body select-none">
+<!-- TopAppBar -->
+<header class="bg-[#060e20] flex justify-between items-center w-full px-6 h-14 fixed top-0 z-50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#a3a6ff]" data-icon="terminal">terminal</span>
+<h1 class="text-lg font-black tracking-tighter text-[#a3a6ff]">PRISM_PROTOCOL</h1>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-['Space_Grotesk'] uppercase tracking-[0.1em] text-[0.6875rem] font-bold text-[#a3a6ff]">LIVE_OVERSIGHT</span>
+<span class="material-symbols-outlined text-[#a3a6ff]" data-icon="sensors">sensors</span>
+</div>
+</header>
+<main class="pt-20 pb-24 px-4 min-h-screen">
+<!-- Dashboard Heading & Meta -->
+<div class="flex justify-between items-end mb-8">
+<div class="space-y-1">
+<span class="font-label text-[0.6875rem] uppercase tracking-[0.2em] text-on-surface-variant">System_Active</span>
+<h2 class="font-headline text-3xl font-bold leading-none">TACTICAL DASHBOARD</h2>
+</div>
+<div class="text-right">
+<span class="font-label text-[0.6875rem] uppercase tracking-widest text-primary block">Node: 09-Alpha</span>
+<span class="font-label text-[0.6875rem] text-on-surface-variant block opacity-60">12:44:02 UTC</span>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-2 gap-4">
+<!-- Safety Integrity Gauge (Large) -->
+<div class="col-span-2 bg-surface-container-low p-6 flex flex-col items-center justify-center relative overflow-hidden">
+<div class="absolute top-4 right-4 flex items-center gap-2">
+<div class="w-2 h-2 bg-primary animate-pulse rounded-full glow-primary"></div>
+<span class="font-label text-[10px] uppercase tracking-widest text-primary">Syncing</span>
+</div>
+<div class="relative w-48 h-48 flex items-center justify-center mb-4">
+<!-- Gauge SVG -->
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-surface-container-highest" cx="96" cy="96" fill="transparent" r="88" stroke="currentColor" stroke-width="2"></circle>
+<circle class="text-primary glow-primary" cx="96" cy="96" fill="transparent" r="88" stroke="currentColor" stroke-dasharray="552.92" stroke-dashoffset="110.58" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-headline text-5xl font-black text-on-surface">94.2</span>
+<span class="font-label text-[0.6875rem] uppercase tracking-[0.3em] text-on-surface-variant">Integrity %</span>
+</div>
+</div>
+<div class="w-full border-t border-outline-variant/20 pt-4 flex justify-between">
+<span class="font-label text-[10px] uppercase text-on-surface-variant">Metric: SAFETY_VAL</span>
+<span class="font-label text-[10px] uppercase text-primary font-bold">Optimal State</span>
+</div>
+</div>
+<!-- Communication Density (Bar Chart) -->
+<div class="col-span-2 bg-surface-container-low p-6">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="font-label text-[0.6875rem] uppercase tracking-widest text-on-surface-variant mb-1">Communication Density</h3>
+<p class="font-body text-xs text-on-surface-variant opacity-70">Traffic per frequency band</p>
+</div>
+<span class="material-symbols-outlined text-primary text-sm" data-icon="bar_chart">bar_chart</span>
+</div>
+<div class="flex items-end justify-between h-32 gap-2 px-2">
+<div class="w-full bg-surface-container-highest relative group">
+<div class="absolute bottom-0 w-full bg-primary/20 h-[40%]"></div>
+<div class="absolute bottom-0 w-full bg-primary h-[25%] glow-primary"></div>
+</div>
+<div class="w-full bg-surface-container-highest relative group">
+<div class="absolute bottom-0 w-full bg-primary/20 h-[70%]"></div>
+<div class="absolute bottom-0 w-full bg-primary h-[55%] glow-primary"></div>
+</div>
+<div class="w-full bg-surface-container-highest relative group">
+<div class="absolute bottom-0 w-full bg-primary/20 h-[90%]"></div>
+<div class="absolute bottom-0 w-full bg-primary h-[85%] glow-primary"></div>
+</div>
+<div class="w-full bg-surface-container-highest relative group">
+<div class="absolute bottom-0 w-full bg-primary/20 h-[60%]"></div>
+<div class="absolute bottom-0 w-full bg-primary h-[45%] glow-primary"></div>
+</div>
+<div class="w-full bg-surface-container-highest relative group">
+<div class="absolute bottom-0 w-full bg-primary/20 h-[30%]"></div>
+<div class="absolute bottom-0 w-full bg-primary h-[15%] glow-primary"></div>
+</div>
+<div class="w-full bg-surface-container-highest relative group">
+<div class="absolute bottom-0 w-full bg-primary/20 h-[80%]"></div>
+<div class="absolute bottom-0 w-full bg-primary h-[65%] glow-primary"></div>
+</div>
+</div>
+<div class="flex justify-between mt-4">
+<span class="font-label text-[8px] uppercase tracking-tighter text-on-surface-variant opacity-40">Band 01</span>
+<span class="font-label text-[8px] uppercase tracking-tighter text-on-surface-variant opacity-40">Band 06</span>
+</div>
+</div>
+<!-- Network Shield Status -->
+<div class="col-span-1 bg-surface-container-low p-4">
+<span class="material-symbols-outlined text-tertiary text-xl mb-3" data-icon="security" style="font-variation-settings: 'FILL' 1;">security</span>
+<h4 class="font-label text-[0.6875rem] uppercase tracking-widest text-on-surface-variant mb-1">Enc_Shield</h4>
+<div class="text-xl font-headline font-bold text-tertiary">ACTIVE</div>
+<div class="mt-2 h-1 bg-surface-container-highest w-full">
+<div class="h-full bg-tertiary w-3/4"></div>
+</div>
+</div>
+<!-- Threat Level -->
+<div class="col-span-1 bg-surface-container-low p-4">
+<span class="material-symbols-outlined text-secondary text-xl mb-3" data-icon="warning" style="font-variation-settings: 'FILL' 1;">warning</span>
+<h4 class="font-label text-[0.6875rem] uppercase tracking-widest text-on-surface-variant mb-1">Threat_Lvl</h4>
+<div class="text-xl font-headline font-bold text-secondary">LOW</div>
+<div class="mt-2 h-1 bg-surface-container-highest w-full">
+<div class="h-full bg-secondary w-1/5"></div>
+</div>
+</div>
+<!-- Recent Interventions -->
+<div class="col-span-2 bg-surface-container-low p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-label text-[0.6875rem] uppercase tracking-widest text-on-surface-variant">Recent Interventions</h3>
+<span class="font-label text-[10px] text-primary uppercase">View Logs</span>
+</div>
+<div class="space-y-4">
+<!-- Item 1 -->
+<div class="flex items-start gap-4 p-3 bg-surface-container-highest">
+<div class="bg-secondary/10 p-2 text-secondary">
+<span class="material-symbols-outlined text-lg" data-icon="block">block</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between">
+<span class="font-label text-[0.6875rem] uppercase font-bold text-on-surface">URL Restricted</span>
+<span class="font-label text-[9px] text-on-surface-variant opacity-60">14:22</span>
+</div>
+<p class="text-xs text-on-surface-variant mt-1 font-body">Unauthorized domain access attempt: 'social-node-04'</p>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex items-start gap-4 p-3 bg-surface-container-highest">
+<div class="bg-primary/10 p-2 text-primary">
+<span class="material-symbols-outlined text-lg" data-icon="lock">lock</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between">
+<span class="font-label text-[0.6875rem] uppercase font-bold text-on-surface">Device Locked</span>
+<span class="font-label text-[9px] text-on-surface-variant opacity-60">12:10</span>
+</div>
+<p class="text-xs text-on-surface-variant mt-1 font-body">Terminal 'ALPHA-KID' reached scheduled downtime protocol.</p>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="flex items-start gap-4 p-3 bg-surface-container-highest">
+<div class="bg-tertiary/10 p-2 text-tertiary">
+<span class="material-symbols-outlined text-lg" data-icon="verified_user">verified_user</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between">
+<span class="font-label text-[0.6875rem] uppercase font-bold text-on-surface">Scan Complete</span>
+<span class="font-label text-[9px] text-on-surface-variant opacity-60">09:45</span>
+</div>
+<p class="text-xs text-on-surface-variant mt-1 font-body">Global file structure integrity check: 100% Secure.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- System Stats Block -->
+<div class="col-span-2 p-6 bg-[#091328] border border-outline-variant/10">
+<div class="grid grid-cols-3 gap-4">
+<div class="text-center">
+<div class="text-on-surface-variant font-label text-[8px] uppercase mb-1">Uptime</div>
+<div class="text-primary font-headline text-lg font-bold">142h</div>
+</div>
+<div class="text-center">
+<div class="text-on-surface-variant font-label text-[8px] uppercase mb-1">Latency</div>
+<div class="text-primary font-headline text-lg font-bold">12ms</div>
+</div>
+<div class="text-center">
+<div class="text-on-surface-variant font-label text-[8px] uppercase mb-1">Nodes</div>
+<div class="text-primary font-headline text-lg font-bold">04</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 px-4 bg-[#060e20]/85 backdrop-blur-xl">
+<button class="flex items-center justify-center text-[#40485d] hover:text-[#dee5ff] transition-all Active: scale-95 duration-75">
+<span class="material-symbols-outlined" data-icon="radar">radar</span>
+</button>
+<button class="flex items-center justify-center text-[#a3a6ff] drop-shadow-[0_0_8px_rgba(163,166,255,0.8)] scale-110 Active: scale-95 duration-75">
+<span class="material-symbols-outlined" data-icon="grid_view" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+</button>
+<button class="flex items-center justify-center text-[#40485d] hover:text-[#dee5ff] transition-all Active: scale-95 duration-75">
+<span class="material-symbols-outlined" data-icon="shield">shield</span>
+</button>
+<button class="flex items-center justify-center text-[#40485d] hover:text-[#dee5ff] transition-all Active: scale-95 duration-75">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+</nav>
+</body></html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary-fixed-variant": "#9b3d2a",
+              "inverse-on-surface": "#a19c94",
+              "primary-fixed-dim": "#b7debe",
+              "on-tertiary": "#e8ffea",
+              "inverse-surface": "#100e09",
+              "outline-variant": "#b9b1a3",
+              "on-error": "#fff7f6",
+              "error-dim": "#67040d",
+              "surface-tint": "#44674d",
+              "error": "#a83836",
+              "surface-container-low": "#faf3e7",
+              "surface-dim": "#e1d9ca",
+              "tertiary-container": "#d3fbda",
+              "on-primary-container": "#375941",
+              "on-tertiary-container": "#3f6249",
+              "surface": "#fff8f0",
+              "primary": "#44674d",
+              "inverse-primary": "#d3fbda",
+              "surface-container": "#f5ede0",
+              "surface-variant": "#eae1d2",
+              "on-surface": "#363228",
+              "secondary-fixed-dim": "#ffc8bc",
+              "outline": "#807a6d",
+              "on-error-container": "#6e0a12",
+              "tertiary-fixed-dim": "#c5eccc",
+              "on-primary-fixed-variant": "#41634a",
+              "error-container": "#fa746f",
+              "tertiary": "#44674e",
+              "primary-dim": "#385b42",
+              "surface-bright": "#fff8f0",
+              "tertiary-dim": "#385a42",
+              "on-secondary": "#fff7f6",
+              "primary-fixed": "#c5eccc",
+              "on-secondary-fixed": "#752211",
+              "secondary-container": "#ffdad3",
+              "on-background": "#363228",
+              "on-primary": "#e8ffea",
+              "secondary": "#a0412d",
+              "on-tertiary-fixed-variant": "#496c53",
+              "on-secondary-container": "#8e3421",
+              "primary-container": "#c5eccc",
+              "secondary-dim": "#903522",
+              "on-tertiary-fixed": "#2d4f38",
+              "secondary-fixed": "#ffdad3",
+              "on-surface-variant": "#645e53",
+              "surface-container-highest": "#eae1d2",
+              "on-primary-fixed": "#25462f",
+              "tertiary-fixed": "#d3fbda",
+              "surface-container-lowest": "#ffffff",
+              "surface-container-high": "#efe7da",
+              "background": "#fff8f0"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .hearth-shape {
+            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+        }
+        .glass-panel {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container min-h-screen">
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-[#FFF8F0]/80 dark:bg-stone-900/80 backdrop-blur-md shadow-sm shadow-[#363228]/5">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Parent Profile Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPQb5lxw9FNMopXWtHzS7ezCTLNjhGt08cTzxTy-qMiB5S2JfxBi1zpoU1o99jwkynaervk8ELraHHm59-SZvAIX1t5h8H33E_VLB7tP-V1xk6T7LagW1NxohbtIunWLLsatgNSAzy3f-IAWpFAYJ4BELE-bPyEWJlU4pZIN3yiRar5WIxE6HygejNyCPysMmCc8x7iG6YIjILAEW5ToClbbs_e_d7xs9muLUcztGqtZH_9b-dxRpcTTDB-aHEviczH2evXv7nX5A"/>
+</div>
+<span class="text-xl font-bold text-[#363228] dark:text-[#F5EDE0] font-headline">Nurturing Atelier</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-[#44674D] dark:text-[#84A98C] hover:bg-[#F5EDE0] transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications_active">notifications_active</span>
+</button>
+</nav>
+<main class="pt-24 pb-32 px-6 max-w-5xl mx-auto space-y-10">
+<!-- Hero Section: The Hearth -->
+<section class="relative">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+<div class="order-2 md:order-1 space-y-4">
+<span class="font-label text-xs tracking-widest text-secondary uppercase font-semibold">Morning, Sarah</span>
+<h1 class="text-5xl md:text-6xl font-headline font-extrabold text-on-surface leading-tight tracking-tight">
+                        Everything is <br/><span class="text-primary italic">at peace</span>.
+                    </h1>
+<p class="text-on-surface-variant text-lg max-w-md">
+                        Leo's digital environment is balanced. High focus levels detected during study hours.
+                    </p>
+</div>
+<div class="order-1 md:order-2 flex justify-center md:justify-end relative">
+<!-- Hearth Blob -->
+<div class="hearth-shape w-64 h-64 md:w-80 md:h-80 bg-gradient-to-tr from-primary to-tertiary-fixed-dim flex items-center justify-center relative shadow-2xl shadow-primary/20">
+<div class="text-white text-center space-y-1">
+<span class="material-symbols-outlined text-5xl" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<p class="font-headline font-bold text-xl">All is well</p>
+</div>
+<!-- Ambient blobs behind -->
+<div class="absolute -z-10 w-full h-full bg-secondary/10 hearth-shape blur-3xl scale-125 translate-x-4 translate-y-4"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Bento Grid: Activity & Stats -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Leo's Status Card -->
+<div class="md:col-span-8 bg-surface-container-lowest rounded-lg p-8 flex flex-col md:flex-row gap-8 items-center shadow-sm">
+<div class="relative">
+<div class="w-32 h-32 rounded-full border-4 border-primary-container p-1">
+<img class="w-full h-full rounded-full object-cover" data-alt="Portrait of young boy Leo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCurR4XH40Z01u0tqCA7rmHjrvlhqSTCSbg__UGwkervZcTGQyoia3SYT_bqDvFo49SulW7S1IffaIa8F0yhbcuRDx79xMcdGTBwxwr4A_BTWHNdepu6KOnFdAJNz7vpsJaZXRfMCxW0V9J-2xrtoa8g6hVCclDBAKJlodGhGpaohP935-CNMpZUqGjuL0bRdPgij3YL821CeYi4U5msMqjc0OYzryW2-lcVN9XbaIuDn48kljO1I6z6vJEjKaZAHP5Z1G-_C-_FPk"/>
+</div>
+<div class="absolute bottom-1 right-1 bg-primary w-6 h-6 rounded-full border-2 border-surface-container-lowest flex items-center justify-center">
+<span class="w-2 h-2 bg-white rounded-full"></span>
+</div>
+</div>
+<div class="flex-1 space-y-4 text-center md:text-left">
+<div>
+<h2 class="text-2xl font-headline font-bold">Leo is Online</h2>
+<p class="text-on-surface-variant">Currently using <span class="text-primary font-semibold">Khan Academy</span></p>
+</div>
+<div class="flex flex-wrap gap-3 justify-center md:justify-start">
+<div class="bg-surface-container px-4 py-2 rounded-full flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">battery_charging_80</span>
+<span class="text-sm font-medium">84%</span>
+</div>
+<div class="bg-surface-container px-4 py-2 rounded-full flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">location_on</span>
+<span class="text-sm font-medium">Home</span>
+</div>
+</div>
+</div>
+<div class="md:border-l md:border-surface-variant md:pl-8 flex flex-col items-center justify-center">
+<span class="text-4xl font-headline font-extrabold text-secondary">92%</span>
+<span class="font-label text-[10px] tracking-widest uppercase opacity-60">Harmony Sync</span>
+</div>
+</div>
+<!-- Quick Action / Status -->
+<div class="md:col-span-4 bg-primary text-on-primary rounded-lg p-8 flex flex-col justify-between shadow-lg shadow-primary/10">
+<span class="material-symbols-outlined text-3xl">auto_awesome</span>
+<div class="space-y-2">
+<h3 class="text-xl font-headline font-bold leading-tight">Bedtime Routine starts in 2h</h3>
+<p class="text-primary-container text-sm">Devices will automatically enter Focus Mode at 8:00 PM.</p>
+</div>
+</div>
+<!-- Most Active Apps -->
+<div class="md:col-span-6 bg-surface-container-low rounded-lg p-8 space-y-6">
+<div class="flex justify-between items-end">
+<h3 class="text-xl font-headline font-bold">Most active apps</h3>
+<span class="text-sm font-medium text-primary">View all</span>
+</div>
+<div class="space-y-5">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-highest rounded-md flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">school</span>
+</div>
+<div class="flex-1 space-y-1">
+<div class="flex justify-between text-sm">
+<span class="font-bold">Khan Academy</span>
+<span class="text-on-surface-variant">45m</span>
+</div>
+<div class="h-2 w-full bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full w-[85%]"></div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-highest rounded-md flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">smart_display</span>
+</div>
+<div class="flex-1 space-y-1">
+<div class="flex justify-between text-sm">
+<span class="font-bold">YouTube Kids</span>
+<span class="text-on-surface-variant">20m</span>
+</div>
+<div class="h-2 w-full bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full w-[40%]"></div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-highest rounded-md flex items-center justify-center">
+<span class="material-symbols-outlined text-[#44674D]">translate</span>
+</div>
+<div class="flex-1 space-y-1">
+<div class="flex justify-between text-sm">
+<span class="font-bold">Duolingo</span>
+<span class="text-on-surface-variant">15m</span>
+</div>
+<div class="h-2 w-full bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full w-[30%]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Insights / Sync Card -->
+<div class="md:col-span-6 bg-surface-container-highest rounded-lg p-8 relative overflow-hidden group">
+<div class="relative z-10 space-y-4">
+<div class="bg-surface-container-lowest w-fit px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant">Daily Insights</div>
+<h3 class="text-2xl font-headline font-bold leading-tight">Healthy Balance <br/>Achieved Today.</h3>
+<p class="text-on-surface-variant text-sm">Educational content outpaced entertainment by 3:1 today. Great job guiding Leo's journey!</p>
+<button class="bg-on-surface text-surface py-3 px-6 rounded-full font-bold text-sm transition-transform active:scale-95">Explore Detailed Insights</button>
+</div>
+<!-- Abstract visual element -->
+<div class="absolute -right-12 -bottom-12 w-48 h-48 bg-primary/10 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-700"></div>
+<div class="absolute right-8 top-8 opacity-20">
+<span class="material-symbols-outlined text-8xl" style="font-variation-settings: 'FILL' 1;">insights</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-8 pt-4 bg-[#FFFFFF]/70 dark:bg-stone-950/70 backdrop-blur-xl rounded-t-[2.5rem] shadow-[0_-8px_32px_rgba(54,50,40,0.06)]">
+<a class="flex flex-col items-center justify-center text-[#44674D] dark:text-[#84A98C] bg-[#F5EDE0] dark:bg-stone-800 rounded-full px-4 py-2 transition-all tap-highlight-none active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-medium tracking-wide uppercase">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#363228]/50 dark:text-[#F5EDE0]/50 px-4 py-2 hover:text-[#A0412D] transition-all tap-highlight-none active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-medium tracking-wide uppercase">Activity</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#363228]/50 dark:text-[#F5EDE0]/50 px-4 py-2 hover:text-[#A0412D] transition-all tap-highlight-none active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="insights">insights</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-medium tracking-wide uppercase">Insights</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#363228]/50 dark:text-[#F5EDE0]/50 px-4 py-2 hover:text-[#A0412D] transition-all tap-highlight-none active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-medium tracking-wide uppercase">Rules</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#363228]/50 dark:text-[#F5EDE0]/50 px-4 py-2 hover:text-[#A0412D] transition-all tap-highlight-none active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-medium tracking-wide uppercase">Settings</span>
+</a>
+</nav>
+</body></html>

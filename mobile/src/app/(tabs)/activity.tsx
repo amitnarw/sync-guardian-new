@@ -51,7 +51,7 @@ export default function ActivityScreen() {
             </TouchableOpacity>
             <View style={s.profileWrap}>
               <Image
-                source={require('@/assets/images/mother_avatar.png')}
+                source={require('@/assets/images/mother_avatar.jpg')}
                 style={s.profileAvatar}
               />
             </View>
@@ -209,13 +209,6 @@ export default function ActivityScreen() {
             </View>
           </View>
 
-          {/* End of feed soft indicator dots */}
-          <View style={s.endIndicator}>
-            <View style={s.dot} />
-            <View style={[s.dot, { opacity: 0.5 }]} />
-            <View style={[s.dot, { opacity: 0.25 }]} />
-          </View>
-
           {/* Bottom padding spacing */}
           <View style={s.bottomSpacer} />
         </ScrollView>
@@ -301,13 +294,14 @@ const s = StyleSheet.create({
     paddingVertical: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 16,
     marginBottom: 24,
   },
   gradientBlobContainer: {
     position: 'absolute',
     top: 0,
-    left: -20,
-    right: -20,
+    left: 0,
+    right: 0,
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
@@ -367,7 +361,7 @@ const s = StyleSheet.create({
   },
   timelineLine: {
     position: 'absolute',
-    left: 20,
+    left: 2,
     top: 0,
     bottom: 0,
     width: 2,
@@ -559,21 +553,6 @@ const s = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: C.onSurfaceVariant,
-  },
-
-  /* End of feed dots */
-  endIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 32,
-    gap: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: C.surfaceContainerHigh,
   },
 
   /* Bottom Spacer */

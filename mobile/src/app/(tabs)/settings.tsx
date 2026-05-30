@@ -1,9 +1,12 @@
-import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, ActivityIndicator, Modal, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedView } from '@/components/themed-view';
+import { useAuthStore } from '@/hooks/use-auth-store';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -36,8 +39,71 @@ const C = {
 } as const;
 
 export default function SettingsScreen() {
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const screenOpacity = useSharedValue(1);
+  const containerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: screenOpacity.value,
+  }));
+
+  const [showDialog, setShowDialog] = useState(false);
+  const dialogOpacity = useSharedValue(0);
+  const dialogCardScale = useSharedValue(0.88);
+  const dialogCardTranslateY = useSharedValue(24);
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: dialogOpacity.value,
+  }));
+
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: dialogOpacity.value,
+    transform: [
+      { scale: dialogCardScale.value },
+      { translateY: dialogCardTranslateY.value },
+    ],
+  }));
+
+  useEffect(() => {
+    if (showDialog) {
+      dialogOpacity.value = withTiming(1, { duration: 300 });
+      dialogCardScale.value = withSpring(1, { stiffness: 300, damping: 24 });
+      dialogCardTranslateY.value = withSpring(0, { stiffness: 300, damping: 24 });
+    }
+  }, [showDialog]);
+
+  const handleOpenDialog = () => setShowDialog(true);
+
+  const handleStay = () => {
+    dialogOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
+      if (finished) {
+        runOnJS(setShowDialog)(false);
+        dialogCardScale.value = 0.88;
+        dialogCardTranslateY.value = 24;
+      }
+    });
+  };
+
+  const performSignOut = () => {
+    useAuthStore.getState().resetAuth();
+    router.replace('/login');
+  };
+
+  const handleConfirmSignOut = () => {
+    setIsSigningOut(true);
+    dialogOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
+      if (finished) {
+        runOnJS(setShowDialog)(false);
+        screenOpacity.value = withTiming(0, { duration: 400 }, (finished2) => {
+          if (finished2) {
+            runOnJS(performSignOut)();
+          }
+        });
+      }
+    });
+  };
+
   return (
     <ThemedView style={s.container}>
+      <Animated.View style={[{ flex: 1 }, containerAnimatedStyle]}>
       {/* Ambient background glowing circle layer */}
       <View style={s.ambientBgWrapper}>
         <LinearGradient
@@ -126,8 +192,16 @@ export default function SettingsScreen() {
 
           {/* ========== ACTION AREA: SIGN OUT GENTLY ========== */}
           <View style={s.actionSection}>
-            <TouchableOpacity style={s.signOutButton}>
-              <Ionicons name="log-out-outline" size={20} color={C.onSurface} style={s.signOutIcon} />
+            <TouchableOpacity
+              style={[s.signOutButton, isSigningOut && s.signOutButtonDisabled]}
+              onPress={handleOpenDialog}
+              disabled={isSigningOut}
+            >
+              {isSigningOut ? (
+                <ActivityIndicator size="small" color={C.onSurface} style={s.signOutIcon} />
+              ) : (
+                <Ionicons name="log-out-outline" size={20} color={C.onSurface} style={s.signOutIcon} />
+              )}
               <Text style={s.signOutText}>Sign Out Gently</Text>
             </TouchableOpacity>
           </View>
@@ -136,6 +210,38 @@ export default function SettingsScreen() {
           <View style={s.bottomSpacer} />
         </ScrollView>
       </SafeAreaView>
+
+      <Modal
+        visible={showDialog}
+        transparent={true}
+        animationType="none"
+        onRequestClose={handleStay}
+      >
+        <Animated.View style={[s.dialogOverlay, backdropAnimatedStyle]}>
+          <TouchableWithoutFeedback onPress={handleStay}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <Animated.View style={[s.dialogCard, cardAnimatedStyle]}>
+            <Text style={s.dialogTitle}>Leaving so soon?</Text>
+            <Text style={s.dialogBody}>
+              Your digital sanctuary will be here when you return.
+            </Text>
+            <View style={s.dialogActions}>
+              <TouchableOpacity style={s.dialogButtonStay} onPress={handleStay}>
+                <Text style={s.dialogButtonStayText}>Stay</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.dialogButtonSignOut} onPress={handleConfirmSignOut}>
+                {isSigningOut ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={s.dialogButtonSignOutText}>Sign Out</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </Animated.View>
+      </Modal>
+      </Animated.View>
     </ThemedView>
   );
 }
@@ -340,6 +446,9 @@ const s = StyleSheet.create({
     borderRadius: 9999,
     gap: 8,
   },
+  signOutButtonDisabled: {
+    opacity: 0.6,
+  },
   signOutIcon: {
     marginRight: 2,
   },
@@ -353,5 +462,69 @@ const s = StyleSheet.create({
   /* Bottom Spacer */
   bottomSpacer: {
     height: 130,
+  },
+
+  /* ---------- Sign Out Dialog ---------- */
+  dialogOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(27,29,14,0.35)',
+  },
+  dialogCard: {
+    width: SCREEN_W - 64,
+    backgroundColor: C.surface,
+    borderRadius: 32,
+    padding: 32,
+    shadowColor: C.onSurface,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 32,
+    elevation: 8,
+  },
+  dialogTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 20,
+    lineHeight: 26,
+    color: C.onSurface,
+    letterSpacing: -0.3,
+  },
+  dialogBody: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.onSurfaceVariant,
+    marginTop: 8,
+    marginBottom: 28,
+  },
+  dialogActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  dialogButtonStay: {
+    flex: 1,
+    backgroundColor: C.surfaceContainer,
+    borderRadius: 9999,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  dialogButtonStayText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.onSurface,
+  },
+  dialogButtonSignOut: {
+    flex: 1,
+    backgroundColor: C.primary,
+    borderRadius: 9999,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  dialogButtonSignOutText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#ffffff',
   },
 });

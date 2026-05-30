@@ -1,0 +1,65 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "opengateway": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Gitlawb Opengateway (Free MiMo)",
+      "options": {
+        "baseURL": "https://opengateway.gitlawb.com/v1/xiaomi-mimo",
+        "apiKey": "ogw_live_48cdcb7aa2179a5ddf14c17668df2495"
+      },
+      "models": {
+        "mimo-v2.5-pro": {
+          "name": "MiMo V2.5 Pro",
+          "headers": {
+            "Authorization": "Bearer ogw_live_48cdcb7aa2179a5ddf14c17668df2495"
+          },
+          "limit": {
+            "context": 1048576,
+            "output": 16384
+          }
+        },
+        "mimo-v2-pro": {
+          "name": "MiMo V2 Pro",
+          "headers": {
+            "Authorization": "Bearer ogw_live_48cdcb7aa2179a5ddf14c17668df2495"
+          },
+          "limit": {
+            "context": 1048576,
+            "output": 131072
+          }
+        },
+        "mimo-v2.5": {
+          "name": "MiMo V2.5",
+          "headers": {
+            "Authorization": "Bearer ogw_live_48cdcb7aa2179a5ddf14c17668df2495"
+          },
+          "limit": {
+            "context": 1048576,
+            "output": 131072
+          }
+        },
+        "mimo-v2-omni": {
+          "name": "MiMo V2 Omni",
+          "headers": {
+            "Authorization": "Bearer ogw_live_48cdcb7aa2179a5ddf14c17668df2495"
+          },
+          "limit": {
+            "context": 262144,
+            "output": 65536
+          }
+        },
+        "mimo-v2-flash": {
+          "name": "MiMo V2 Flash",
+          "headers": {
+            "Authorization": "Bearer ogw_live_48cdcb7aa2179a5ddf14c17668df2495"
+          },
+          "limit": {
+            "context": 262144,
+            "output": 65536
+          }
+        }
+      }
+    }
+  }
+}
