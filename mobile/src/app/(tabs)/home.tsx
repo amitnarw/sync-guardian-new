@@ -1,13 +1,14 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, runOnJS } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SymbolView } from 'expo-symbols';
+import { BlurView, BlurTargetView } from 'expo-blur';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -56,13 +57,155 @@ const navItems = [
 ];
 
 export default function HomeScreen() {
-  const scale = useSharedValue(1);
+  const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
+  const [isDropdownRendered, setIsDropdownRendered] = React.useState(false);
+  const dropdownProgress = useSharedValue(0);
 
   React.useEffect(() => {
+    if (isDropdownVisible) {
+      setIsDropdownRendered(true);
+      dropdownProgress.value = withTiming(1, { duration: 250 });
+    } else {
+      dropdownProgress.value = withTiming(0, { duration: 200 }, (finished) => {
+        if (finished) {
+          runOnJS(setIsDropdownRendered)(false);
+        }
+      });
+    }
+  }, [isDropdownVisible]);
+
+  const handleProfilePress = () => {
+    setIsDropdownVisible(!isDropdownVisible);
+  };
+
+  const dropdownAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: dropdownProgress.value,
+      transform: [
+        { scale: dropdownProgress.value * 0.08 + 0.92 },
+        { translateY: (1 - dropdownProgress.value) * -12 },
+      ],
+    };
+  });
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: dropdownProgress.value,
+    };
+  });
+
+  const blurTargetRef = React.useRef<View>(null);
+  const scale = useSharedValue(1);
+  const topLeft = useSharedValue(110);
+  const topRight = useSharedValue(130);
+  const bottomLeft = useSharedValue(90);
+  const bottomRight = useSharedValue(140);
+  const rotation = useSharedValue(0);
+
+  // Slow morphing variables for insights card decoration blob
+  const insTopLeft = useSharedValue(96);
+  const insTopRight = useSharedValue(96);
+  const insBottomLeft = useSharedValue(96);
+  const insBottomRight = useSharedValue(96);
+
+  React.useEffect(() => {
+    // Smooth pulsing scale animation
     scale.value = withRepeat(
       withSequence(
-        withTiming(1.03, { duration: 3000 }),
-        withTiming(1, { duration: 3000 })
+        withTiming(1.02, { duration: 4000 }),
+        withTiming(0.98, { duration: 4000 })
+      ),
+      -1,
+      true
+    );
+
+    // Smooth fluid morphing border radiuses with staggered durations for organic shapes
+    topLeft.value = withRepeat(
+      withSequence(
+        withTiming(150, { duration: 3800 }),
+        withTiming(65, { duration: 4500 }),
+        withTiming(110, { duration: 4000 })
+      ),
+      -1,
+      true
+    );
+
+    topRight.value = withRepeat(
+      withSequence(
+        withTiming(80, { duration: 4200 }),
+        withTiming(160, { duration: 3600 }),
+        withTiming(130, { duration: 4000 })
+      ),
+      -1,
+      true
+    );
+
+    bottomLeft.value = withRepeat(
+      withSequence(
+        withTiming(140, { duration: 4000 }),
+        withTiming(60, { duration: 4800 }),
+        withTiming(90, { duration: 4200 })
+      ),
+      -1,
+      true
+    );
+
+    bottomRight.value = withRepeat(
+      withSequence(
+        withTiming(75, { duration: 3700 }),
+        withTiming(160, { duration: 4400 }),
+        withTiming(140, { duration: 4600 })
+      ),
+      -1,
+      true
+    );
+
+    // Smooth fluid rotation (slower)
+    rotation.value = withRepeat(
+      withSequence(
+        withTiming(10, { duration: 8000 }),
+        withTiming(-10, { duration: 8000 })
+      ),
+      -1,
+      true
+    );
+
+    // Slow organic morphing for insights blob
+    insTopLeft.value = withRepeat(
+      withSequence(
+        withTiming(120, { duration: 5000 }),
+        withTiming(60, { duration: 6000 }),
+        withTiming(96, { duration: 5500 })
+      ),
+      -1,
+      true
+    );
+
+    insTopRight.value = withRepeat(
+      withSequence(
+        withTiming(70, { duration: 5500 }),
+        withTiming(130, { duration: 4800 }),
+        withTiming(96, { duration: 5200 })
+      ),
+      -1,
+      true
+    );
+
+    insBottomLeft.value = withRepeat(
+      withSequence(
+        withTiming(110, { duration: 5200 }),
+        withTiming(60, { duration: 5800 }),
+        withTiming(96, { duration: 5000 })
+      ),
+      -1,
+      true
+    );
+
+    insBottomRight.value = withRepeat(
+      withSequence(
+        withTiming(70, { duration: 5600 }),
+        withTiming(120, { duration: 5200 }),
+        withTiming(96, { duration: 6000 })
       ),
       -1,
       true
@@ -71,193 +214,311 @@ export default function HomeScreen() {
 
   const animatedBlobStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ scale: scale.value }],
+      borderTopLeftRadius: topLeft.value,
+      borderTopRightRadius: topRight.value,
+      borderBottomLeftRadius: bottomLeft.value,
+      borderBottomRightRadius: bottomRight.value,
+      transform: [
+        { scale: scale.value },
+        { rotate: `${rotation.value}deg` }
+      ],
+    };
+  });
+
+  const animatedInnerStyle = useAnimatedStyle(() => {
+    return {
+      borderTopLeftRadius: topLeft.value * 0.5,
+      borderTopRightRadius: topRight.value * 0.5,
+      borderBottomLeftRadius: bottomLeft.value * 0.5,
+      borderBottomRightRadius: bottomRight.value * 0.5,
+      transform: [
+        { scale: scale.value },
+        { rotate: `${-rotation.value}deg` }
+      ],
+    };
+  });
+
+  const animatedInsightsBlobStyle = useAnimatedStyle(() => {
+    return {
+      borderTopLeftRadius: insTopLeft.value,
+      borderTopRightRadius: insTopRight.value,
+      borderBottomLeftRadius: insBottomLeft.value,
+      borderBottomRightRadius: insBottomRight.value,
     };
   });
 
   return (
     <ThemedView style={s.container}>
-      <SafeAreaView style={s.safeArea} edges={['top']}>
-        {/* Floating Glass Header */}
-        <View style={s.header}>
-          <View style={s.headerLeft}>
-            <Image
-              source={require('@/assets/images/mother_avatar.jpg')}
-              style={s.headerAvatar}
-            />
-            <Text style={s.headerTitle}>Nurturing Atelier</Text>
-          </View>
-          <TouchableOpacity 
-            style={s.headerButton}
-            onPress={() => router.push('/notifications')}
-          >
-            <Ionicons name="notifications-outline" size={22} color={C.onSurface} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={s.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* ========== HERO SECTION (v2) ========== */}
-          <View style={s.heroSection}>
-            {/* Text block */}
-            <View style={s.heroTextBlock}>
-              <Text style={s.flowLabel}>MORNING FLOW</Text>
-              <Text style={s.heroTitle}>
-                Gentle rhythm for{'\n'}
-                <Text style={s.heroTitleAccent}>Leo's Wednesday</Text>
-              </Text>
-              <Text style={s.heroDescription}>
-                Currently in "Creative Exploration" block. The digital sanctuary is maintaining a soft focus environment.
-              </Text>
-              <View style={s.heroButtons}>
-                <TouchableOpacity style={s.primaryBtn}>
-                  <Text style={s.primaryBtnText}>Adjust Rhythm</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={s.secondaryBtn}>
-                  <Text style={s.secondaryBtnText}>View Schedule</Text>
-                </TouchableOpacity>
-              </View>
+      <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+        <SafeAreaView style={s.safeArea} edges={['top']}>
+          {/* Floating Glass Header */}
+          <View style={s.header}>
+            <View style={s.headerLeft}>
+              <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
+              <Text style={s.headerTitle}>Nurturing Atelier</Text>
             </View>
-
-            {/* Visual block */}
-            <View style={s.visualBlock}>
-              {/* Decorative blurred blob behind hearth */}
-              <View style={s.decoBlobBehind} />
-
-              {/* Hearth Blob */}
-              <AnimatedLinearGradient
-                colors={[C.primary, C.primaryContainer]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[s.hearthBlob, animatedBlobStyle]}
+            <View style={s.headerRight}>
+              <TouchableOpacity
+                onPress={handleProfilePress}
+                activeOpacity={0.8}
               >
-                <View style={s.hearthInner}>
-                  <SymbolView
-                    name={"shield_with_heart" as any}
-                    size={72}
-                    type="monochrome"
-                    tintColor="#ffffff"
+                <View style={s.profileWrap}>
+                  <Image
+                    source={require('@/assets/images/mother_avatar.jpg')}
+                    style={s.profileAvatar}
                   />
                 </View>
-              </AnimatedLinearGradient>
-
-              {/* Floating Timer Card */}
-              <View style={s.timerCard}>
-                <View style={s.timerHeader}>
-                  <SymbolView name="timer" size={20} tintColor={C.secondary} />
-                  <Text style={s.timerText}>1h 12m Remaining</Text>
-                </View>
-                <View style={s.timerTrack}>
-                  <View style={s.timerFill} />
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* ========== LEO STATUS CARD (v1) ========== */}
-          <View style={s.leoCard}>
-            <View style={s.leoRow}>
-              <View style={s.leoAvatarWrap}>
-                <Image
-                  source={require('@/assets/images/leo_avatar.jpg')}
-                  style={s.leoAvatar}
-                />
-                <View style={s.leoOnlineDot}>
-                  <View style={s.leoOnlineDotInner} />
-                </View>
-              </View>
-              <View style={s.leoInfo}>
-                <Text style={s.leoName}>Leo is Online</Text>
-                <Text style={s.leoActivity}>
-                  Currently using <Text style={s.leoAppName}>Khan Academy</Text>
-                </Text>
-                <View style={s.leoBadges}>
-                  <View style={s.badge}>
-                    <Ionicons name="battery-charging" size={14} color={C.primary} />
-                    <Text style={s.badgeText}>84%</Text>
-                  </View>
-                  <View style={s.badge}>
-                    <Ionicons name="location-outline" size={14} color={C.primary} />
-                    <Text style={s.badgeText}>Home</Text>
-                  </View>
-                </View>
-              </View>
-              <View style={s.harmonyBlock}>
-                <Text style={s.harmonyStat}>92%</Text>
-                <Text style={s.harmonyLabel}>Harmony Sync</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* ========== BEDTIME ROUTINE CARD (v1) ========== */}
-          <View style={s.bedtimeCard}>
-            <Ionicons name="sparkles" size={28} color={C.onPrimary} />
-            <View style={s.bedtimeTextBlock}>
-              <Text style={s.bedtimeTitle}>Bedtime Routine starts in 2h</Text>
-              <Text style={s.bedtimeSub}>
-                Devices will automatically enter Focus Mode at 8:00 PM.
-              </Text>
-            </View>
-          </View>
-
-          {/* ========== MOST ACTIVE APPS (v1) ========== */}
-          <View style={s.appsSection}>
-            <View style={s.appsHeader}>
-              <Text style={s.appsTitle}>Most active apps</Text>
-              <TouchableOpacity>
-                <Text style={s.viewAll}>View all</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.iconButton}
+                onPress={() => router.push('/notifications')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="notifications-outline" size={22} color={C.primary} />
               </TouchableOpacity>
             </View>
-            <View style={s.appsList}>
-              {apps.map((app, i) => (
-                <View key={i} style={s.appItem}>
-                  <View style={[s.appIconBox, { backgroundColor: C.surfaceContainerHighest }]}>
-                    <Ionicons name={app.icon} size={20} color={C.primary} />
-                  </View>
-                  <View style={s.appDetails}>
-                    <View style={s.appMeta}>
-                      <Text style={s.appName}>{app.name}</Text>
-                      <Text style={s.appDuration}>{app.duration}</Text>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={s.scrollContent}
+            showsVerticalScrollIndicator={false}
+            onScrollBeginDrag={() => setIsDropdownVisible(false)}
+          >
+            {/* ========== HERO SECTION (v2) ========== */}
+            <View style={s.heroSection}>
+              {/* Text block */}
+              <View style={s.heroTextBlock}>
+                <Text style={s.flowLabel}>MORNING FLOW</Text>
+                <Text style={s.heroTitle}>
+                  Gentle rhythm for{'\n'}
+                  <Text style={s.heroTitleAccent}>Leo's Wednesday</Text>
+                </Text>
+                <Text style={s.heroDescription}>
+                  Currently in "Creative Exploration" block. The digital sanctuary is maintaining a soft focus environment.
+                </Text>
+                <View style={s.heroButtons}>
+                  <TouchableOpacity style={s.primaryBtn}>
+                    <Text style={s.primaryBtnText}>Adjust Rhythm</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.secondaryBtn}>
+                    <Text style={s.secondaryBtnText}>View Schedule</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Visual block */}
+              <View style={s.visualBlock}>
+                {/* Decorative blurred blob behind hearth */}
+                <View style={s.decoBlobBehind} />
+
+                {/* Hearth Blob Container (clipping wrapper) */}
+                <Animated.View
+                  style={[s.hearthBlob, animatedBlobStyle]}
+                >
+                  <LinearGradient
+                    colors={[C.primary, C.primaryContainer]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <Animated.View style={[s.hearthInner, animatedInnerStyle]}>
+                    <SymbolView
+                      name={"shield_with_heart" as any}
+                      size={64}
+                      type="monochrome"
+                      tintColor="#ffffff"
+                    />
+                  </Animated.View>
+                </Animated.View>
+
+                {/* Floating Timer Card */}
+                <View style={s.timerCardContainer}>
+                  <BlurView
+                    intensity={80}
+                    tint="light"
+                    style={s.timerCard}
+                  >
+                    <View style={s.timerHeader}>
+                      <SymbolView name="timer" size={20} tintColor={C.secondary} />
+                      <Text style={s.timerText}>1h 12m Remaining</Text>
                     </View>
-                    <View style={s.appTrack}>
-                      <View style={[s.appFill, { width: app.width as any, backgroundColor: app.color }]} />
+                    <View style={s.timerTrack}>
+                      <View style={s.timerFill} />
+                    </View>
+                  </BlurView>
+                </View>
+              </View>
+            </View>
+
+            {/* ========== LEO STATUS CARD (v1) ========== */}
+            <View style={s.leoCard}>
+              <View style={s.leoRow}>
+                <View style={s.leoAvatarWrap}>
+                  <Image
+                    source={require('@/assets/images/leo_avatar.jpg')}
+                    style={s.leoAvatar}
+                  />
+                  <View style={s.leoOnlineDot}>
+                    <View style={s.leoOnlineDotInner} />
+                  </View>
+                </View>
+                <View style={s.leoInfo}>
+                  <Text style={s.leoName}>Leo is Online</Text>
+                  <Text style={s.leoActivity}>
+                    Currently using <Text style={s.leoAppName}>Khan Academy</Text>
+                  </Text>
+                  <View style={s.leoBadges}>
+                    <View style={s.badge}>
+                      <Ionicons name="battery-charging" size={14} color={C.primary} />
+                      <Text style={s.badgeText}>84%</Text>
+                    </View>
+                    <View style={s.badge}>
+                      <Ionicons name="location-outline" size={14} color={C.primary} />
+                      <Text style={s.badgeText}>Home</Text>
                     </View>
                   </View>
                 </View>
-              ))}
-            </View>
-          </View>
-
-          {/* ========== DAILY INSIGHTS CARD (v1) ========== */}
-          <View style={s.insightsCard}>
-            <View style={s.insightsLabelRow}>
-              <View style={s.insightsLabelPill}>
-                <Text style={s.insightsLabelText}>Daily Insights</Text>
+                <View style={s.harmonyBlock}>
+                  <Text style={s.harmonyStat}>92%</Text>
+                  <Text style={s.harmonyLabel}>Harmony Sync</Text>
+                </View>
               </View>
-              <MaterialCommunityIcons name="chart-bell-curve" size={24} color={C.tertiary} />
             </View>
-            <Text style={s.insightsTitle}>Healthy Balance{'\n'}Achieved Today.</Text>
-            <Text style={s.insightsDesc}>
-              Educational content outpaced entertainment by 3:1 today. Great job guiding Leo's journey!
-            </Text>
-            <TouchableOpacity style={s.insightsCta}>
-              <Text style={s.insightsCtaText}>Explore Detailed Insights</Text>
-            </TouchableOpacity>
 
-            {/* Decorative blurred circle */}
-            <View style={s.insightsBlob} />
-            {/* Icon watermark */}
-            <View style={s.insightsWatermark}>
-              <MaterialCommunityIcons name="chart-bell-curve" size={96} color={C.primary} />
+            {/* ========== BEDTIME ROUTINE CARD (v1) ========== */}
+            <View style={s.bedtimeCard}>
+              <Ionicons name="sparkles" size={28} color={C.onPrimary} />
+              <View style={s.bedtimeTextBlock}>
+                <Text style={s.bedtimeTitle}>Bedtime Routine starts in 2h</Text>
+                <Text style={s.bedtimeSub}>
+                  Devices will automatically enter Focus Mode at 8:00 PM.
+                </Text>
+              </View>
             </View>
-          </View>
 
-          <View style={s.bottomSpacer} />
-        </ScrollView>
-      </SafeAreaView>
+            {/* ========== MOST ACTIVE APPS (v1) ========== */}
+            <View style={s.appsSection}>
+              <View style={s.appsHeader}>
+                <Text style={s.appsTitle}>Most active apps</Text>
+                <TouchableOpacity>
+                  <Text style={s.viewAll}>View all</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={s.appsList}>
+                {apps.map((app, i) => (
+                  <View key={i} style={s.appItem}>
+                    <View style={s.appIconBox}>
+                      <Ionicons name={app.icon} size={20} color={C.primary} />
+                    </View>
+                    <View style={s.appDetails}>
+                      <View style={s.appMeta}>
+                        <Text style={s.appName}>{app.name}</Text>
+                        <Text style={s.appDuration}>{app.duration}</Text>
+                      </View>
+                      <View style={s.appTrack}>
+                        <View style={[s.appFill, { width: app.width as any, backgroundColor: app.color }]} />
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
 
+            {/* ========== DAILY INSIGHTS CARD (v1) ========== */}
+            <View style={s.insightsCard}>
+              <View style={s.insightsLabelRow}>
+                <View style={s.insightsLabelPill}>
+                  <Text style={s.insightsLabelText}>Daily Insights</Text>
+                </View>
+              </View>
+              <Text style={s.insightsTitle}>Healthy Balance{'\n'}Achieved Today.</Text>
+              <Text style={s.insightsDesc}>
+                Educational content outpaced entertainment by 3:1 today. Great job guiding Leo's journey!
+              </Text>
+              <TouchableOpacity style={s.insightsCta}>
+                <Text style={s.insightsCtaText}>Explore Detailed Insights</Text>
+              </TouchableOpacity>
+
+              {/* Decorative blurred blob */}
+              <Animated.View style={[s.insightsBlob, animatedInsightsBlobStyle]} />
+              {/* Icon watermark */}
+              <View style={s.insightsWatermark}>
+                <MaterialCommunityIcons name="chart-bell-curve" size={96} color={C.primary} />
+              </View>
+            </View>
+
+            <View style={s.bottomSpacer} />
+          </ScrollView>
+        </SafeAreaView>
+      </BlurTargetView>
+      {isDropdownRendered && (
+        <>
+          <TouchableWithoutFeedback onPress={() => setIsDropdownVisible(false)}>
+            <Animated.View style={[s.dropdownBackdrop, backdropAnimatedStyle]} />
+          </TouchableWithoutFeedback>
+          <Animated.View style={[s.dropdownMenuContainer, dropdownAnimatedStyle]}>
+            <View style={s.dropdownMenu}>
+              <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
+                <View style={s.dropdownHeaderInfo}>
+                  <Text style={s.dropdownUserTitle}>Mother's Space</Text>
+                  <Text style={s.dropdownUserRole}>Atelier Curator</Text>
+                </View>
+
+                <View style={s.dropdownDivider} />
+
+                <TouchableOpacity
+                  style={s.dropdownItem}
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    console.log("Profile");
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="person-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>View Profile</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+
+                <View style={s.dropdownDivider} />
+
+                <TouchableOpacity
+                  style={s.dropdownItem}
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    router.push('/notifications');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="notifications-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>Daily Pulse</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+
+                <View style={s.dropdownDivider} />
+
+                <TouchableOpacity
+                  style={s.dropdownItem}
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    router.push('/(tabs)/settings');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="settings-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>Sanctuary Settings</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+              </BlurView>
+            </View>
+          </Animated.View>
+        </>
+      )}
     </ThemedView>
   );
 }
@@ -290,34 +551,52 @@ const s = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(68,103,77,0.12)',
-    backgroundColor: C.surfaceContainerHighest,
+  headerIcon: {
+    marginRight: 2,
   },
   headerTitle: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 18,
     lineHeight: 24,
-    color: C.onSurface,
-    letterSpacing: -0.2,
+    color: C.primary,
+    letterSpacing: -0.5,
   },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: C.surfaceContainerLowest,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.white,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  profileWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: C.surfaceContainerLowest,
+    backgroundColor: C.surfaceContainerHighest,
+    overflow: 'hidden',
+    shadowColor: '#363228',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
+    shadowOpacity: 0.08,
+    shadowRadius: 32,
+  },
+  profileAvatar: {
+    width: '100%',
+    height: '100%',
   },
 
   /* ---------- Hero Section ---------- */
@@ -412,23 +691,19 @@ const s = StyleSheet.create({
   hearthBlob: {
     width: 288,
     height: 288,
-    borderTopLeftRadius: 170,
-    borderTopRightRadius: 110,
-    borderBottomLeftRadius: 90,
-    borderBottomRightRadius: 200,
+    borderTopLeftRadius: 144,
+    borderTopRightRadius: 144,
+    borderBottomLeftRadius: 144,
+    borderBottomRightRadius: 144,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.20,
-    shadowRadius: 20,
-    elevation: 5,
     zIndex: 1,
+    overflow: 'hidden',
   },
   hearthInner: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 144,
+    height: 144,
+    borderRadius: 72,
     backgroundColor: 'rgba(255,255,255,0.20)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.30)',
@@ -437,22 +712,92 @@ const s = StyleSheet.create({
   },
 
   /* Timer card */
-  timerCard: {
+  timerCardContainer: {
     position: 'absolute',
     bottom: 20,
     left: -12,
-    backgroundColor: C.surfaceContainerLowest,
+    zIndex: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 32,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  timerCard: {
     padding: 24,
     borderRadius: 32,
     minWidth: 200,
-    shadowColor: C.onSurface,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+  },
+  dropdownBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(54, 50, 40, 0.08)',
+    zIndex: 99,
+  },
+  dropdownMenuContainer: {
+    position: 'absolute',
+    top: 95,
+    right: 24,
+    width: 240,
+    zIndex: 100,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  dropdownMenu: {
+    borderRadius: 24,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(234,225,210,0.20)',
-    zIndex: 2,
+    borderColor: 'rgba(68, 103, 77, 0.12)',
+  },
+  dropdownBlur: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 248, 240, 0.95)',
+  },
+  dropdownHeaderInfo: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  dropdownUserTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 15,
+    color: C.onSurface,
+  },
+  dropdownUserRole: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 12,
+    color: C.primary,
+    opacity: 0.8,
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: 'rgba(68, 103, 77, 0.08)',
+    marginVertical: 4,
+    marginHorizontal: 8,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dropdownItemText: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 14,
+    color: C.onSurface,
   },
   timerHeader: {
     flexDirection: 'row',
@@ -487,10 +832,10 @@ const s = StyleSheet.create({
     padding: 32,
     marginBottom: 16,
     shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 6,
   },
   leoRow: {
     flexDirection: 'column',
@@ -641,43 +986,46 @@ const s = StyleSheet.create({
     color: C.primary,
   },
   appsList: {
-    gap: 16,
+    gap: 10,
   },
   appItem: {
+    backgroundColor: C.surfaceContainerLow,
+    padding: 20,
+    borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
   },
   appIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.surfaceContainerHighest,
     justifyContent: 'center',
     alignItems: 'center',
   },
   appDetails: {
     flex: 1,
+    gap: 6,
   },
   appMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
   },
   appName: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 14,
-    lineHeight: 20,
     color: C.onSurface,
   },
   appDuration: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.onSurfaceVariant,
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 12,
+    color: 'rgba(54,50,40,0.5)',
   },
   appTrack: {
     height: 6,
-    backgroundColor: C.surfaceContainer,
+    backgroundColor: C.surfaceContainerHigh,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -753,8 +1101,12 @@ const s = StyleSheet.create({
     bottom: -48,
     width: 192,
     height: 192,
-    borderRadius: 96,
+    borderTopLeftRadius: 96,
+    borderTopRightRadius: 96,
+    borderBottomLeftRadius: 96,
+    borderBottomRightRadius: 96,
     backgroundColor: 'rgba(68,103,77,0.08)',
+    overflow: 'hidden',
   },
   insightsWatermark: {
     position: 'absolute',

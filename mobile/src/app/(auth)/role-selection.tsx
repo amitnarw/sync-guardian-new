@@ -61,7 +61,7 @@ function ParentRoleNode({ onPress }: { onPress: () => void }) {
         </Svg>
 
         <View style={[styles.innerCircle, styles.parentShadow]}>
-          <MaterialIcons name="family-restroom" size={48} color="#44674d" />
+          <MaterialIcons name="family-restroom" size={38} color="#44674d" />
         </View>
         <Text style={[styles.roleTitle, { color: '#375941' }]}>Parent</Text>
       </View>
@@ -112,7 +112,7 @@ function ChildRoleNode({ onPress }: { onPress: () => void }) {
         </Svg>
 
         <View style={[styles.innerCircle, styles.childShadow]}>
-          <MaterialIcons name="child-care" size={48} color="#a0412d" />
+          <MaterialIcons name="child-care" size={38} color="#a0412d" />
         </View>
         <Text style={[styles.roleTitle, { color: '#8e3421' }]}>Child</Text>
       </View>
@@ -229,8 +229,8 @@ const styles = StyleSheet.create({
   roleGrid: {
     width: '100%',
     maxWidth: 1024,
-    flexDirection: 'column', // grid-cols-1 on small
-    gap: 48,
+    flexDirection: 'column',
+    gap: 38,
     alignItems: 'center',
   },
   roleNodeBlock: {
@@ -238,21 +238,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   blobContainer: {
-    width: 256, // w-64
-    height: 256, // h-64
+    width: 205,
+    height: 205,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    marginBottom: 24, // mb-6
+    marginBottom: 20,
   },
   innerCircle: {
-    width: 96, // w-24
-    height: 96, // h-24
-    borderRadius: 48,
+    width: 77,
+    height: 77,
+    borderRadius: 38,
     backgroundColor: '#ffffff', // bg-surface-container-lowest
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24, // z-10 visually
+    marginBottom: 20,
     zIndex: 10,
   },
   parentShadow: {
@@ -272,13 +272,13 @@ const styles = StyleSheet.create({
   roleTitle: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontWeight: '700',
-    fontSize: 24, // text-2xl
+    fontSize: 19,
     zIndex: 10,
   },
   roleSubtitle: {
     color: '#645e53',
     fontFamily: 'PlusJakartaSans-Medium',
     fontWeight: '500',
-    fontSize: 16,
+    fontSize: 13,
   },
 });

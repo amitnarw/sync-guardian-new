@@ -97,6 +97,7 @@ export default function LoginScreen() {
                 title="Login"
                 onPress={handleLogin}
                 icon="arrow-forward"
+                style={styles.loginBtn}
               />
 
               <View style={styles.createAccountBox}>
@@ -117,6 +118,7 @@ export default function LoginScreen() {
             </View>
             <View style={styles.socialGrid}>
               <Button 
+                 title="Continue with Google"
                  imageSource={{ uri: 'https://img.icons8.com/color/48/000000/google-logo.png' }}
                  onPress={() => {}}
                  variant="secondary"
@@ -252,6 +254,10 @@ const styles = StyleSheet.create({
   socialGrid: {
     flexDirection: 'row',
     width: '100%',
+  },
+  loginBtn: {
+    height: 56,
+    flex: 0,
   },
   socialBtnSingle: {
     flex: 1,

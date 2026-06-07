@@ -24,7 +24,7 @@ const PILL_W = 84;
 const PILL_H = 48;
 
 interface CustomTabBarProps {
-  blurTargetRef: React.RefObject<View>;
+  blurTargetRef: React.RefObject<View | null>;
 }
 
 function TabItem({

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { AuthColors, AuthRadius } from '@/constants/auth-theme';
 import { Button } from '@/components/ui/button';
+import { BlurView } from 'expo-blur';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -70,14 +71,14 @@ export default function OnboardingScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }}
+        contentContainerStyle={{ flexGrow: 1, paddingTop: 8, paddingBottom: Math.max(insets.bottom - 16, 12) }}
         showsVerticalScrollIndicator={false}
       >
         {/* Header / Brand Anchor */}
         <View style={styles.header}>
           <View style={styles.logoCluster}>
             <View style={styles.logoBlobContainer}>
-              <Svg width={40} height={40} viewBox="0 0 256 256">
+              <Svg width={32} height={32} viewBox="0 0 256 256">
                 <Defs>
                   <LinearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                     <Stop offset="0%" stopColor="#44674d" />
@@ -86,7 +87,7 @@ export default function OnboardingScreen() {
                 </Defs>
                 <Path d={blobPath} fill="url(#logoGrad)" />
               </Svg>
-              <MaterialIcons name="spa" size={20} color="#ffffff" style={{ position: 'absolute' }} />
+              <MaterialIcons name="spa" size={16} color="#ffffff" style={{ position: 'absolute' }} />
             </View>
             <Text style={styles.navText}>Nurturing Atelier</Text>
           </View>
@@ -141,15 +142,15 @@ export default function OnboardingScreen() {
             </View>
 
             {/* Floating Support Badge */}
-            <View style={styles.floatingBadge}>
+            <BlurView intensity={80} tint="light" style={styles.floatingBadge}>
               <View style={styles.floatingIcon}>
-                <MaterialIcons name="favorite" size={20} color="#ffffff" />
+                <MaterialIcons name="favorite" size={16} color="#ffffff" />
               </View>
               <View style={styles.floatingTexts}>
                 <Text style={styles.floatingTitle}>Gentle Care</Text>
                 <Text style={styles.floatingSubtitle}>For your loved ones</Text>
               </View>
-            </View>
+            </BlurView>
           </View>
 
           {/* Text Instruction Block */}
@@ -161,30 +162,32 @@ export default function OnboardingScreen() {
             <Text style={styles.heroSubtitle}>
               A space for mindful connections and gentle monitoring. We help you nurture growth without intruding on privacy.
             </Text>
+          </View>
 
-            {/* Action Buttons */}
-            <View style={styles.buttonRow}>
-              <Button
-                title="Begin Your Journey"
-                onPress={handleBeginJourney}
-                icon="arrow-forward"
-              />
-              <Button
-                title="Learn More"
-                onPress={handleLearnMore}
-                variant="secondary"
-              />
-            </View>
+          {/* Action Buttons */}
+          <View style={styles.buttonRow}>
+            <Button
+              title="Begin Your Journey"
+              onPress={handleBeginJourney}
+              icon="arrow-forward"
+              style={styles.actionBtn}
+            />
+            <Button
+              title="Learn More"
+              onPress={handleLearnMore}
+              variant="secondary"
+              style={styles.actionBtn}
+            />
+          </View>
 
-            {/* Social Proof */}
-            <View style={styles.socialProof}>
-              <View style={styles.avatarCluster}>
-                <RNImage source={{ uri: AVATAR_URLS[0] }} style={styles.avatar} />
-                <RNImage source={{ uri: AVATAR_URLS[1] }} style={[styles.avatar, styles.overlapAvatar]} />
-                <RNImage source={{ uri: AVATAR_URLS[2] }} style={[styles.avatar, styles.overlapAvatar]} />
-              </View>
-              <Text style={styles.socialProofText}>Trusted by 2,000+ families</Text>
+          {/* Social Proof */}
+          <View style={styles.socialProof}>
+            <View style={styles.avatarCluster}>
+              <RNImage source={{ uri: AVATAR_URLS[0] }} style={styles.avatar} />
+              <RNImage source={{ uri: AVATAR_URLS[1] }} style={[styles.avatar, styles.overlapAvatar]} />
+              <RNImage source={{ uri: AVATAR_URLS[2] }} style={[styles.avatar, styles.overlapAvatar]} />
             </View>
+            <Text style={styles.socialProofText}>Trusted by 2,000+ families</Text>
           </View>
         </View>
 
@@ -213,7 +216,7 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 48, // `my-12` margins
+    marginBottom: 20, // reduced from 48
   },
   logoCluster: {
     flexDirection: 'row',
@@ -221,8 +224,8 @@ const styles = StyleSheet.create({
     gap: 8, // `gap-2`
   },
   logoBlobContainer: {
-    width: 40, // `w-10`
-    height: 40, // `h-10`
+    width: 32, // reduced from 40
+    height: 32, // reduced from 40
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#44674d',
@@ -234,22 +237,24 @@ const styles = StyleSheet.create({
   navText: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontWeight: '700',
-    fontSize: 20, // `text-xl`
+    fontSize: 16, // reduced from 20
     letterSpacing: -0.5, // `tracking-tight`
     color: '#44674d', // `text-primary`
   },
   mainCanvas: {
     flex: 1,
+    width: '100%',
     paddingHorizontal: 24, // `p-6 md:p-12` baseline mapping 
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   heroContainer: {
     position: 'relative',
-    width: SCREEN_WIDTH * 0.8, // `max-w-md aspect-square` emulation bounded nicely
-    height: SCREEN_WIDTH * 0.8,
-    maxWidth: 384,
-    maxHeight: 384,
-    marginBottom: 48,
+    width: SCREEN_WIDTH * 0.75, // increased image size
+    height: SCREEN_WIDTH * 0.75,
+    maxWidth: 320,
+    maxHeight: 320,
+    marginBottom: 0, // spacing handled by space-between
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -264,25 +269,26 @@ const styles = StyleSheet.create({
   },
   floatingBadge: {
     position: 'absolute',
-    bottom: 24,
-    right: -16,
+    bottom: 12, // reduced from 24
+    right: -12, // reduced from -16
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    gap: 10, // reduced from 16
+    paddingVertical: 10, // reduced from 16
+    paddingHorizontal: 16, // reduced from 24
     backgroundColor: 'rgba(228, 228, 204, 0.6)', // AuthColors.surfaceVariant at 60%
     borderRadius: AuthRadius.xl,
+    overflow: 'hidden', // clips the blur view to rounded corners
     shadowColor: '#3e2723',
-    shadowOffset: { width: 0, height: 20 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.06,
-    shadowRadius: 40,
+    shadowRadius: 20,
     elevation: 4,
   },
   floatingIcon: {
-    width: 48, // `w-12`
-    height: 48, // `h-12`
-    borderRadius: 24,
+    width: 36, // reduced from 48
+    height: 36, // reduced from 48
+    borderRadius: 18,
     backgroundColor: '#a0412d', // `bg-secondary`
     justifyContent: 'center',
     alignItems: 'center',
@@ -299,12 +305,12 @@ const styles = StyleSheet.create({
     color: '#363228', // `text-on-surface`
     fontFamily: 'PlusJakartaSans-SemiBold',
     fontWeight: '600',
-    fontSize: 14, // `text-sm`
+    fontSize: 14, // `text-sm` (kept same)
   },
   floatingSubtitle: {
     color: '#645e53', // `text-on-surface-variant`
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 12, // `text-xs`
+    fontSize: 12, // `text-xs` (kept same)
   },
   textBlock: {
     width: '100%',
@@ -318,38 +324,41 @@ const styles = StyleSheet.create({
     color: '#44674d', // `text-primary`
     textTransform: 'uppercase',
     letterSpacing: 2.4, // `tracking-[0.2em]`
-    marginBottom: 16, // `mb-4`
+    marginBottom: 8, // reduced from 16
     textAlign: 'center',
   },
   heroTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
     fontWeight: '800',
-    fontSize: 36, // `text-4xl`
+    fontSize: 28, // reduced from 36
     color: '#363228', // `text-on-surface`
-    lineHeight: 44, // `leading-tight`
-    marginBottom: 24, // `mb-6`
+    lineHeight: 34, // reduced from 44
+    marginBottom: 12, // reduced from 24
     textAlign: 'center',
   },
   heroSubtitle: {
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 18, // `text-lg`
+    fontSize: 14, // reduced from 18
     color: '#645e53', // `text-on-surface-variant`
-    marginBottom: 40, // `mb-10`
-    lineHeight: 28, // `leading-relaxed`
+    marginBottom: 0, // spacing handled by space-between
+    lineHeight: 22, // reduced from 28
     textAlign: 'center',
   },
   buttonRow: {
     width: '100%',
     flexDirection: 'column',
-    gap: 16, // `gap-4` vertically mapping
-    marginBottom: 48,
+    gap: 12, // reduced from 16
+    marginBottom: 0, // spacing handled by space-between
+  },
+  actionBtn: {
+    height: 52, // sleeker buttons to save vertical space
   },
   socialProof: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16, // `gap-4`
+    gap: 12, // reduced from 16
     opacity: 0.7, // `opacity-70`
-    marginBottom: 48,
+    marginBottom: 0, // spacing handled by space-between
   },
   avatarCluster: {
     flexDirection: 'row',
@@ -373,9 +382,9 @@ const styles = StyleSheet.create({
   footer: {
     width: '100%',
     alignItems: 'center',
-    gap: 24, // `gap-6` between columns
+    gap: 12, // reduced from 24
     paddingHorizontal: 24,
-    paddingBottom: 24,
+    paddingBottom: 12, // reduced from 24
     opacity: 0.6, // `opacity-60`
   },
   copyrightText: {

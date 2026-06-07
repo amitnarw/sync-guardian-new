@@ -1,8 +1,11 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -36,6 +39,44 @@ const C = {
 } as const;
 
 export default function ActivityScreen() {
+  const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
+  const [isDropdownRendered, setIsDropdownRendered] = React.useState(false);
+  const [firstIconY, setFirstIconY] = React.useState<number | null>(null);
+  const [lastIconY, setLastIconY] = React.useState<number | null>(null);
+  const dropdownProgress = useSharedValue(0);
+
+  React.useEffect(() => {
+    if (isDropdownVisible) {
+      setIsDropdownRendered(true);
+      dropdownProgress.value = withTiming(1, { duration: 250 });
+    } else {
+      dropdownProgress.value = withTiming(0, { duration: 200 }, (finished) => {
+        if (finished) {
+          runOnJS(setIsDropdownRendered)(false);
+        }
+      });
+    }
+  }, [isDropdownVisible]);
+
+  const handleProfilePress = () => {
+    setIsDropdownVisible(!isDropdownVisible);
+  };
+
+  const dropdownAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: dropdownProgress.value,
+      transform: [
+        { scale: dropdownProgress.value * 0.08 + 0.92 },
+        { translateY: (1 - dropdownProgress.value) * -12 },
+      ],
+    };
+  });
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: dropdownProgress.value,
+    };
+  });
   return (
     <ThemedView style={s.container}>
       <SafeAreaView style={s.safeArea} edges={['top']}>
@@ -46,28 +87,38 @@ export default function ActivityScreen() {
             <Text style={s.headerTitle}>Nurturing Atelier</Text>
           </View>
           <View style={s.headerRight}>
-            <TouchableOpacity style={s.iconButton}>
-              <Ionicons name="search-outline" size={22} color={C.onSurface} />
+            <TouchableOpacity 
+              onPress={handleProfilePress}
+              activeOpacity={0.8}
+            >
+              <View style={s.profileWrap}>
+                <Image
+                  source={require('@/assets/images/mother_avatar.jpg')}
+                  style={s.profileAvatar}
+                />
+              </View>
             </TouchableOpacity>
-            <View style={s.profileWrap}>
-              <Image
-                source={require('@/assets/images/mother_avatar.jpg')}
-                style={s.profileAvatar}
-              />
-            </View>
+            <TouchableOpacity 
+              style={s.iconButton}
+              onPress={() => router.push('/notifications')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="notifications-outline" size={22} color={C.primary} />
+            </TouchableOpacity>
           </View>
         </View>
 
         <ScrollView
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
+          onScrollBeginDrag={() => setIsDropdownVisible(false)}
         >
           {/* ========== HERO "HEARTH" HEADER ========== */}
           <View style={s.heroSection}>
             {/* Blurry Background Hearth Gradient Blob */}
             <View style={s.gradientBlobContainer}>
               <LinearGradient
-                colors={['rgba(68,103,77,0.08)', 'rgba(197,236,204,0.15)']}
+                colors={[C.primaryContainer, 'rgba(255, 248, 240, 0.75)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={s.hearthBlob}
@@ -76,6 +127,7 @@ export default function ActivityScreen() {
 
             <View style={s.heroContent}>
               <View style={s.heroBadgePill}>
+                <MaterialCommunityIcons name="spa" size={14} color={C.primary} />
                 <Text style={s.heroBadgeText}>Today's Journey</Text>
               </View>
               <Text style={s.heroTitle}>Activity Flow</Text>
@@ -86,9 +138,20 @@ export default function ActivityScreen() {
           </View>
 
           {/* ========== TIMELINE FEED ========== */}
+          <Text style={s.sectionTitle}>Recent Activity</Text>
           <View style={s.timelineContainer}>
             {/* Left timeline path line */}
-            <View style={s.timelineLine} />
+            <View style={[
+              s.timelineLine,
+              firstIconY !== null && lastIconY !== null ? {
+                top: firstIconY,
+                bottom: undefined,
+                height: lastIconY - firstIconY,
+              } : {
+                top: 26,
+                bottom: 26,
+              }
+            ]} />
 
             {/* Date Marker: Today */}
             <View style={s.dateMarkerRow}>
@@ -98,7 +161,12 @@ export default function ActivityScreen() {
             </View>
 
             {/* Activity 1: Creative Milestone (Sage Theme) */}
-            <View style={s.activityRow}>
+            <View 
+              style={s.activityRow}
+              onLayout={(e) => {
+                setFirstIconY(e.nativeEvent.layout.y + 26);
+              }}
+            >
               {/* Timeline Icon Node */}
               <View style={s.iconNodeWrap}>
                 <View style={[s.iconNodeInner, { backgroundColor: C.primaryContainer }]}>
@@ -190,7 +258,12 @@ export default function ActivityScreen() {
             </View>
 
             {/* Activity 4: Neutral (Cream Theme) */}
-            <View style={[s.activityRow, s.activityRowYesterday]}>
+            <View 
+              style={[s.activityRow, s.activityRowYesterday]}
+              onLayout={(e) => {
+                setLastIconY(e.nativeEvent.layout.y + 26);
+              }}
+            >
               {/* Timeline Icon Node */}
               <View style={s.iconNodeWrap}>
                 <View style={[s.iconNodeInner, { backgroundColor: C.surfaceContainer }]}>
@@ -213,6 +286,74 @@ export default function ActivityScreen() {
           <View style={s.bottomSpacer} />
         </ScrollView>
       </SafeAreaView>
+      {isDropdownRendered && (
+        <>
+          <TouchableWithoutFeedback onPress={() => setIsDropdownVisible(false)}>
+            <Animated.View style={[s.dropdownBackdrop, backdropAnimatedStyle]} />
+          </TouchableWithoutFeedback>
+          <Animated.View style={[s.dropdownMenuContainer, dropdownAnimatedStyle]}>
+            <View style={s.dropdownMenu}>
+              <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
+                <View style={s.dropdownHeaderInfo}>
+                  <Text style={s.dropdownUserTitle}>Mother's Space</Text>
+                  <Text style={s.dropdownUserRole}>Atelier Curator</Text>
+                </View>
+                
+                <View style={s.dropdownDivider} />
+                
+                <TouchableOpacity 
+                  style={s.dropdownItem} 
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    console.log("Profile");
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="person-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>View Profile</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+                
+                <View style={s.dropdownDivider} />
+                
+                <TouchableOpacity 
+                  style={s.dropdownItem} 
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    router.push('/notifications');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="notifications-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>Daily Pulse</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+                
+                <View style={s.dropdownDivider} />
+                
+                <TouchableOpacity 
+                  style={s.dropdownItem} 
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    router.push('/(tabs)/settings');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="settings-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>Sanctuary Settings</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+              </BlurView>
+            </View>
+          </Animated.View>
+        </>
+      )}
     </ThemedView>
   );
 }
@@ -266,9 +407,14 @@ const s = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: C.surfaceContainerLow,
+    backgroundColor: C.white,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   profileWrap: {
     width: 40,
@@ -287,6 +433,73 @@ const s = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  dropdownBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(54, 50, 40, 0.08)',
+    zIndex: 99,
+  },
+  dropdownMenuContainer: {
+    position: 'absolute',
+    top: 95,
+    right: 24,
+    width: 240,
+    zIndex: 100,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  dropdownMenu: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(68, 103, 77, 0.12)',
+  },
+  dropdownBlur: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 248, 240, 0.95)',
+  },
+  dropdownHeaderInfo: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  dropdownUserTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 15,
+    color: C.onSurface,
+  },
+  dropdownUserRole: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 12,
+    color: C.primary,
+    opacity: 0.8,
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: 'rgba(68, 103, 77, 0.08)',
+    marginVertical: 4,
+    marginHorizontal: 8,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dropdownItemText: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 14,
+    color: C.onSurface,
+  },
 
   /* ---------- Hero Hearth Header ---------- */
   heroSection: {
@@ -296,6 +509,19 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: 16,
     marginBottom: 24,
+    borderRadius: 32,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(68, 103, 77, 0.12)',
+  },
+  sectionTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 20,
+    lineHeight: 26,
+    color: C.onSurface,
+    marginTop: 8,
+    marginBottom: 16,
+    marginHorizontal: 16,
   },
   gradientBlobContainer: {
     position: 'absolute',
@@ -303,16 +529,11 @@ const s = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
     zIndex: 0,
   },
   hearthBlob: {
-    width: SCREEN_W * 1.1,
-    height: 180,
-    borderRadius: 90,
-    opacity: 0.7,
+    width: '100%',
+    height: '100%',
   },
   heroContent: {
     zIndex: 1,
@@ -320,14 +541,15 @@ const s = StyleSheet.create({
     gap: 12,
   },
   heroBadgePill: {
-    backgroundColor: C.surfaceContainer,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 9999,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(68, 103, 77, 0.1)',
   },
   heroBadgeText: {
     fontFamily: 'PlusJakartaSans-SemiBold',

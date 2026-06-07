@@ -1,8 +1,11 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
+import { router } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
 import { SymbolView } from 'expo-symbols';
 
@@ -45,26 +48,77 @@ const PERCENTAGE = 0.72;
 const STROKE_OFFSET = CIRCUMFERENCE * (1 - PERCENTAGE);
 
 export default function InsightsScreen() {
+  const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
+  const [isDropdownRendered, setIsDropdownRendered] = React.useState(false);
+  const dropdownProgress = useSharedValue(0);
+
+  React.useEffect(() => {
+    if (isDropdownVisible) {
+      setIsDropdownRendered(true);
+      dropdownProgress.value = withTiming(1, { duration: 250 });
+    } else {
+      dropdownProgress.value = withTiming(0, { duration: 200 }, (finished) => {
+        if (finished) {
+          runOnJS(setIsDropdownRendered)(false);
+        }
+      });
+    }
+  }, [isDropdownVisible]);
+
+  const handleProfilePress = () => {
+    setIsDropdownVisible(!isDropdownVisible);
+  };
+
+  const dropdownAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: dropdownProgress.value,
+      transform: [
+        { scale: dropdownProgress.value * 0.08 + 0.92 },
+        { translateY: (1 - dropdownProgress.value) * -12 },
+      ],
+    };
+  });
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: dropdownProgress.value,
+    };
+  });
   return (
     <ThemedView style={s.container}>
       <SafeAreaView style={s.safeArea} edges={['top']}>
         {/* Floating Glass Header */}
         <View style={s.header}>
           <View style={s.headerLeft}>
-            <Image
-              source={require('@/assets/images/mother_avatar.jpg')}
-              style={s.headerAvatar}
-            />
+            <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
             <Text style={s.headerTitle}>Nurturing Atelier</Text>
           </View>
-          <TouchableOpacity style={s.headerButton}>
-            <Ionicons name="notifications-outline" size={22} color={C.onSurface} />
-          </TouchableOpacity>
+          <View style={s.headerRight}>
+            <TouchableOpacity 
+              onPress={handleProfilePress}
+              activeOpacity={0.8}
+            >
+              <View style={s.profileWrap}>
+                <Image
+                  source={require('@/assets/images/mother_avatar.jpg')}
+                  style={s.profileAvatar}
+                />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={s.iconButton}
+              onPress={() => router.push('/notifications')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="notifications-outline" size={22} color={C.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
+          onScrollBeginDrag={() => setIsDropdownVisible(false)}
         >
           {/* ========== HERO: GROWTH NARRATIVE ========== */}
           <View style={s.heroSection}>
@@ -214,6 +268,74 @@ export default function InsightsScreen() {
           <View style={s.bottomSpacer} />
         </ScrollView>
       </SafeAreaView>
+      {isDropdownRendered && (
+        <>
+          <TouchableWithoutFeedback onPress={() => setIsDropdownVisible(false)}>
+            <Animated.View style={[s.dropdownBackdrop, backdropAnimatedStyle]} />
+          </TouchableWithoutFeedback>
+          <Animated.View style={[s.dropdownMenuContainer, dropdownAnimatedStyle]}>
+            <View style={s.dropdownMenu}>
+              <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
+                <View style={s.dropdownHeaderInfo}>
+                  <Text style={s.dropdownUserTitle}>Mother's Space</Text>
+                  <Text style={s.dropdownUserRole}>Atelier Curator</Text>
+                </View>
+                
+                <View style={s.dropdownDivider} />
+                
+                <TouchableOpacity 
+                  style={s.dropdownItem} 
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    console.log("Profile");
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="person-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>View Profile</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+                
+                <View style={s.dropdownDivider} />
+                
+                <TouchableOpacity 
+                  style={s.dropdownItem} 
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    router.push('/notifications');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="notifications-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>Daily Pulse</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+                
+                <View style={s.dropdownDivider} />
+                
+                <TouchableOpacity 
+                  style={s.dropdownItem} 
+                  onPress={() => {
+                    setIsDropdownVisible(false);
+                    router.push('/(tabs)/settings');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.dropdownItemLeft}>
+                    <Ionicons name="settings-outline" size={18} color={C.primary} />
+                    <Text style={s.dropdownItemText}>Sanctuary Settings</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
+                </TouchableOpacity>
+              </BlurView>
+            </View>
+          </Animated.View>
+        </>
+      )}
     </ThemedView>
   );
 }
@@ -234,7 +356,6 @@ const s = StyleSheet.create({
     paddingTop: 8,
   },
 
-  /* ---------- Header ---------- */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -246,34 +367,119 @@ const s = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(68,103,77,0.12)',
-    backgroundColor: C.surfaceContainerHighest,
+  headerIcon: {
+    marginRight: 2,
   },
   headerTitle: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 18,
     lineHeight: 24,
-    color: C.onSurface,
-    letterSpacing: -0.2,
+    color: C.primary,
+    letterSpacing: -0.5,
   },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: C.surfaceContainerLowest,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.white,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  profileWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: C.surfaceContainerLowest,
+    backgroundColor: C.surfaceContainerHighest,
+    overflow: 'hidden',
+    shadowColor: '#363228',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.08,
+    shadowRadius: 32,
+  },
+  profileAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  dropdownBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(54, 50, 40, 0.08)',
+    zIndex: 99,
+  },
+  dropdownMenuContainer: {
+    position: 'absolute',
+    top: 95,
+    right: 24,
+    width: 240,
+    zIndex: 100,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
     shadowRadius: 24,
+    elevation: 10,
+  },
+  dropdownMenu: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(68, 103, 77, 0.12)',
+  },
+  dropdownBlur: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 248, 240, 0.95)',
+  },
+  dropdownHeaderInfo: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  dropdownUserTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 15,
+    color: C.onSurface,
+  },
+  dropdownUserRole: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 12,
+    color: C.primary,
+    opacity: 0.8,
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: 'rgba(68, 103, 77, 0.08)',
+    marginVertical: 4,
+    marginHorizontal: 8,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dropdownItemText: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 14,
+    color: C.onSurface,
   },
 
   /* ---------- Hero Section ---------- */
