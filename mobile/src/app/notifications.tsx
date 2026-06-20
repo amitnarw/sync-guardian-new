@@ -3,6 +3,8 @@ import { StyleSheet, ScrollView, View, TouchableOpacity, Text, Dimensions } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/hooks/use-auth-store';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -48,63 +50,58 @@ interface NotificationItem {
 export default function NotificationsScreen() {
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All Activity');
 
-  const notifications: NotificationItem[] = [
-    {
-      id: '1',
-      title: 'Restricted Content Attempt',
-      message: 'Leo\'s device flagged a search for "bypass firewall" on Safari.',
-      time: '2m ago',
-      type: 'restriction',
-      category: 'safety',
-      isPriority: true,
-    },
-    {
-      id: '2',
-      title: 'App Permission Request',
-      message: 'Maya wants to install "Studio Ghibli Art". Category: Creativity & Design.',
-      time: '14m ago',
-      type: 'permission',
-      category: 'apps',
-      isPriority: true,
-    },
-    {
-      id: '3',
-      title: 'Screen time limit reached for Roblox',
-      message: 'Leo • Today, 2:45 PM',
-      time: 'Today, 2:45 PM',
-      type: 'screentime',
-      category: 'screentime',
-      isPriority: false,
-    },
-    {
-      id: '4',
-      title: 'New Learning Pattern Detected',
-      message: 'Maya spent 45m on Language apps today.',
-      time: 'Today',
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const { pairId } = useAuthStore();
+
+  const mapDbNotification = (dbRow: any): NotificationItem => {
+    return {
+      id: dbRow.id,
+      title: dbRow.notification_title,
+      message: `${dbRow.source_app_name}: ${dbRow.notification_body}`,
+      time: new Date(dbRow.notification_posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       type: 'insight',
       category: 'insights',
       isPriority: false,
-    },
-    {
-      id: '5',
-      title: 'Leo\'s iPad is at 10% battery',
-      message: 'Last synced 1m ago',
-      time: '1m ago',
-      type: 'battery',
-      category: 'safety',
-      isPriority: false,
-    },
-    {
-      id: '6',
-      title: 'Weekly Safety Audit Complete',
-      message: 'No critical issues found in 7 devices.',
-      time: 'Yesterday',
-      type: 'audit',
-      category: 'safety',
-      isPriority: false,
-      isYesterday: true,
-    },
-  ];
+    };
+  };
+
+  React.useEffect(() => {
+    if (!pairId) return;
+
+    const fetchHistory = async () => {
+      const { data, error } = await supabase
+        .from('mirrored_notifications')
+        .select('*')
+        .eq('pair_id', pairId)
+        .order('notification_posted_at', { ascending: false });
+        
+      if (data) {
+        setNotifications(data.map(mapDbNotification));
+      }
+    };
+
+    fetchHistory();
+
+    const channel = supabase
+      .channel('realtime_notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'mirrored_notifications',
+          filter: `pair_id=eq.${pairId}`,
+        },
+        (payload) => {
+          setNotifications((prev) => [mapDbNotification(payload.new), ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pairId]);
 
   const filters: FilterType[] = ['All Activity', 'Safety Alerts', 'Screen Time', 'New Apps', 'Insights'];
 

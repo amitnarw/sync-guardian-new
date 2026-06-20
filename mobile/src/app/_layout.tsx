@@ -4,6 +4,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthTheme } from '@/hooks/use-auth-theme';
+import { useAuthStore } from '@/hooks/use-auth-store';
+import messaging from '@react-native-firebase/messaging';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -30,6 +32,7 @@ const LightTheme = {
 
 export default function RootLayout() {
   const authTheme = useAuthTheme();
+  const { userRole, isAuthenticated, setFcmToken } = useAuthStore();
 
   const [loaded, error] = useFonts({
     'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
@@ -48,6 +51,30 @@ export default function RootLayout() {
     }
   }, [loaded, error]);
 
+  useEffect(() => {
+    async function requestUserPermission() {
+      // ONLY request push notifications if the user is fully logged in AND is a Parent
+      if (!isAuthenticated || userRole !== 'parent') return;
+
+      const authStatus = await messaging().requestPermission();
+      const enabled =
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+      if (enabled) {
+        console.log('Authorization status:', authStatus);
+        try {
+          const token = await messaging().getToken();
+          setFcmToken(token);
+          // Normally we'd send this to Supabase to tie it to the `devices` table
+        } catch (error) {
+          console.warn('Failed to get FCM token (likely due to mock Firebase config):', error);
+        }
+      }
+    }
+    requestUserPermission();
+  }, [isAuthenticated, userRole]);
+
   if (!loaded && !error) {
     return null;
   }
@@ -60,6 +87,7 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: authTheme.background },
+            animation: 'fade',
           }}
         />
       </ThemeProvider>
