@@ -1,0 +1,22 @@
+{
+  "project_info": {
+    "project_number": "123456789012",
+    "project_id": "mock-firebase-project"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
+        "android_client_info": {
+          "package_name": "com.amitnarw.mobile"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "MOCK_API_KEY"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}

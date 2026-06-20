@@ -19,6 +19,15 @@ interface AuthState {
   email: string | null;
   setEmail: (email: string | null) => void;
 
+  // Pairing state
+  pairId: string | null;
+  setPairId: (pairId: string | null) => void;
+  deviceId: string | null;
+  setDeviceId: (deviceId: string | null) => void;
+
+  fcmToken: string | null;
+  setFcmToken: (fcmToken: string | null) => void;
+
   // Reset auth state
   resetAuth: () => void;
 }
@@ -36,11 +45,22 @@ export const useAuthStore = create<AuthState>()((set) => ({
   email: null,
   setEmail: (email) => set({ email }),
 
+  pairId: null,
+  setPairId: (pairId) => set({ pairId }),
+
+  deviceId: null,
+  setDeviceId: (deviceId) => set({ deviceId }),
+
+  fcmToken: null,
+  setFcmToken: (fcmToken) => set({ fcmToken }),
+
   resetAuth: () =>
     set({
       userRole: null,
       hasCompletedOnboarding: false,
       isAuthenticated: false,
       email: null,
+      pairId: null,
+      deviceId: null,
     }),
 }))

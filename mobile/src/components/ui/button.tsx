@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, Pressable, ViewStyle, Image } from 'react-native';
+import { StyleSheet, Text, Pressable, ViewStyle, Image, ActivityIndicator } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -12,12 +12,14 @@ interface ButtonProps {
   icon?: keyof typeof MaterialIcons.glyphMap;
   imageSource?: any;
   style?: ViewStyle | ViewStyle[];
+  loading?: boolean;
 }
 
-export const Button = ({ title, onPress, variant = 'primary', icon, imageSource, style }: ButtonProps) => {
+export const Button = ({ title, onPress, variant = 'primary', icon, imageSource, style, loading }: ButtonProps) => {
   const scale = useSharedValue(1);
 
   const handlePressIn = () => {
+    if (loading) return;
     scale.value = withSpring(0.95, { damping: 15, stiffness: 300 });
   };
   const handlePressOut = () => {
@@ -34,31 +36,38 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
     <AnimatedPressable 
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      onPress={onPress}
+      onPress={loading ? undefined : onPress}
       style={[
         styles.button, 
         isPrimary ? styles.primaryButton : styles.secondaryButton,
         animatedStyle,
-        style
+        style,
+        loading && { opacity: 0.7 }
       ]}
     >
-      {imageSource && (
-        <Image 
-          source={imageSource} 
-          style={styles.imageIcon} 
-        />
-      )}
-      {title && (
-        <Text style={[styles.buttonText, isPrimary ? styles.primaryText : styles.secondaryText]}>
-          {title}
-        </Text>
-      )}
-      {icon && (
-        <MaterialIcons 
-          name={icon} 
-          size={isPrimary ? 20 : 18} 
-          color={isPrimary ? '#e8ffea' : '#363228'} 
-        />
+      {loading ? (
+        <ActivityIndicator color={isPrimary ? '#e8ffea' : '#363228'} />
+      ) : (
+        <>
+          {imageSource && (
+            <Image 
+              source={imageSource} 
+              style={styles.imageIcon} 
+            />
+          )}
+          {title && (
+            <Text style={[styles.buttonText, isPrimary ? styles.primaryText : styles.secondaryText]}>
+              {title}
+            </Text>
+          )}
+          {icon && (
+            <MaterialIcons 
+              name={icon} 
+              size={isPrimary ? 20 : 18} 
+              color={isPrimary ? '#e8ffea' : '#363228'} 
+            />
+          )}
+        </>
       )}
     </AnimatedPressable>
   );

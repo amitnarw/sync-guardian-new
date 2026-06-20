@@ -26,11 +26,8 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     // Simulate login
     setIsAuthenticated(true);
-    if (!useAuthStore.getState().hasCompletedOnboarding) {
-      router.replace('/onboarding');
-    } else {
-      router.replace('/(tabs)/home');
-    }
+    // After login, we must pair the device if not already paired
+    router.replace('/pairing');
   };
 
   const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));

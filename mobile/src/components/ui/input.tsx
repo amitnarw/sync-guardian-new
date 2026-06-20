@@ -1,24 +1,17 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, ViewStyle } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TextInputProps } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 
-interface InputProps {
-  label: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  placeholder: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  secureTextEntry?: boolean;
+interface InputProps extends TextInputProps {
+  label?: string;
+  icon?: keyof typeof MaterialIcons.glyphMap;
 }
 
 export const Input = ({
   label,
   icon,
-  placeholder,
-  value,
-  onChangeText,
-  secureTextEntry,
+  ...rest
 }: InputProps) => {
   const [isFocused, setIsFocused] = useState(false);
   const focusProgress = useSharedValue(0);
@@ -50,11 +43,7 @@ export const Input = ({
         <Animated.View style={[StyleSheet.absoluteFill, styles.inputFocusElement, animatedRing]} pointerEvents="none" />
 
         <TextInput
-          placeholder={placeholder}
-          placeholderTextColor="#b9b1a3"
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry}
+          {...rest}
           onFocus={handleFocus}
           onBlur={handleBlur}
           style={styles.textInput}
