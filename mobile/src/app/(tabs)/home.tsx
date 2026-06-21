@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -60,6 +60,19 @@ export default function HomeScreen() {
   const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
   const [isDropdownRendered, setIsDropdownRendered] = React.useState(false);
   const dropdownProgress = useSharedValue(0);
+
+  React.useEffect(() => {
+    const backAction = () => {
+      Alert.alert('Exit App', 'Are you sure you want to exit?', [
+        { text: 'Cancel', onPress: () => null, style: 'cancel' },
+        { text: 'YES', onPress: () => BackHandler.exitApp() },
+      ]);
+      return true; // Prevents default behavior
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, []);
 
   React.useEffect(() => {
     if (isDropdownVisible) {

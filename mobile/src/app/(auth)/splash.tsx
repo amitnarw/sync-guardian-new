@@ -26,16 +26,36 @@ export default function SplashScreen() {
   const insets = useSafeAreaInsets();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
+  const _hasHydrated = useAuthStore((state) => state._hasHydrated);
+
   const containerOpacity = useSharedValue(0);
   const blobScale = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
 
   const navigate = () => {
-    ExpoSplashScreen.hideAsync().catch(() => {});
-    if (isAuthenticated) {
-      router.replace('/(tabs)/home'); 
+    const doNavigate = (state: any) => {
+      ExpoSplashScreen.hideAsync().catch(() => {});
+      if (state.isAuthenticated) {
+        const userRole = state.userRole;
+        if (userRole === 'child') {
+          router.replace('/(child)/home');
+        } else {
+          router.replace('/(tabs)/home'); 
+        }
+      } else {
+        router.replace('/role-selection');
+      }
+    };
+
+    if (!_hasHydrated) {
+      const unsubscribe = useAuthStore.subscribe((state) => {
+        if (state._hasHydrated) {
+          unsubscribe();
+          doNavigate(state);
+        }
+      });
     } else {
-      router.replace('/role-selection');
+      doNavigate(useAuthStore.getState());
     }
   };
 

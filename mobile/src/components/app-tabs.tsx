@@ -65,7 +65,16 @@ export default function AppTabs() {
           />
         </Tabs>
       </BlurTargetView>
-      <CustomTabBar blurTargetRef={blurTargetRef} />
+      <CustomTabBar 
+        blurTargetRef={blurTargetRef} 
+        routes={[
+          { name: 'home', label: 'Home', icon: 'dashboard', href: '/(tabs)/home' },
+          { name: 'activity', label: 'Activity', icon: 'analytics', href: '/(tabs)/activity' },
+          { name: 'insights', label: 'Insights', icon: 'insights', href: '/(tabs)/insights' },
+          { name: 'rules', label: 'Rules', icon: 'gavel', href: '/(tabs)/rules' },
+          { name: 'settings', label: 'Settings', icon: 'settings', href: '/(tabs)/settings' },
+        ]}
+      />
     </View>
   );
 }

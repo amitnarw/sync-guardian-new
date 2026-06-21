@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Modal } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Modal, ScrollView } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/hooks/use-auth-store';
@@ -11,11 +11,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/button';
 import { OtpInput } from '@/components/ui/otp-input';
 import { SyncAnimation } from '@/components/ui/sync-animation';
+import { ErrorModal } from '@/components/ui/error-modal';
 
 const { width } = Dimensions.get('window');
 
 export default function PairingScreen() {
-  const { userRole, setPairId, setDeviceId } = useAuthStore();
+  const { userRole, setUserRole, setPairId, setDeviceId } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [pairingData, setPairingData] = useState<{ code: string; token: string } | null>(null);
   const [manualCode, setManualCode] = useState('');
@@ -24,7 +25,7 @@ export default function PairingScreen() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [parentMode, setParentMode] = useState<'options' | 'scan' | 'manual'>('options');
   const [torch, setTorch] = useState(false);
-  
+
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -36,21 +37,57 @@ export default function PairingScreen() {
     }
   }, [userRole]);
 
+  // Listen for the parent device claiming the token
+  useEffect(() => {
+    if (!pairingData?.token) return;
+
+    const channel = supabase
+      .channel('pairing-watch')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pairing_tokens',
+          filter: `token=eq.${pairingData.token}`,
+        },
+        (payload: any) => {
+          if (payload.new && payload.new.consumed_at) {
+            setPairId(payload.new.pair_id);
+            router.replace('/onboarding');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pairingData]);
+
   const generatePairingToken = async () => {
     try {
       setLoading(true);
-      // Dummy generated ID for the device
-      const newDeviceId = 'child-dev-' + Math.random().toString(36).substring(7);
-      setDeviceId(newDeviceId);
-
       const { data, error } = await supabase.functions.invoke('create-pairing-token', {
-        body: { deviceId: newDeviceId, deviceName: 'Child Device' },
+        body: { device_name: 'Child Device' },
       });
 
       if (error) throw error;
-      setPairingData(data);
+      
+      // The edge function returns { data: { code, token, child_device_id, ... } }
+      setDeviceId(data.data.child_device_id);
+      setPairingData(data.data);
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to generate token');
+      let msg = err.message || 'Failed to generate token';
+      
+      if (msg.includes('non-2xx')) {
+        msg = 'Backend rejected the request. Please try again.';
+      } else if (msg.includes('failed to send a request')) {
+        msg = 'Could not connect to the server. Please ensure your backend is running.';
+      }
+        
+      setErrorMessage(msg);
+      setErrorModalVisible(true);
     } finally {
       setLoading(false);
     }
@@ -73,12 +110,10 @@ export default function PairingScreen() {
   const verifyToken = async (tokenOrCode: string) => {
     try {
       setIsVerifying(true);
-      const newDeviceId = 'parent-dev-' + Math.random().toString(36).substring(7);
-      setDeviceId(newDeviceId);
 
       // We call the edge function `claim-pairing-token`
       const payload = {
-        parent_device_id: newDeviceId,
+        device_name: 'Parent Device'
       } as any;
 
       // Determine if tokenOrCode is a UUID or a 6 digit code
@@ -94,12 +129,17 @@ export default function PairingScreen() {
 
       if (error) throw error;
 
+      setDeviceId(data.data.parent_device_id);
       setPairId(data.data.id);
       router.replace('/onboarding');
     } catch (err: any) {
-      const msg = err.message?.includes('non-2xx') 
-        ? 'Invalid or expired code. Please verify the code on the child device and try again.'
-        : err.message || 'Failed to verify token';
+      let msg = err.message || 'Failed to verify token';
+      
+      if (msg.includes('non-2xx')) {
+        msg = 'Invalid or expired code. Please verify the code on the child device and try again.';
+      } else if (msg.includes('failed to send a request')) {
+        msg = 'Could not connect to the server. Please ensure your backend is running.';
+      }
         
       setErrorMessage(msg);
       setErrorModalVisible(true);
@@ -125,7 +165,7 @@ export default function PairingScreen() {
 
   if (userRole === 'child') {
     return (
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false} style={styles.container}>
         <View style={styles.header}>
           <MaterialIcons name="spa" size={32} color="#44674d" />
           <Text style={styles.title}>Child Mode Setup</Text>
@@ -151,14 +191,31 @@ export default function PairingScreen() {
           ) : (
             <Button title="Retry Generation" onPress={generatePairingToken} variant="secondary" />
           )}
+
+          <Button
+            title="Go Back"
+            variant="secondary"
+            onPress={() => {
+              setUserRole(null);
+              router.replace('/role-selection');
+            }}
+            style={{ marginTop: 24 }}
+          />
         </View>
-      </View>
+
+        <ErrorModal
+          visible={errorModalVisible}
+          message={errorMessage}
+          onClose={() => setErrorModalVisible(false)}
+        />
+
+      </ScrollView>
     );
   }
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" bounces={false}>
         <View style={styles.innerContainer}>
           <View style={styles.header}>
             <MaterialIcons name="family-restroom" size={32} color="#44674d" />
@@ -267,29 +324,13 @@ export default function PairingScreen() {
             </Animated.View>
           )}
         </View>
-      </TouchableWithoutFeedback>
+      </ScrollView>
 
-      <Modal
+      <ErrorModal
         visible={errorModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setErrorModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalIconContainer}>
-              <MaterialIcons name="error-outline" size={32} color="#cc3333" />
-            </View>
-            <Text style={styles.modalTitle}>Pairing Failed</Text>
-            <Text style={styles.modalText}>{errorMessage}</Text>
-            <Button
-              title="Got it"
-              onPress={() => setErrorModalVisible(false)}
-              style={styles.modalButton}
-            />
-          </View>
-        </View>
-      </Modal>
+        message={errorMessage}
+        onClose={() => setErrorModalVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -312,7 +353,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff8f0',
   },
   innerContainer: {
-    flex: 1,
+    flexGrow: 1,
+    paddingBottom: 24,
   },
   header: {
     paddingTop: 80,
@@ -326,6 +368,7 @@ const styles = StyleSheet.create({
     color: '#363228',
     marginTop: 16,
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontFamily: 'PlusJakartaSans-Medium',
@@ -457,51 +500,5 @@ const styles = StyleSheet.create({
   manualEntryContainer: {
     padding: 24,
     paddingBottom: 48,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#fff8f0',
-    borderRadius: 24,
-    padding: 32,
-    width: '100%',
-    alignItems: 'center',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  modalIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#ffe6e6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 24,
-    color: '#363228',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalText: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 16,
-    color: '#645e53',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  modalButton: {
-    width: '100%',
   },
 });

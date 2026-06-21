@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { ThemedView } from '@/components/themed-view';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { supabase } from '@/lib/supabase';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -43,6 +44,42 @@ export default function SettingsScreen() {
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [isDropdownRendered, setIsDropdownRendered] = useState(false);
   const dropdownProgress = useSharedValue(0);
+
+  const [children, setChildren] = useState<{ id: string; device_name: string }[]>([]);
+  const { deviceId } = useAuthStore();
+
+  useEffect(() => {
+    const fetchChildren = async () => {
+      if (!deviceId) return;
+      const { data, error } = await supabase
+        .from('pairs')
+        .select('id, child_device:devices!child_device_id(device_name)')
+        .eq('parent_device_id', deviceId)
+        .in('status', ['active', 'pending']);
+      
+      if (data) {
+        setChildren(data.map((d: any) => ({
+          id: d.id,
+          device_name: d.child_device?.device_name || 'Child Device'
+        })));
+      }
+    };
+    fetchChildren();
+  }, [deviceId]);
+
+  const handleDisconnectChild = (pairId: string, name: string) => {
+    Alert.alert('Disconnect', `Are you sure you want to unpair ${name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Unpair', 
+        style: 'destructive', 
+        onPress: async () => {
+          await supabase.from('pairs').update({ status: 'revoked' }).eq('id', pairId);
+          setChildren(children.filter(c => c.id !== pairId));
+        }
+      }
+    ]);
+  };
 
   useEffect(() => {
     if (isDropdownVisible) {
@@ -120,7 +157,12 @@ export default function SettingsScreen() {
     });
   };
 
-  const performSignOut = () => {
+  const performSignOut = async () => {
+    try {
+      // Import at top, but just use inline require or add import if needed.
+      const { supabase } = require('@/lib/supabase');
+      await supabase.auth.signOut();
+    } catch(e) {}
     useAuthStore.getState().resetAuth();
     router.replace('/login');
   };
@@ -237,6 +279,33 @@ export default function SettingsScreen() {
               {/* Backing blurry tertiary blob */}
               <View style={s.cardBlobPrivacy} />
             </TouchableOpacity>
+          </View>
+
+          {/* ========== CONNECTED CHILDREN ========== */}
+          <View style={s.childrenSection}>
+            <Text style={s.childrenSectionTitle}>Connected Devices ({children.length})</Text>
+            {children.length === 0 ? (
+              <View style={s.emptyStateCard}>
+                <Text style={s.emptyStateText}>No children connected yet.</Text>
+              </View>
+            ) : (
+              children.map(child => (
+                <View key={child.id} style={s.childRowCard}>
+                  <View style={s.childInfo}>
+                    <View style={s.childAvatarBox}>
+                      <Ionicons name="phone-portrait" size={20} color={C.primary} />
+                    </View>
+                    <Text style={s.childNameText}>{child.device_name}</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={s.disconnectSmallBtn}
+                    onPress={() => handleDisconnectChild(child.id, child.device_name)}
+                  >
+                    <Text style={s.disconnectSmallText}>Disconnect</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
           </View>
 
           {/* ========== ACTION AREA: SIGN OUT GENTLY ========== */}
@@ -649,6 +718,78 @@ const s = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: C.onSurface,
+  },
+
+  /* Children Section */
+  childrenSection: {
+    marginBottom: 32,
+    gap: 12,
+  },
+  childrenSectionTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    color: C.onSurfaceVariant,
+    letterSpacing: 0.5,
+    marginLeft: 8,
+    marginBottom: 4,
+  },
+  emptyStateCard: {
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 12,
+    elevation: 1,
+  },
+  emptyStateText: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 14,
+    color: C.outline,
+  },
+  childRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 12,
+    elevation: 1,
+  },
+  childInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  childAvatarBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.primaryContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  childNameText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 15,
+    color: C.onSurface,
+  },
+  disconnectSmallBtn: {
+    backgroundColor: C.secondaryContainer,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  disconnectSmallText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    color: C.secondary,
   },
 
   /* Bottom Spacer */
