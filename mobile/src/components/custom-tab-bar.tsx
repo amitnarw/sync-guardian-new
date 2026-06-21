@@ -11,13 +11,12 @@ const C = {
   selectedPill: '#dcebd2',
 } as const;
 
-const ROUTES = [
-  { name: 'home', label: 'Home', icon: 'dashboard' as const, href: '/(tabs)/home' },
-  { name: 'activity', label: 'Activity', icon: 'analytics' as const, href: '/(tabs)/activity' },
-  { name: 'insights', label: 'Insights', icon: 'insights' as const, href: '/(tabs)/insights' },
-  { name: 'rules', label: 'Rules', icon: 'gavel' as const, href: '/(tabs)/rules' },
-  { name: 'settings', label: 'Settings', icon: 'settings' as const, href: '/(tabs)/settings' },
-];
+export type TabRoute = {
+  name: string;
+  label: string;
+  icon: any;
+  href: string;
+};
 
 const SPRING_CONFIG = { stiffness: 350, damping: 25, mass: 0.8 };
 const PILL_W = 84;
@@ -25,6 +24,7 @@ const PILL_H = 48;
 
 interface CustomTabBarProps {
   blurTargetRef: React.RefObject<View | null>;
+  routes: TabRoute[];
 }
 
 function TabItem({
@@ -33,7 +33,7 @@ function TabItem({
   onPress,
   onLayout,
 }: {
-  route: typeof ROUTES[number];
+  route: TabRoute;
   isFocused: boolean;
   onPress: () => void;
   onLayout?: (e: LayoutChangeEvent) => void;
@@ -73,7 +73,7 @@ function TabItem({
   );
 }
 
-export default function CustomTabBar({ blurTargetRef }: CustomTabBarProps) {
+export default function CustomTabBar({ blurTargetRef, routes }: CustomTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const tabLayouts = useRef<{ x: number; y: number; width: number; height: number }[]>([]);
@@ -83,7 +83,7 @@ export default function CustomTabBar({ blurTargetRef }: CustomTabBarProps) {
   const pillW = useSharedValue(0);
   const pillH = useSharedValue(0);
 
-  const activeIndex = ROUTES.findIndex(r => pathname.includes(r.name));
+  const activeIndex = routes.findIndex(r => pathname.includes(r.name));
 
   useEffect(() => {
     const layout = tabLayouts.current[activeIndex];
@@ -102,7 +102,7 @@ export default function CustomTabBar({ blurTargetRef }: CustomTabBarProps) {
     tabLayouts.current[index] = { x, y, width, height };
 
     if (!layoutsReady.current) {
-      const allReady = ROUTES.every((_, i) => tabLayouts.current[i] != null);
+      const allReady = routes.every((_, i) => tabLayouts.current[i] != null);
       if (allReady) {
         layoutsReady.current = true;
         const layout = tabLayouts.current[activeIndex];
@@ -129,7 +129,7 @@ export default function CustomTabBar({ blurTargetRef }: CustomTabBarProps) {
     <BlurView intensity={80} tint="light" blurTarget={blurTargetRef} blurMethod="dimezisBlurView" style={s.navSafeArea}>
       <SafeAreaView edges={['bottom']} style={s.bottomNav}>
         <Animated.View style={[s.pill, pillStyle]} />
-        {ROUTES.map((route, index) => {
+        {routes.map((route, index) => {
           const isFocused = pathname.includes(route.name);
           return (
             <TabItem

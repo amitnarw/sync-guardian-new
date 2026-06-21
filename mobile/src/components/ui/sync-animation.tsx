@@ -84,7 +84,7 @@ export const SyncAnimation = () => {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    height: 240,
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 16,

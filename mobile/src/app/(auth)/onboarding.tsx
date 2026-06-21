@@ -27,7 +27,7 @@ const COVER_IMG_URL = "https://lh3.googleusercontent.com/aida-public/AB6AXuDMwCM
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
-  const { setHasCompletedOnboarding, setIsAuthenticated } = useAuthStore();
+  const { setHasCompletedOnboarding, setIsAuthenticated, userRole } = useAuthStore();
 
   const screenOpacity = useSharedValue(0);
 
@@ -38,12 +38,11 @@ export default function OnboardingScreen() {
   const handleBeginJourney = async () => {
     setHasCompletedOnboarding(true);
     setIsAuthenticated(true);
-    router.replace('/(tabs)/home');
-  };
-
-  const handleLearnMore = () => {
-    // Navigate to informative page if needed
-    console.log('Learn more');
+    if (userRole === 'child') {
+      router.replace('/(child)/home');
+    } else {
+      router.replace('/(tabs)/home');
+    }
   };
 
   const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
@@ -155,27 +154,33 @@ export default function OnboardingScreen() {
 
           {/* Text Instruction Block */}
           <View style={styles.textBlock}>
-            <Text style={styles.welcomeLabel}>Welcome to the sanctuary</Text>
-
-            <Text style={styles.heroTitle}>Your family’s <Text style={{ color: AuthColors.primary, fontStyle: 'italic' }}>digital sanctuary</Text></Text>
-
-            <Text style={styles.heroSubtitle}>
-              A space for mindful connections and gentle monitoring. We help you nurture growth without intruding on privacy.
+            <Text style={styles.welcomeLabel}>
+              {userRole === 'child' ? 'Device Secured' : 'Welcome to the sanctuary'}
             </Text>
+
+            {userRole === 'child' ? (
+              <>
+                <Text style={styles.heroTitle}>Successfully <Text style={{ color: AuthColors.primary, fontStyle: 'italic' }}>Paired</Text></Text>
+                <Text style={styles.heroSubtitle}>
+                  This device is securely linked. Sync Guardian will run in the background to keep you safe.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.heroTitle}>Your family’s <Text style={{ color: AuthColors.primary, fontStyle: 'italic' }}>digital sanctuary</Text></Text>
+                <Text style={styles.heroSubtitle}>
+                  A space for mindful connections and gentle monitoring. We help you nurture growth without intruding on privacy.
+                </Text>
+              </>
+            )}
           </View>
 
           {/* Action Buttons */}
           <View style={styles.buttonRow}>
             <Button
-              title="Begin Your Journey"
+              title={userRole === 'child' ? 'Go to Dashboard' : 'Begin Your Journey'}
               onPress={handleBeginJourney}
               icon="arrow-forward"
-              style={styles.actionBtn}
-            />
-            <Button
-              title="Learn More"
-              onPress={handleLearnMore}
-              variant="secondary"
               style={styles.actionBtn}
             />
           </View>
