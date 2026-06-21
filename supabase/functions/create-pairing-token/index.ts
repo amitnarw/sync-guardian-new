@@ -14,18 +14,24 @@ serve(async (req) => {
   try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { child_device_id } = await req.json()
+    const { device_name = 'Child Device' } = await req.json()
 
-    if (!child_device_id) {
-      return new Response(
-        JSON.stringify({ error: 'child_device_id is required' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
-    }
+    const child_device_id = crypto.randomUUID();
+
+    // 1. Insert device into devices table to satisfy foreign key constraint
+    const { error: deviceError } = await supabaseClient
+      .from('devices')
+      .insert({
+        id: child_device_id,
+        role: 'child',
+        device_name: device_name,
+        platform: 'android'
+      })
+
+    if (deviceError) throw deviceError;
 
     // Generate a 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString()

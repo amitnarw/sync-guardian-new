@@ -65,3 +65,10 @@ CREATE TABLE mirrored_notifications (
   batch_id TEXT,
   metadata_json JSONB
 );
+
+-- Grant permissions to Supabase roles
+GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, anon, authenticated, service_role;
+
+-- Enable Realtime for pairing_tokens so the Child device knows when it's paired
+ALTER PUBLICATION supabase_realtime ADD TABLE pairing_tokens;

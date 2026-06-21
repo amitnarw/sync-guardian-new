@@ -14,18 +14,31 @@ serve(async (req) => {
   try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { token, code, parent_device_id } = await req.json()
+    const { token, code, device_name = 'Parent Device' } = await req.json()
 
-    if ((!token && !code) || !parent_device_id) {
+    if (!token && !code) {
       return new Response(
-        JSON.stringify({ error: 'token or code, and parent_device_id are required' }),
+        JSON.stringify({ error: 'token or code is required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
+
+    const parent_device_id = crypto.randomUUID();
+
+    // Ensure Parent device exists in devices table
+    const { error: deviceError } = await supabaseClient
+      .from('devices')
+      .insert({
+        id: parent_device_id,
+        role: 'parent',
+        device_name,
+        platform: 'android'
+      })
+
+    if (deviceError) throw deviceError;
 
     // Find the token
     const query = supabaseClient
@@ -71,7 +84,7 @@ serve(async (req) => {
     if (pairError) throw pairError
 
     return new Response(
-      JSON.stringify({ data: pairData }),
+      JSON.stringify({ data: { ...pairData, parent_device_id } }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
