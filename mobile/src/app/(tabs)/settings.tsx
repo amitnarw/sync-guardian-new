@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, ActivityIndicator, Modal, TouchableWithoutFeedback, Alert } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, ActivityIndicator, Modal, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { ThemedView } from '@/components/themed-view';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useAppModal } from '@/hooks/use-app-modal';
 import { supabase } from '@/lib/supabase';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 
@@ -45,21 +46,23 @@ export default function SettingsScreen() {
   const [isDropdownRendered, setIsDropdownRendered] = useState(false);
   const dropdownProgress = useSharedValue(0);
 
-  const [children, setChildren] = useState<{ id: string; device_name: string }[]>([]);
+  const [children, setChildren] = useState<{ id: string; child_device_id: string; device_name: string }[]>([]);
   const { deviceId } = useAuthStore();
+  const { showModal } = useAppModal();
 
   useEffect(() => {
     const fetchChildren = async () => {
       if (!deviceId) return;
       const { data, error } = await supabase
         .from('pairs')
-        .select('id, child_device:devices!child_device_id(device_name)')
+        .select('id, child_device_id, child_device:devices!child_device_id(device_name)')
         .eq('parent_device_id', deviceId)
         .in('status', ['active', 'pending']);
       
       if (data) {
         setChildren(data.map((d: any) => ({
           id: d.id,
+          child_device_id: d.child_device_id,
           device_name: d.child_device?.device_name || 'Child Device'
         })));
       }
@@ -67,18 +70,43 @@ export default function SettingsScreen() {
     fetchChildren();
   }, [deviceId]);
 
+  const [pingingId, setPingingId] = useState<string | null>(null);
+
+  const handlePingChild = async (childDeviceId: string, pairId: string) => {
+    setPingingId(pairId);
+    try {
+      const { error } = await supabase.functions.invoke('send-child-recovery-push', {
+        body: { child_device_id: childDeviceId },
+      });
+      if (error) throw error;
+      showModal({
+        title: 'Ping Sent',
+        message: 'Wake-up signal sent to child device.',
+        icon: 'success',
+      });
+    } catch (e: any) {
+      showModal({
+        title: 'Ping Failed',
+        message: e.message || 'Could not reach the child device.',
+        icon: 'error',
+      });
+    } finally {
+      setPingingId(null);
+    }
+  };
+
   const handleDisconnectChild = (pairId: string, name: string) => {
-    Alert.alert('Disconnect', `Are you sure you want to unpair ${name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Unpair', 
-        style: 'destructive', 
-        onPress: async () => {
-          await supabase.from('pairs').update({ status: 'revoked' }).eq('id', pairId);
-          setChildren(children.filter(c => c.id !== pairId));
-        }
-      }
-    ]);
+    showModal({
+      title: 'Disconnect',
+      message: `Are you sure you want to unpair ${name}?`,
+      icon: 'warning',
+      primaryButton: 'Unpair',
+      onPrimaryPress: async () => {
+        await supabase.from('pairs').update({ status: 'revoked' }).eq('id', pairId);
+        setChildren(children.filter(c => c.id !== pairId));
+      },
+      secondaryButton: 'Cancel',
+    });
   };
 
   useEffect(() => {
@@ -297,12 +325,25 @@ export default function SettingsScreen() {
                     </View>
                     <Text style={s.childNameText}>{child.device_name}</Text>
                   </View>
-                  <TouchableOpacity 
-                    style={s.disconnectSmallBtn}
-                    onPress={() => handleDisconnectChild(child.id, child.device_name)}
-                  >
-                    <Text style={s.disconnectSmallText}>Disconnect</Text>
-                  </TouchableOpacity>
+                  <View style={s.childActions}>
+                    <TouchableOpacity 
+                      style={s.pingSmallBtn}
+                      onPress={() => handlePingChild(child.child_device_id, child.id)}
+                      disabled={pingingId === child.id}
+                    >
+                      {pingingId === child.id ? (
+                        <ActivityIndicator size="small" color={C.primary} />
+                      ) : (
+                        <Ionicons name="pulse-outline" size={16} color={C.primary} />
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={s.disconnectSmallBtn}
+                      onPress={() => handleDisconnectChild(child.id, child.device_name)}
+                    >
+                      <Text style={s.disconnectSmallText}>Disconnect</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))
             )}
@@ -779,6 +820,19 @@ const s = StyleSheet.create({
     fontFamily: 'PlusJakartaSans-SemiBold',
     fontSize: 15,
     color: C.onSurface,
+  },
+  childActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pingSmallBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.primaryContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   disconnectSmallBtn: {
     backgroundColor: C.secondaryContainer,

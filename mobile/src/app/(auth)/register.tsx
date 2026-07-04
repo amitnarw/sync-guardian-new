@@ -4,6 +4,8 @@ import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { MaterialIcons, AntDesign } from '@expo/vector-icons';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useAuth } from '@/hooks/use-auth';
+import { useAppModal } from '@/hooks/use-app-modal';
 import Svg, { Path } from 'react-native-svg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,10 +15,13 @@ import { Input } from '@/components/ui/input';
 const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
 
 export default function RegisterScreen() {
-  const { userRole, setIsAuthenticated, setHasCompletedOnboarding } = useAuthStore();
+  const { userRole, setHasCompletedOnboarding } = useAuthStore();
+  const { signUpWithEmail, signInWithGoogle } = useAuth();
+  const { showModal } = useAppModal();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const screenOpacity = useSharedValue(0);
 
@@ -25,11 +30,83 @@ export default function RegisterScreen() {
   }, []);
 
   const handleRegister = async () => {
-    // Simulate registration
-    setIsAuthenticated(true);
-    setHasCompletedOnboarding(false); // New users go through onboarding
+    if (!name.trim()) {
+      showModal({
+        title: 'Missing details',
+        message: 'Please enter your name',
+        icon: 'warning',
+      });
+      return;
+    }
+    if (!email.trim() || !password.trim()) {
+      showModal({
+        title: 'Missing details',
+        message: 'Please enter email and password',
+        icon: 'warning',
+      });
+      return;
+    }
+    if (password.length < 6) {
+      showModal({
+        title: 'Weak password',
+        message: 'Password must be at least 6 characters',
+        icon: 'warning',
+      });
+      return;
+    }
+    try {
+      setLoading(true);
+      const data = await signUpWithEmail(email.trim(), password.trim());
+      setHasCompletedOnboarding(false);
 
-    router.replace('/onboarding');
+      if (data.session) {
+        if (!userRole) {
+          router.replace('/role-selection');
+        } else {
+          router.replace('/onboarding');
+        }
+      } else {
+        showModal({
+          title: 'Verify your email',
+          message: 'Please check your inbox and click the confirmation link before logging in.',
+          icon: 'info',
+        });
+        router.replace('/login');
+      }
+    } catch (err: any) {
+      showModal({
+        title: 'Registration Failed',
+        message: err.message || 'An error occurred',
+        icon: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleRegister = async () => {
+    try {
+      setLoading(true);
+      await signInWithGoogle();
+      setHasCompletedOnboarding(false);
+      const currentRole = useAuthStore.getState().userRole;
+      if (!currentRole) {
+        router.replace('/role-selection');
+      } else {
+        router.replace('/onboarding');
+      }
+    } catch (err: any) {
+      console.error('Google sign-in error:', err?.message);
+      if (!err.message?.includes('cancelled')) {
+        showModal({
+          title: 'Google Sign-In Failed',
+          message: err.message || 'An error occurred',
+          icon: 'error',
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
@@ -91,9 +168,10 @@ export default function RegisterScreen() {
           {/* Core Action */}
           <View style={styles.actionsBox}>
             <Button
-              title="Create Account"
-              onPress={handleRegister}
-              icon="arrow-forward"
+                title={loading ? 'Creating Account...' : 'Create Account'}
+                onPress={handleRegister}
+                icon="arrow-forward"
+                disabled={loading}
             />
 
             <View style={styles.createAccountBox}>
@@ -114,8 +192,10 @@ export default function RegisterScreen() {
           </View>
           <View style={styles.socialGrid}>
             <Button 
+               title={loading ? 'Signing in...' : 'Continue with Google'}
                imageSource={{ uri: 'https://img.icons8.com/color/48/000000/google-logo.png' }}
-               onPress={() => {}}
+               onPress={handleGoogleRegister}
+               disabled={loading}
                variant="secondary"
                style={styles.socialBtnSingle}
             />

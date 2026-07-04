@@ -4,6 +4,8 @@ import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { MaterialIcons, AntDesign } from '@expo/vector-icons';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useAuth } from '@/hooks/use-auth';
+import { useAppModal } from '@/hooks/use-app-modal';
 import Svg, { Path } from 'react-native-svg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +15,12 @@ import { Input } from '@/components/ui/input';
 const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
 
 export default function LoginScreen() {
-  const { userRole, setIsAuthenticated } = useAuthStore();
+  const { userRole } = useAuthStore();
+  const { signInWithEmail, signInWithGoogle } = useAuth();
+  const { showModal } = useAppModal();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const screenOpacity = useSharedValue(0);
 
@@ -24,10 +29,55 @@ export default function LoginScreen() {
   }, []);
 
   const handleLogin = async () => {
-    // Simulate login
-    setIsAuthenticated(true);
-    // After login, we must pair the device if not already paired
-    router.replace('/pairing');
+    if (!email.trim() || !password.trim()) {
+      showModal({
+        title: 'Missing details',
+        message: 'Please enter email and password',
+        icon: 'warning',
+      });
+      return;
+    }
+    try {
+      setLoading(true);
+      await signInWithEmail(email.trim(), password);
+      if (!userRole) {
+        router.replace('/role-selection');
+      } else {
+        router.replace('/pairing');
+      }
+    } catch (err: any) {
+      showModal({
+        title: 'Login Failed',
+        message: err.message || 'An error occurred',
+        icon: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      await signInWithGoogle();
+      const currentRole = useAuthStore.getState().userRole;
+      if (!currentRole) {
+        router.replace('/role-selection');
+      } else {
+        router.replace('/pairing');
+      }
+    } catch (err: any) {
+      console.error('Google sign-in error:', err?.message);
+      if (!err.message?.includes('cancelled')) {
+        showModal({
+          title: 'Google Sign-In Failed',
+          message: err.message || 'An error occurred',
+          icon: 'error',
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
@@ -91,9 +141,10 @@ export default function LoginScreen() {
             {/* Core Action */}
             <View style={styles.actionsBox}>
               <Button
-                title="Login"
+                title={loading ? 'Signing in...' : 'Login'}
                 onPress={handleLogin}
                 icon="arrow-forward"
+                disabled={loading}
                 style={styles.loginBtn}
               />
 
@@ -114,13 +165,14 @@ export default function LoginScreen() {
               <View style={styles.dividerLine} />
             </View>
             <View style={styles.socialGrid}>
-              <Button 
-                 title="Continue with Google"
-                 imageSource={{ uri: 'https://img.icons8.com/color/48/000000/google-logo.png' }}
-                 onPress={() => {}}
-                 variant="secondary"
-                 style={styles.socialBtnSingle}
-              />
+               <Button 
+                  title={loading ? 'Signing in...' : 'Continue with Google'}
+                  imageSource={{ uri: 'https://img.icons8.com/color/48/000000/google-logo.png' }}
+                  onPress={handleGoogleLogin}
+                  disabled={loading}
+                  variant="secondary"
+                  style={styles.socialBtnSingle}
+               />
             </View>
           </View>
         </View>

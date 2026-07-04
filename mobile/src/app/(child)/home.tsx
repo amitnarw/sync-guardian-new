@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Dimensions, Text, Alert, BackHandler } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Dimensions, Text, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,6 +9,7 @@ import { SymbolView } from 'expo-symbols';
 import { BlurView, BlurTargetView } from 'expo-blur';
 import { ThemedView } from '@/components/themed-view';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useAppModal } from '@/hooks/use-app-modal';
 import { supabase } from '@/lib/supabase';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -43,16 +44,20 @@ const C = {
 
 export default function ChildHome() {
   const { pairId } = useAuthStore();
+  const { showModal } = useAppModal();
   const [parentName, setParentName] = useState('Parent Device');
 
   useEffect(() => {
-    // Intercept hardware back button
     const backAction = () => {
-      Alert.alert('Exit App', 'Are you sure you want to exit?', [
-        { text: 'Cancel', onPress: () => null, style: 'cancel' },
-        { text: 'YES', onPress: () => BackHandler.exitApp() },
-      ]);
-      return true; // Prevents default behavior
+      showModal({
+        title: 'Exit App',
+        message: 'Are you sure you want to exit?',
+        icon: 'warning',
+        primaryButton: 'Exit',
+        onPrimaryPress: () => BackHandler.exitApp(),
+        secondaryButton: 'Cancel',
+      });
+      return true;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);

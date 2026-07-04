@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback, BackHandler } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, TouchableWithoutFeedback, BackHandler, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,6 +9,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SymbolView } from 'expo-symbols';
 import { BlurView, BlurTargetView } from 'expo-blur';
+import { usePairData } from '@/hooks/use-pair-data';
+import { useAppModal } from '@/hooks/use-app-modal';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -42,32 +44,55 @@ const C = {
   white: '#ffffff',
 } as const;
 
-const apps = [
-  { name: 'Khan Academy', duration: '45m', color: C.primary, icon: 'school-outline' as const, width: '85%' },
-  { name: 'YouTube Kids', duration: '20m', color: C.secondary, icon: 'logo-youtube' as const, width: '40%' },
-  { name: 'Duolingo', duration: '15m', color: '#87a96b', icon: 'language-outline' as const, width: '30%' },
-];
+const APP_ICONS: Record<string, string> = {
+  'com.google.android.youtube': 'logo-youtube',
+  'com.khan.android.academy': 'school-outline',
+  'com.duolingo': 'language-outline',
+  default: 'apps-outline',
+};
 
-const navItems = [
-  { key: 'home', icon: 'grid' as const, label: 'Home', active: true },
-  { key: 'activity', icon: 'analytics' as const, label: 'Activity', active: false },
-  { key: 'insights', icon: 'bulb' as const, label: 'Insights', active: false },
-  { key: 'rules', icon: 'shield-checkmark' as const, label: 'Rules', active: false },
-  { key: 'settings', icon: 'settings' as const, label: 'Settings', active: false },
-];
+function groupNotificationsByApp(notifs: { source_package: string | null; source_app_name: string | null }[]) {
+  const groups: Record<string, { name: string; package: string; count: number }> = {};
+  for (const n of notifs) {
+    const pkg = n.source_package?.trim() || 'unknown';
+    if (!groups[pkg]) groups[pkg] = { name: n.source_app_name?.trim() || pkg, package: pkg, count: 0 };
+    groups[pkg].count++;
+  }
+  const sorted = Object.values(groups).sort((a, b) => b.count - a.count);
+  const max = sorted[0]?.count || 1;
+  return sorted.map((g) => ({ ...g, percentage: Math.round((g.count / max) * 100) }));
+}
+
+function formatTimeAgo(timestamp: number): string {
+  if (isNaN(timestamp) || timestamp <= 0) return 'Unknown';
+  const diff = Date.now() - timestamp;
+  if (diff < 0) return 'Just now';
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 export default function HomeScreen() {
+  const { childDevice, latestNotification, notifications, isOnline, isLoading, error } = usePairData();
   const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
   const [isDropdownRendered, setIsDropdownRendered] = React.useState(false);
   const dropdownProgress = useSharedValue(0);
+  const { showModal } = useAppModal();
 
   React.useEffect(() => {
     const backAction = () => {
-      Alert.alert('Exit App', 'Are you sure you want to exit?', [
-        { text: 'Cancel', onPress: () => null, style: 'cancel' },
-        { text: 'YES', onPress: () => BackHandler.exitApp() },
-      ]);
-      return true; // Prevents default behavior
+      showModal({
+        title: 'Exit App',
+        message: 'Are you sure you want to exit?',
+        icon: 'warning',
+        primaryButton: 'Exit',
+        onPrimaryPress: () => BackHandler.exitApp(),
+        secondaryButton: 'Cancel',
+      });
+      return true;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
@@ -363,39 +388,66 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* ========== LEO STATUS CARD (v1) ========== */}
+            {/* ========== CHILD STATUS CARD (live) ========== */}
             <View style={s.leoCard}>
+              {isLoading ? (
+                <ActivityIndicator size="large" color={C.primary} style={{ padding: 32 }} />
+              ) : error ? (
+                <View style={{ padding: 32, alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
+                </View>
+              ) : !childDevice ? (
+                <View style={{ padding: 32, alignItems: 'center' }}>
+                  <Ionicons name="phone-portrait-outline" size={40} color={C.outline} />
+                  <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>No child connected yet</Text>
+                </View>
+              ) : (
               <View style={s.leoRow}>
                 <View style={s.leoAvatarWrap}>
                   <Image
                     source={require('@/assets/images/leo_avatar.jpg')}
                     style={s.leoAvatar}
                   />
-                  <View style={s.leoOnlineDot}>
-                    <View style={s.leoOnlineDotInner} />
-                  </View>
+                  {isOnline && (
+                    <View style={s.leoOnlineDot}>
+                      <View style={s.leoOnlineDotInner} />
+                    </View>
+                  )}
                 </View>
                 <View style={s.leoInfo}>
-                  <Text style={s.leoName}>Leo is Online</Text>
-                  <Text style={s.leoActivity}>
-                    Currently using <Text style={s.leoAppName}>Khan Academy</Text>
+                  <Text style={s.leoName}>
+                    {childDevice.device_name || 'Child'} is {isOnline ? 'Online' : 'Away'}
                   </Text>
-                  <View style={s.leoBadges}>
-                    <View style={s.badge}>
-                      <Ionicons name="battery-charging" size={14} color={C.primary} />
-                      <Text style={s.badgeText}>84%</Text>
+                  <Text style={s.leoActivity}>
+                    {latestNotification ? (
+                      <>Currently using <Text style={s.leoAppName}>{latestNotification.source_app_name || 'an app'}</Text></>
+                    ) : (
+                      'No recent activity'
+                    )}
+                  </Text>
+                  {isOnline && childDevice.last_seen_at && (
+                    <View style={s.leoBadges}>
+                      <View style={s.badge}>
+                        <Ionicons name="time-outline" size={14} color={C.primary} />
+                        <Text style={s.badgeText}>
+                          {formatTimeAgo(new Date(childDevice.last_seen_at).getTime())}
+                        </Text>
+                      </View>
+                      <View style={s.badge}>
+                        <Ionicons name="notifications" size={14} color={C.primary} />
+                        <Text style={s.badgeText}>{notifications.length} today</Text>
+                      </View>
                     </View>
-                    <View style={s.badge}>
-                      <Ionicons name="location-outline" size={14} color={C.primary} />
-                      <Text style={s.badgeText}>Home</Text>
-                    </View>
-                  </View>
+                  )}
                 </View>
                 <View style={s.harmonyBlock}>
-                  <Text style={s.harmonyStat}>92%</Text>
-                  <Text style={s.harmonyLabel}>Harmony Sync</Text>
+                  <Text style={s.harmonyStat}>
+                    {notifications.length > 0 ? `${notifications.length >= 100 ? '99+' : notifications.length}` : '--'}
+                  </Text>
+                  <Text style={s.harmonyLabel}>Notifications</Text>
                 </View>
               </View>
+              )}
             </View>
 
             {/* ========== BEDTIME ROUTINE CARD (v1) ========== */}
@@ -409,31 +461,36 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* ========== MOST ACTIVE APPS (v1) ========== */}
+            {/* ========== MOST ACTIVE APPS (live) ========== */}
             <View style={s.appsSection}>
               <View style={s.appsHeader}>
                 <Text style={s.appsTitle}>Most active apps</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => router.push('/(tabs)/activity')}>
                   <Text style={s.viewAll}>View all</Text>
                 </TouchableOpacity>
               </View>
               <View style={s.appsList}>
-                {apps.map((app, i) => (
-                  <View key={i} style={s.appItem}>
+                {groupNotificationsByApp(notifications).slice(0, 3).map((app, i) => (
+                  <View key={app.name} style={s.appItem}>
                     <View style={s.appIconBox}>
-                      <Ionicons name={app.icon} size={20} color={C.primary} />
+                      <Ionicons name={(APP_ICONS[app.package] || APP_ICONS.default) as any} size={20} color={C.primary} />
                     </View>
                     <View style={s.appDetails}>
                       <View style={s.appMeta}>
                         <Text style={s.appName}>{app.name}</Text>
-                        <Text style={s.appDuration}>{app.duration}</Text>
+                        <Text style={s.appDuration}>{app.count} notification{app.count !== 1 ? 's' : ''}</Text>
                       </View>
                       <View style={s.appTrack}>
-                        <View style={[s.appFill, { width: app.width as any, backgroundColor: app.color }]} />
+                        <View style={[s.appFill, { width: `${Math.max(app.percentage, 10)}%` as any, backgroundColor: [C.primary, C.secondary, '#87a96b'][i % 3] }]} />
                       </View>
                     </View>
                   </View>
                 ))}
+                {!isLoading && notifications.length === 0 && (
+                  <View style={{ padding: 24, alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline }}>No notifications yet</Text>
+                  </View>
+                )}
               </View>
             </View>
 

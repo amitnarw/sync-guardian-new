@@ -34,7 +34,7 @@ const C = {
   white: '#ffffff',
 } as const;
 
-type FilterType = 'All Activity' | 'Safety Alerts' | 'Screen Time' | 'New Apps' | 'Insights';
+type FilterType = 'All Activity' | 'Insights';
 
 interface NotificationItem {
   id: string;
@@ -54,11 +54,19 @@ export default function NotificationsScreen() {
   const { pairId } = useAuthStore();
 
   const mapDbNotification = (dbRow: any): NotificationItem => {
+    const appName = dbRow.source_app_name?.trim() || 'Unknown App';
+    const body = dbRow.notification_body?.trim() || '';
+    const timeStr = (() => {
+      try {
+        const d = new Date(dbRow.notification_posted_at);
+        return isNaN(d.getTime()) ? '--' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch { return '--'; }
+    })();
     return {
       id: dbRow.id,
-      title: dbRow.notification_title,
-      message: `${dbRow.source_app_name}: ${dbRow.notification_body}`,
-      time: new Date(dbRow.notification_posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      title: dbRow.notification_title || '(no title)',
+      message: body ? `${appName}: ${body}` : appName,
+      time: timeStr,
       type: 'insight',
       category: 'insights',
       isPriority: false,
@@ -103,14 +111,10 @@ export default function NotificationsScreen() {
     };
   }, [pairId]);
 
-  const filters: FilterType[] = ['All Activity', 'Safety Alerts', 'Screen Time', 'New Apps', 'Insights'];
+  const filters: FilterType[] = ['All Activity', 'Insights'];
 
-  // Filter items according to category
   const filteredNotifications = notifications.filter((item) => {
     if (selectedFilter === 'All Activity') return true;
-    if (selectedFilter === 'Safety Alerts') return item.category === 'safety' || item.type === 'restriction';
-    if (selectedFilter === 'Screen Time') return item.category === 'screentime';
-    if (selectedFilter === 'New Apps') return item.category === 'apps';
     if (selectedFilter === 'Insights') return item.category === 'insights';
     return true;
   });

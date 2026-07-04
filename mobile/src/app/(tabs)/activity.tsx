@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
@@ -7,6 +7,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
+import { usePairData, MirroredNotification } from '@/hooks/use-pair-data';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -39,6 +40,7 @@ const C = {
 } as const;
 
 export default function ActivityScreen() {
+  const { notifications, isLoading, error } = usePairData();
   const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
   const [isDropdownRendered, setIsDropdownRendered] = React.useState(false);
   const [firstIconY, setFirstIconY] = React.useState<number | null>(null);
@@ -139,8 +141,20 @@ export default function ActivityScreen() {
 
           {/* ========== TIMELINE FEED ========== */}
           <Text style={s.sectionTitle}>Recent Activity</Text>
+
+          {isLoading ? (
+            <ActivityIndicator size="large" color={C.primary} style={{ padding: 32 }} />
+          ) : error ? (
+            <View style={{ padding: 32, alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
+            </View>
+          ) : notifications.length === 0 ? (
+            <View style={{ padding: 32, alignItems: 'center' }}>
+              <Ionicons name="notifications-off-outline" size={40} color={C.outline} />
+              <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>No notifications yet</Text>
+            </View>
+          ) : (
           <View style={s.timelineContainer}>
-            {/* Left timeline path line */}
             <View style={[
               s.timelineLine,
               firstIconY !== null && lastIconY !== null ? {
@@ -153,134 +167,58 @@ export default function ActivityScreen() {
               }
             ]} />
 
-            {/* Date Marker: Today */}
-            <View style={s.dateMarkerRow}>
-              <View style={s.dateMarkerPill}>
-                <Text style={s.dateMarkerText}>Today, Oct 24</Text>
-              </View>
-            </View>
+            {notifications.map((n, idx) => {
+              const isToday = new Date(n.notification_posted_at).toDateString() === new Date().toDateString();
+              const isYesterday = new Date(n.notification_posted_at).toDateString() === new Date(Date.now() - 86400000).toDateString();
+              const showDateMarker = idx === 0 || (
+                new Date(n.notification_posted_at).toDateString() !== new Date(notifications[idx - 1].notification_posted_at).toDateString()
+              );
+              const timeStr = new Date(n.notification_posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            {/* Activity 1: Creative Milestone (Sage Theme) */}
-            <View 
-              style={s.activityRow}
-              onLayout={(e) => {
-                setFirstIconY(e.nativeEvent.layout.y + 26);
-              }}
-            >
-              {/* Timeline Icon Node */}
-              <View style={s.iconNodeWrap}>
-                <View style={[s.iconNodeInner, { backgroundColor: C.primaryContainer }]}>
-                  <Ionicons name="color-palette" size={22} color={C.primary} />
-                </View>
-              </View>
-
-              {/* Activity Card */}
-              <View style={s.activityCard}>
-                <View style={s.cardHeader}>
-                  <Text style={[s.cardSubLabel, { color: C.primary }]}>Creative Milestone</Text>
-                  <View style={s.timeBadgePill}>
-                    <Text style={s.timeBadgeText}>10:30 AM</Text>
+              return (
+                <React.Fragment key={n.id}>
+                  {showDateMarker && (
+                    <View style={[s.dateMarkerRow, idx > 0 ? { marginTop: 24 } : undefined]}>
+                      <View style={[s.dateMarkerPill, !isToday ? s.dateMarkerPillYesterday : undefined]}>
+                        <Text style={[s.dateMarkerText, !isToday ? { color: C.onSurfaceVariant } : undefined]}>
+                          {isToday ? 'Today' : isYesterday ? 'Yesterday' : new Date(n.notification_posted_at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  <View
+                    style={s.activityRow}
+                    onLayout={
+                      idx === 0
+                        ? (e) => setFirstIconY(e.nativeEvent.layout.y + 26)
+                        : idx === notifications.length - 1
+                          ? (e) => setLastIconY(e.nativeEvent.layout.y + 26)
+                          : undefined
+                    }
+                  >
+                    <View style={s.iconNodeWrap}>
+                      <View style={[s.iconNodeInner, { backgroundColor: C.primaryContainer }]}>
+                        <Ionicons name="notifications" size={18} color={C.primary} />
+                      </View>
+                    </View>
+                    <View style={s.activityCard}>
+                      <View style={s.cardHeader}>
+                        <Text style={[s.cardSubLabel, { color: C.primary }]}>{n.source_app_name || 'Notification'}</Text>
+                        <View style={s.timeBadgePill}>
+                          <Text style={s.timeBadgeText}>{timeStr}</Text>
+                        </View>
+                      </View>
+                      <Text style={s.cardTitle}>{n.notification_title || '(no title)'}</Text>
+                      {n.notification_body ? (
+                        <Text style={s.cardDesc} numberOfLines={3}>{n.notification_body}</Text>
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-                <Text style={s.cardTitle}>Art Studio Pro</Text>
-                <Text style={s.cardDesc}>
-                  Spent 45 minutes exploring watercolor techniques. A new digital canvas was completed, showing excellent focus and color coordination.
-                </Text>
-                <View style={s.cardActions}>
-                  <TouchableOpacity style={s.actionBtn}>
-                    <Text style={s.actionBtnText}>View Artwork</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {/* Activity 2: Educational Peak (Sage/Cream Theme) */}
-            <View style={s.activityRow}>
-              {/* Timeline Icon Node */}
-              <View style={s.iconNodeWrap}>
-                <View style={[s.iconNodeInner, { backgroundColor: C.tertiaryContainer }]}>
-                  <Ionicons name="book" size={20} color={C.primary} />
-                </View>
-              </View>
-
-              {/* Activity Card */}
-              <View style={s.activityCard}>
-                <View style={s.cardHeader}>
-                  <Text style={[s.cardSubLabel, { color: C.primary }]}>Educational Peak</Text>
-                  <View style={s.timeBadgePill}>
-                    <Text style={s.timeBadgeText}>1:15 PM</Text>
-                  </View>
-                </View>
-                <Text style={s.cardTitle}>StoryTime Academy</Text>
-                <Text style={s.cardDesc}>
-                  Completed the 'Deep Sea Explorers' reading module. Comprehension scores indicate high engagement with narrative structures.
-                </Text>
-
-                {/* Remote Illustration Image */}
-                <View style={s.illustrationWrapper}>
-                  <Image
-                    source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAcUL_qSzwBS1Ow3NG_4KJoDAcoX6W9VUIkrcUF3R0wye_Qkeql7C2FUxGp2dPlbcPVsWbBnudSNhW1AqEh6EthW9HwuFlJdTSynYC1agbmqdB7q9a7U3KCwqFSMT7nFkS5FU1f3BISvvwh_kxXc7OtMIZtj6o2UhbYO7znclxCJmjOUF4lipU9Bw4i6supDl_r6SV95w4qNw7rNqvyQszy9XMsUn1IC0CeA6N61mxHXtMOnfhHbBIEWGdgBBkfca1eijWnQ6Bapg4' }}
-                    style={s.illustrationImage}
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Activity 3: Balanced Boundary (Terracotta Theme) */}
-            <View style={s.activityRow}>
-              {/* Timeline Icon Node */}
-              <View style={s.iconNodeWrap}>
-                <View style={[s.iconNodeInner, { backgroundColor: C.secondaryContainer }]}>
-                  <Ionicons name="moon" size={20} color={C.secondary} />
-                </View>
-              </View>
-
-              {/* Activity Card - Surface low bg, outlined border */}
-              <View style={[s.activityCard, s.activityCardOutlined]}>
-                <View style={s.cardHeader}>
-                  <Text style={[s.cardSubLabel, { color: C.secondary }]}>Balanced Boundary</Text>
-                  <View style={s.timeBadgePill}>
-                    <Text style={s.timeBadgeText}>4:00 PM</Text>
-                  </View>
-                </View>
-                <Text style={s.cardTitle}>Social Media Wind-down</Text>
-                <Text style={s.cardDesc}>
-                  Daily allocation for social applications was gently concluded. Device successfully transitioned to focus mode.
-                </Text>
-              </View>
-            </View>
-
-            {/* Date Marker: Yesterday */}
-            <View style={[s.dateMarkerRow, { marginTop: 24 }]}>
-              <View style={[s.dateMarkerPill, s.dateMarkerPillYesterday]}>
-                <Text style={[s.dateMarkerText, { color: C.onSurfaceVariant }]}>Yesterday, Oct 23</Text>
-              </View>
-            </View>
-
-            {/* Activity 4: Neutral (Cream Theme) */}
-            <View 
-              style={[s.activityRow, s.activityRowYesterday]}
-              onLayout={(e) => {
-                setLastIconY(e.nativeEvent.layout.y + 26);
-              }}
-            >
-              {/* Timeline Icon Node */}
-              <View style={s.iconNodeWrap}>
-                <View style={[s.iconNodeInner, { backgroundColor: C.surfaceContainer }]}>
-                  <Ionicons name="headset" size={20} color={C.onSurfaceVariant} />
-                </View>
-              </View>
-
-              {/* Minimal Activity Item */}
-              <View style={s.activityCardMinimal}>
-                <View style={s.cardHeaderMinimal}>
-                  <Text style={s.cardTitleMinimal}>Audio Listening</Text>
-                  <Text style={s.timeTextMinimal}>2:30 PM</Text>
-                </View>
-                <Text style={s.cardDescMinimal}>Listened to 'Classical Focus' playlist for 30 mins.</Text>
-              </View>
-            </View>
+                </React.Fragment>
+              );
+            })}
           </View>
+          )}
 
           {/* Bottom padding spacing */}
           <View style={s.bottomSpacer} />

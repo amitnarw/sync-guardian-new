@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, ActivityIndicator, Modal, TouchableWithoutFeedback, Alert } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, ActivityIndicator, Modal, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { ThemedView } from '@/components/themed-view';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useAppModal } from '@/hooks/use-app-modal';
 import { supabase } from '@/lib/supabase';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 
@@ -39,6 +40,7 @@ const C = {
 
 export default function ChildSettingsScreen() {
   const { deviceId, pairId, resetAuth } = useAuthStore();
+  const { showModal } = useAppModal();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
@@ -48,23 +50,23 @@ export default function ChildSettingsScreen() {
   }));
 
   const handleDisconnect = () => {
-    Alert.alert('Disconnect', 'Are you sure you want to unpair from the Parent Device?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Disconnect',
-        style: 'destructive',
-        onPress: async () => {
-          setIsDisconnecting(true);
-          try {
-            if (pairId) {
-              await supabase.from('pairs').update({ status: 'revoked' }).eq('id', pairId);
-            }
-          } catch (e) { }
-          resetAuth();
-          router.replace('/splash');
-        }
-      }
-    ]);
+    showModal({
+      title: 'Disconnect',
+      message: 'Are you sure you want to unpair from the Parent Device?',
+      icon: 'warning',
+      primaryButton: 'Disconnect',
+      onPrimaryPress: async () => {
+        setIsDisconnecting(true);
+        try {
+          if (pairId) {
+            await supabase.from('pairs').update({ status: 'revoked' }).eq('id', pairId);
+          }
+        } catch (e) { }
+        resetAuth();
+        router.replace('/splash');
+      },
+      secondaryButton: 'Cancel',
+    });
   };
 
   const performSignOut = async () => {
@@ -77,10 +79,14 @@ export default function ChildSettingsScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out completely?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', onPress: performSignOut }
-    ]);
+    showModal({
+      title: 'Log Out',
+      message: 'Are you sure you want to log out completely?',
+      icon: 'warning',
+      primaryButton: 'Log Out',
+      onPrimaryPress: performSignOut,
+      secondaryButton: 'Cancel',
+    });
   };
 
   return (
