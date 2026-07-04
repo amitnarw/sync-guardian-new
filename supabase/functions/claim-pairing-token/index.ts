@@ -1,47 +1,45 @@
 import { serve } from "https://deno.land/std@0.192.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, handleCors } from '../_shared/cors.ts'
+import { verifyAuth, checkRateLimit } from '../_shared/auth-verifier.ts'
+import { getAdminClient } from '../_shared/supabase-admin.ts'
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const corsResponse = handleCors(req)
+  if (corsResponse) return corsResponse
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const authHeader = req.headers.get('Authorization')
+    const user = await verifyAuth(authHeader)
 
+    const adminClient = getAdminClient()
     const { token, code, device_name = 'Parent Device' } = await req.json()
 
     if (!token && !code) {
       return new Response(
         JSON.stringify({ error: 'token or code is required' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
       )
     }
 
-    const parent_device_id = crypto.randomUUID();
+    // Rate limit by IP (will be behind Kong/API gateway in production)
+    checkRateLimit(req.headers.get('x-forwarded-for') ?? user.id)
 
-    // Ensure Parent device exists in devices table
-    const { error: deviceError } = await supabaseClient
+    // Generate parent device_id
+    const parent_device_id = crypto.randomUUID()
+
+    const { error: deviceError } = await adminClient
       .from('devices')
       .insert({
         id: parent_device_id,
+        user_id: user.id,
         role: 'parent',
         device_name,
-        platform: 'android'
+        platform: 'android',
       })
 
-    if (deviceError) throw deviceError;
+    if (deviceError) throw deviceError
 
-    // Find the token
-    const query = supabaseClient
+    const query = adminClient
       .from('pairing_tokens')
       .select('*')
       .is('consumed_at', null)
@@ -58,24 +56,25 @@ serve(async (req) => {
     if (tokenError || !tokenData) {
       return new Response(
         JSON.stringify({ error: 'Invalid or expired token' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
       )
     }
 
-    // Mark token as consumed and create the pair
-    const { error: updateError } = await supabaseClient
-      .from('pairing_tokens')
-      .update({ consumed_at: new Date().toISOString() })
-      .eq('id', tokenData.id)
+    // Fetch child device owner for RLS
+    const { data: childDevice } = await adminClient
+      .from('devices')
+      .select('user_id')
+      .eq('id', tokenData.child_device_id)
+      .single()
 
-    if (updateError) throw updateError
-
-    // Create the pair
-    const { data: pairData, error: pairError } = await supabaseClient
+    // Create the pair first, so we have the pair_id
+    const { data: pairData, error: pairError } = await adminClient
       .from('pairs')
       .insert({
         parent_device_id,
         child_device_id: tokenData.child_device_id,
+        parent_user_id: user.id,
+        child_user_id: childDevice?.user_id,
         status: 'active',
       })
       .select()
@@ -83,14 +82,25 @@ serve(async (req) => {
 
     if (pairError) throw pairError
 
+    // Mark token as consumed with the pair_id
+    const { error: updateError } = await adminClient
+      .from('pairing_tokens')
+      .update({ consumed_at: new Date().toISOString(), pair_id: pairData.id })
+      .eq('id', tokenData.id)
+
+    if (updateError) throw updateError
+
     return new Response(
       JSON.stringify({ data: { ...pairData, parent_device_id } }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {
+    const status = error.message.includes('Unauthorized') ? 401
+      : error.message.includes('Too many') ? 429
+      : 400
     return new Response(
       JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
     )
   }
 })
