@@ -5,23 +5,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export type UserRole = 'parent' | 'child' | null;
 
 interface AuthState {
-  // User role selection
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
 
-  // Onboarding state
   hasCompletedOnboarding: boolean;
   setHasCompletedOnboarding: (completed: boolean) => void;
 
-  // Authentication state
   isAuthenticated: boolean;
   setIsAuthenticated: (authenticated: boolean) => void;
 
-  // Email for login
   email: string | null;
   setEmail: (email: string | null) => void;
 
-  // Pairing state
   pairId: string | null;
   setPairId: (pairId: string | null) => void;
   deviceId: string | null;
@@ -30,11 +25,12 @@ interface AuthState {
   fcmToken: string | null;
   setFcmToken: (fcmToken: string | null) => void;
 
-  // Hydration state
+  userId: string | null;
+  setUserId: (id: string | null) => void;
+
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
 
-  // Reset auth state
   resetAuth: () => void;
 }
 
@@ -55,12 +51,14 @@ export const useAuthStore = create<AuthState>()(
 
       pairId: null,
       setPairId: (pairId) => set({ pairId }),
-
       deviceId: null,
       setDeviceId: (deviceId) => set({ deviceId }),
 
       fcmToken: null,
       setFcmToken: (fcmToken) => set({ fcmToken }),
+
+      userId: null,
+      setUserId: (id) => set({ userId: id }),
 
       _hasHydrated: false,
       setHasHydrated: (state) => set({ _hasHydrated: state }),
@@ -73,6 +71,7 @@ export const useAuthStore = create<AuthState>()(
           email: null,
           pairId: null,
           deviceId: null,
+          userId: null,
         }),
     }),
     {
@@ -83,6 +82,16 @@ export const useAuthStore = create<AuthState>()(
           state.setHasHydrated(true);
         }
       },
-    }
+      partialize: (state) => ({
+        userRole: state.userRole,
+        hasCompletedOnboarding: state.hasCompletedOnboarding,
+        isAuthenticated: state.isAuthenticated,
+        email: state.email,
+        pairId: state.pairId,
+        deviceId: state.deviceId,
+        fcmToken: state.fcmToken,
+        userId: state.userId,
+      }),
+    },
   )
 );

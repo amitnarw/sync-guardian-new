@@ -6,6 +6,7 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 import QRCode from 'react-native-qrcode-svg';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { supabase } from '@/lib/supabase';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import { MaterialIcons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ const { width } = Dimensions.get('window');
 export default function PairingScreen() {
   const { userRole, setUserRole, setPairId, setDeviceId } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [pairingData, setPairingData] = useState<{ code: string; token: string } | null>(null);
+  const [pairingData, setPairingData] = useState<{ code: string; token: string; child_device_id: string } | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -31,16 +32,74 @@ export default function PairingScreen() {
 
   useEffect(() => {
     if (userRole === 'child') {
-      generatePairingToken();
+      (async () => {
+        // Ensure session is ready before calling the edge function
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setErrorMessage('Session not ready. Please try signing in again.');
+          setErrorModalVisible(true);
+          setLoading(false);
+          return;
+        }
+        generatePairingToken();
+      })();
     } else {
       setLoading(false);
     }
   }, [userRole]);
 
-  // Listen for the parent device claiming the token
+  // Listen for the parent device claiming the token (realtime + polling fallback)
   useEffect(() => {
     if (!pairingData?.token) return;
 
+    let cancelled = false;
+
+    const checkToken = async () => {
+      if (cancelled) return;
+
+      const { data, error } = await supabase
+        .from('pairing_tokens')
+        .select('consumed_at, pair_id')
+        .eq('token', pairingData.token)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Pairing: polling query error:', error);
+        return false;
+      }
+
+      console.log('Pairing: polling result:', data);
+
+      if (data?.consumed_at) {
+        let newPairId = data.pair_id;
+
+        // If pair_id is null (edge case), fallback to querying pairs by child_device_id
+        if (!newPairId && pairingData.child_device_id) {
+          console.log('Pairing: pair_id null, looking up by child_device_id');
+          const { data: pairData } = await supabase
+            .from('pairs')
+            .select('id')
+            .eq('child_device_id', pairingData.child_device_id)
+            .in('status', ['active', 'pending'])
+            .limit(1);
+          if (pairData && pairData.length > 0) {
+            newPairId = pairData[0].id;
+            console.log('Pairing: found pair via fallback:', newPairId);
+          }
+        }
+
+        if (newPairId) {
+          setPairId(newPairId);
+          router.replace('/onboarding');
+          return true;
+        } else {
+          console.warn('Pairing: token consumed but no pair_id found');
+        }
+      }
+      return false;
+    };
+
+    // Real-time subscription
     const channel = supabase
       .channel('pairing-watch')
       .on(
@@ -52,16 +111,33 @@ export default function PairingScreen() {
           filter: `token=eq.${pairingData.token}`,
         },
         (payload: any) => {
+          console.log('Pairing: realtime event received:', payload.new);
           if (payload.new && payload.new.consumed_at) {
-            setPairId(payload.new.pair_id);
-            router.replace('/onboarding');
+            if (payload.new.pair_id) {
+              setPairId(payload.new.pair_id);
+              router.replace('/onboarding');
+            } else {
+              // Fallback: trigger polling which handles the query
+              console.log('Pairing: realtime had no pair_id, triggering polling fallback');
+              checkToken();
+            }
           }
         }
       )
-      .subscribe();
+      .subscribe((status: string) => {
+        console.log('Pairing: realtime subscription status:', status);
+      });
+
+    // Polling fallback: check immediately then every 5 seconds
+    checkToken();
+    const pollInterval = setInterval(() => {
+      checkToken();
+    }, 5000);
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [pairingData]);
 
@@ -77,15 +153,27 @@ export default function PairingScreen() {
       // The edge function returns { data: { code, token, child_device_id, ... } }
       setDeviceId(data.data.child_device_id);
       setPairingData(data.data);
-    } catch (err: any) {
-      let msg = err.message || 'Failed to generate token';
-      
-      if (msg.includes('non-2xx')) {
-        msg = 'Backend rejected the request. Please try again.';
-      } else if (msg.includes('failed to send a request')) {
-        msg = 'Could not connect to the server. Please ensure your backend is running.';
+    } catch (err: unknown) {
+      let msg = 'Could not create pairing code. Please check your internet and try again.';
+
+      if (err instanceof FunctionsHttpError) {
+        try {
+          const body = await err.context.text();
+          console.error('create-pairing-token body:', body, 'status:', err.context.status);
+          const parsed = JSON.parse(body);
+          msg = parsed.error || msg;
+        } catch {
+          console.error('create-pairing-token response:', err.context.status, err.context.statusText);
+        }
+      } else if (err instanceof Error && err.message !== 'Failed to create session') {
+        console.error('create-pairing-token error:', err.message);
+        msg = err.message;
       }
-        
+
+      if (msg.includes('failed to send a request')) {
+        msg = 'Could not connect. Please check your internet.';
+      }
+
       setErrorMessage(msg);
       setErrorModalVisible(true);
     } finally {
@@ -132,15 +220,27 @@ export default function PairingScreen() {
       setDeviceId(data.data.parent_device_id);
       setPairId(data.data.id);
       router.replace('/onboarding');
-    } catch (err: any) {
-      let msg = err.message || 'Failed to verify token';
-      
-      if (msg.includes('non-2xx')) {
-        msg = 'Invalid or expired code. Please verify the code on the child device and try again.';
-      } else if (msg.includes('failed to send a request')) {
-        msg = 'Could not connect to the server. Please ensure your backend is running.';
+    } catch (err: unknown) {
+      let msg = 'Could not complete pairing. Please check the code and try again.';
+
+      if (err instanceof FunctionsHttpError) {
+        try {
+          const body = await err.context.text();
+          console.error('claim-pairing-token body:', body, 'status:', err.context.status);
+          const parsed = JSON.parse(body);
+          msg = parsed.error || msg;
+        } catch {
+          console.error('claim-pairing-token response:', err.context.status, err.context.statusText);
+        }
+      } else if (err instanceof Error) {
+        console.error('claim-pairing-token error:', err.message);
+        msg = err.message;
       }
-        
+
+      if (msg.includes('failed to send a request')) {
+        msg = 'Could not connect. Please check your internet.';
+      }
+
       setErrorMessage(msg);
       setErrorModalVisible(true);
       setScanned(false);

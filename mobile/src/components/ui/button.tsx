@@ -13,9 +13,10 @@ interface ButtonProps {
   imageSource?: any;
   style?: ViewStyle | ViewStyle[];
   loading?: boolean;
+  disabled?: boolean;
 }
 
-export const Button = ({ title, onPress, variant = 'primary', icon, imageSource, style, loading }: ButtonProps) => {
+export const Button = ({ title, onPress, variant = 'primary', icon, imageSource, style, loading, disabled }: ButtonProps) => {
   const scale = useSharedValue(1);
 
   const handlePressIn = () => {
@@ -31,18 +32,19 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
   }));
 
   const isPrimary = variant === 'primary';
+  const isDisabled = loading || disabled;
 
   return (
     <AnimatedPressable 
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      onPress={loading ? undefined : onPress}
+      onPress={isDisabled ? undefined : onPress}
       style={[
         styles.button, 
         isPrimary ? styles.primaryButton : styles.secondaryButton,
         animatedStyle,
         style,
-        loading && { opacity: 0.7 }
+        isDisabled && { opacity: 0.7 }
       ]}
     >
       {loading ? (

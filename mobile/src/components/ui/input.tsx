@@ -48,6 +48,7 @@ export const Input = ({
           onBlur={handleBlur}
           style={styles.textInput}
           autoCapitalize="none"
+          placeholderTextColor="rgba(54, 50, 40, 0.4)"
         />
         <MaterialIcons
           name={icon}

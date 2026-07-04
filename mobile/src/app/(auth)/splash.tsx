@@ -25,6 +25,7 @@ const blobPath = "M107.52 0 A148.48 115.2 0 0 1 256 115.2 A179.2 140.8 0 0 1 76.
 export default function SplashScreen() {
   const insets = useSafeAreaInsets();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const pairId = useAuthStore((state) => state.pairId);
 
   const _hasHydrated = useAuthStore((state) => state._hasHydrated);
 
@@ -37,10 +38,15 @@ export default function SplashScreen() {
       ExpoSplashScreen.hideAsync().catch(() => {});
       if (state.isAuthenticated) {
         const userRole = state.userRole;
-        if (userRole === 'child') {
+        const pairId = state.pairId;
+        if (!userRole) {
+          router.replace('/role-selection');
+        } else if (userRole === 'child' && !pairId) {
+          router.replace('/pairing');
+        } else if (userRole === 'child') {
           router.replace('/(child)/home');
         } else {
-          router.replace('/(tabs)/home'); 
+          router.replace('/(tabs)/home');
         }
       } else {
         router.replace('/role-selection');
