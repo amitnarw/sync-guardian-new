@@ -57,22 +57,37 @@ export default function RootLayout() {
     }
   }, [loaded, error]);
 
-  // Restore Supabase Auth session on app launch
+  // Restore Supabase Auth session on app launch and validate user exists
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    async function restoreSession() {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        // Verify the session user still exists in Supabase
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          // Session is invalid - sign out locally
+          await supabase.auth.signOut();
+          setIsAuthenticated(false);
+          setUserId(null);
+          setEmail(null);
+          return;
+        }
         setIsAuthenticated(true);
-        setUserId(session.user.id);
-        setEmail(session.user.email ?? null);
+        setUserId(user.id);
+        setEmail(user.email ?? null);
       }
-    });
+    }
+    restoreSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setIsAuthenticated(true);
-          setUserId(session?.user.id ?? null);
-          setEmail(session?.user.email ?? null);
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            setIsAuthenticated(true);
+            setUserId(user.id);
+            setEmail(user.email ?? null);
+          }
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setUserId(null);

@@ -410,7 +410,7 @@ export default function SettingsScreen() {
             <View style={s.dropdownMenu}>
               <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
                 <View style={s.dropdownHeaderInfo}>
-                  <Text style={s.dropdownUserTitle}>Mother's Space</Text>
+                   <Text style={s.dropdownUserTitle}>Mother&apos;s Space</Text>
                   <Text style={s.dropdownUserRole}>Atelier Curator</Text>
                 </View>
                 

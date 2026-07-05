@@ -17,6 +17,7 @@ export interface AppModalProps {
   onSecondaryPress?: () => void;
   dismissable?: boolean;
   onDismiss?: () => void;
+  steps?: string[];
 }
 
 const ICON_CONFIG: Record<AppModalIcon, { name: keyof typeof MaterialIcons.glyphMap; bg: string; color: string }> = {
@@ -37,6 +38,7 @@ export const AppModal = ({
   onSecondaryPress,
   dismissable = true,
   onDismiss,
+  steps,
 }: AppModalProps) => {
   const scale = useSharedValue(0.9);
   const backdropOpacity = useSharedValue(0);
@@ -76,23 +78,30 @@ export const AppModal = ({
           </Animated.View>
         </TouchableWithoutFeedback>
         <Animated.View style={[styles.card, cardStyle]}>
-          {iconCfg && (
-            <View style={[styles.iconContainer, { backgroundColor: iconCfg.bg }]}>
-              <MaterialIcons name={iconCfg.name} size={32} color={iconCfg.color} />
-            </View>
-          )}
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
-          <View style={[styles.actions, !secondaryButton && styles.actionsSingle]}>
-            {secondaryButton && (
-              <Pressable style={styles.secondaryButton} onPress={onSecondaryPress}>
-                <Text style={styles.secondaryText}>{secondaryButton}</Text>
-              </Pressable>
-            )}
-            <Pressable style={[styles.primaryButton, !secondaryButton && styles.primaryButtonFull]} onPress={onPrimaryPress}>
-              <Text style={styles.primaryText}>{primaryButton}</Text>
-            </Pressable>
-          </View>
+           {iconCfg && (
+             <View style={[styles.iconContainer, { backgroundColor: iconCfg.bg }]}>
+               <MaterialIcons name={iconCfg.name} size={32} color={iconCfg.color} />
+             </View>
+           )}
+           <Text style={styles.title}>{title}</Text>
+           <Text style={styles.message}>{message}</Text>
+           {steps && steps.length > 0 && (
+             <View style={styles.stepsContainer}>
+               {steps.map((step, idx) => (
+                 <Text key={idx} style={styles.stepText}>{idx + 1}. {step}</Text>
+               ))}
+             </View>
+           )}
+           <View style={[styles.actions, !secondaryButton && styles.actionsSingle]}>
+             {secondaryButton && (
+               <Pressable style={styles.secondaryButton} onPress={onSecondaryPress}>
+                 <Text style={styles.secondaryText}>{secondaryButton}</Text>
+               </Pressable>
+             )}
+             <Pressable style={[styles.primaryButton, !secondaryButton && styles.primaryButtonFull]} onPress={onPrimaryPress}>
+               <Text style={styles.primaryText}>{primaryButton}</Text>
+             </Pressable>
+           </View>
         </Animated.View>
       </View>
     </Modal>
@@ -144,7 +153,18 @@ const styles = StyleSheet.create({
     color: '#43483d',
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 16,
+  },
+  stepsContainer: {
+    alignItems: 'flex-start',
     marginBottom: 32,
+    width: '100%',
+  },
+  stepText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 14,
+    color: '#43483d',
+    marginBottom: 4,
   },
   actions: {
     flexDirection: 'row',

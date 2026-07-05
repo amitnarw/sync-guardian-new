@@ -129,7 +129,7 @@ export default function InsightsScreen() {
               A week of <Text style={s.heroTitleAccent}>gentle</Text> focus.
             </Text>
             <Text style={s.heroDescription}>
-              Leo's digital presence felt balanced this week. Screen time drifted toward creative tools, reflecting a peak in curiosity.
+               Leo&apos;s digital presence felt balanced this week. Screen time drifted toward creative tools, reflecting a peak in curiosity.
             </Text>
           </View>
 
@@ -253,11 +253,11 @@ export default function InsightsScreen() {
 
             <View style={s.narrativeLabelRow}>
               <Ionicons name="bulb" size={20} color={C.primary} />
-              <Text style={s.narrativeLabelText}>A Maker's Observation</Text>
+              <Text style={s.narrativeLabelText}>A Maker&apos;s Observation</Text>
             </View>
             <Text style={s.narrativeTitle}>Digital creation is outweighing consumption.</Text>
             <Text style={s.narrativeDesc}>
-              Most of the activity this week was concentrated in creative "Sandbox" mode. This suggests a transition from passive viewing to active building. Consider introducing a new drawing tool.
+              Most of the activity this week was concentrated in creative &quot;Sandbox&quot; mode. This suggests a transition from passive viewing to active building. Consider introducing a new drawing tool.
             </Text>
             <TouchableOpacity style={s.exploreBtn}>
               <Text style={s.exploreBtnText}>Explore Creative Tools</Text>
@@ -277,7 +277,7 @@ export default function InsightsScreen() {
             <View style={s.dropdownMenu}>
               <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
                 <View style={s.dropdownHeaderInfo}>
-                  <Text style={s.dropdownUserTitle}>Mother's Space</Text>
+                   <Text style={s.dropdownUserTitle}>Mother&apos;s Space</Text>
                   <Text style={s.dropdownUserRole}>Atelier Curator</Text>
                 </View>
                 

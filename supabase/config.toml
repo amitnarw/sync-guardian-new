@@ -431,3 +431,8 @@ entrypoint = "./functions/claim-pairing-token/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/create-pairing-token/index.ts"
+
+[functions.send-parent-push]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/send-parent-push/index.ts"

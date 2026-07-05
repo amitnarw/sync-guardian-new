@@ -225,13 +225,13 @@ export default function NotificationsScreen() {
                             
                             {isRestriction ? (
                               <Text style={[s.priorityCardMessage, s.priorityCardMessageRestriction]}>
-                                Leo's device flagged a search for{' '}
-                                <Text style={s.boldUnderline}>"bypass firewall"</Text> on Safari.
+                                 Leo&apos;s device flagged a search for{' '}
+                                 <Text style={s.boldUnderline}>&quot;bypass firewall&quot;</Text> on Safari.
                               </Text>
                             ) : (
                               <Text style={[s.priorityCardMessage, s.priorityCardMessagePermission]}>
                                 Maya wants to install{' '}
-                                <Text style={s.boldText}>"Studio Ghibli Art"</Text>. Category: Creativity & Design.
+                                 <Text style={s.boldText}>&quot;Studio Ghibli Art&quot;</Text>. Category: Creativity & Design.
                               </Text>
                             )}
                             
@@ -270,7 +270,7 @@ export default function NotificationsScreen() {
             {todayActivities.length > 0 && (
               <View style={s.section}>
                 <View style={s.sectionHeader}>
-                  <Text style={s.sectionTitleActivity}>Today's Activity</Text>
+                   <Text style={s.sectionTitleActivity}>Today&apos;s Activity</Text>
                   <Text style={s.sectionSubtitleActivity}>{todayActivities.length} items</Text>
                 </View>
 

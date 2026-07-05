@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PENDING_QUEUE_KEY = 'pending_notifications_queue';
+const PROCESSED_KEYS_KEY = 'processed_notification_keys';
 const MAX_QUEUE_SIZE = 500;
 const BATCH_SIZE = 50;
+const MAX_PROCESSED_KEYS = 500;
 
 export interface NotificationPayload {
   child_device_id: string;
@@ -12,6 +14,7 @@ export interface NotificationPayload {
   notification_title: string;
   notification_body: string;
   notification_posted_at: string;
+  notification_key: string | null;
   _retryCount?: number;
 }
 
@@ -33,6 +36,35 @@ let _mmkv: ReturnType<typeof getMMKV> | null = null;
 function mmkv() {
   if (!_mmkv) _mmkv = getMMKV();
   return _mmkv;
+}
+
+export async function getProcessedKeysSet(): Promise<Set<string>> {
+  const store = mmkv();
+  if (store) {
+    const raw = store.getString(PROCESSED_KEYS_KEY);
+    if (raw) {
+      const keys: string[] = JSON.parse(raw);
+      // Prune old keys if too many
+      if (keys.length > MAX_PROCESSED_KEYS) {
+        store.set(PROCESSED_KEYS_KEY, JSON.stringify(keys.slice(-MAX_PROCESSED_KEYS)));
+      }
+      return new Set(keys);
+    }
+  }
+  return new Set();
+}
+
+export async function addToProcessedKeys(key: string): Promise<void> {
+  const store = mmkv();
+  if (!store) return;
+  let raw = store.getString(PROCESSED_KEYS_KEY);
+  let keys: string[] = raw ? JSON.parse(raw) : [];
+  keys.push(key);
+  // Prune old keys if too many
+  if (keys.length > MAX_PROCESSED_KEYS) {
+    keys = keys.slice(-MAX_PROCESSED_KEYS);
+  }
+  store.set(PROCESSED_KEYS_KEY, JSON.stringify(keys));
 }
 
 async function readQueue(): Promise<NotificationPayload[]> {
@@ -87,6 +119,15 @@ export async function clearBufferedNotifications() {
   await deleteQueue();
 }
 
+export async function clearProcessedKeys() {
+  const store = mmkv();
+  if (store) {
+    store.delete(PROCESSED_KEYS_KEY);
+    return;
+  }
+  await AsyncStorage.removeItem(PROCESSED_KEYS_KEY);
+}
+
 async function replaceBufferedNotifications(queue: NotificationPayload[]) {
   await writeQueue(queue);
 }
@@ -96,7 +137,9 @@ export const flushBuffer = async () => {
   if (queue.length === 0) return;
 
   const { supabase } = require('@/lib/supabase');
+  const processedKeys = getProcessedKeysSet();
   const remaining: NotificationPayload[] = [];
+  const sentNotifications: NotificationPayload[] = [];
 
   for (let i = 0; i < queue.length; i += BATCH_SIZE) {
     const batch = queue.slice(i, i + BATCH_SIZE);
@@ -112,6 +155,14 @@ export const flushBuffer = async () => {
           }
         }
         console.error('Flush batch failed, re-buffered', error);
+      } else {
+        // Track sent notification keys
+        for (const n of batch) {
+          if (n.notification_key) {
+            addToProcessedKeys(n.notification_key);
+          }
+          sentNotifications.push(n);
+        }
       }
     } catch (err) {
       for (const n of batch) {

@@ -130,7 +130,7 @@ export default function ActivityScreen() {
             <View style={s.heroContent}>
               <View style={s.heroBadgePill}>
                 <MaterialCommunityIcons name="spa" size={14} color={C.primary} />
-                <Text style={s.heroBadgeText}>Today's Journey</Text>
+                <Text style={s.heroBadgeText}>Today&apos;s Journey</Text>
               </View>
               <Text style={s.heroTitle}>Activity Flow</Text>
               <Text style={s.heroDescription}>
@@ -233,7 +233,7 @@ export default function ActivityScreen() {
             <View style={s.dropdownMenu}>
               <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
                 <View style={s.dropdownHeaderInfo}>
-                  <Text style={s.dropdownUserTitle}>Mother's Space</Text>
+                   <Text style={s.dropdownUserTitle}>Mother&apos;s Space</Text>
                   <Text style={s.dropdownUserRole}>Atelier Curator</Text>
                 </View>
                 

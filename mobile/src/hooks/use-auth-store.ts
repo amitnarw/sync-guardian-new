@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearAppMetadataCache } from './use-app-metadata';
 
 export type UserRole = 'parent' | 'child' | null;
 
@@ -49,21 +50,25 @@ export const useAuthStore = create<AuthState>()(
       email: null,
       setEmail: (email) => set({ email }),
 
+      // NOT persisted - kept in memory only (SecureStore not yet installed)
       pairId: null,
       setPairId: (pairId) => set({ pairId }),
+      // NOT persisted - kept in memory only (SecureStore not yet installed)
       deviceId: null,
       setDeviceId: (deviceId) => set({ deviceId }),
 
       fcmToken: null,
       setFcmToken: (fcmToken) => set({ fcmToken }),
 
+      // NOT persisted - kept in memory only (SecureStore not yet installed)
       userId: null,
       setUserId: (id) => set({ userId: id }),
 
       _hasHydrated: false,
       setHasHydrated: (state) => set({ _hasHydrated: state }),
 
-      resetAuth: () =>
+      resetAuth: () => {
+        clearAppMetadataCache();
         set({
           userRole: null,
           hasCompletedOnboarding: false,
@@ -71,8 +76,10 @@ export const useAuthStore = create<AuthState>()(
           email: null,
           pairId: null,
           deviceId: null,
+          fcmToken: null,
           userId: null,
-        }),
+        });
+      },
     }),
     {
       name: 'auth-storage',
@@ -87,10 +94,6 @@ export const useAuthStore = create<AuthState>()(
         hasCompletedOnboarding: state.hasCompletedOnboarding,
         isAuthenticated: state.isAuthenticated,
         email: state.email,
-        pairId: state.pairId,
-        deviceId: state.deviceId,
-        fcmToken: state.fcmToken,
-        userId: state.userId,
       }),
     },
   )

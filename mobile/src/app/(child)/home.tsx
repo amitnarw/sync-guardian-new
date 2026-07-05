@@ -281,7 +281,7 @@ export default function ChildHome() {
                 <View style={[s.iconWrapper, { backgroundColor: C.surfaceVariant }]}>
                   <Ionicons name="leaf-outline" size={24} color={C.onSurfaceVariant} />
                 </View>
-                <Text style={s.cardTitle}>Today's Rhythm</Text>
+                <Text style={s.cardTitle}>Today&apos;s Rhythm</Text>
                 <Text style={s.cardDesc}>Creative Exploration</Text>
               </View>
 

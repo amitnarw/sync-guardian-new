@@ -10,6 +10,7 @@ interface ShowModalOptions {
   secondaryButton?: string;
   onSecondaryPress?: () => void;
   dismissable?: boolean;
+  steps?: string[];
 }
 
 interface ModalContextValue {
@@ -32,6 +33,7 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
     visible: false,
     title: '',
     message: '',
+    steps: [],
   });
 
   const hideModal = useCallback(() => {
@@ -49,6 +51,7 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         secondaryButton,
         onSecondaryPress,
         dismissable = true,
+        steps = [],
       } = opts;
 
       setModalProps({
@@ -59,6 +62,7 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         primaryButton,
         secondaryButton,
         dismissable,
+        steps,
         onPrimaryPress: () => {
           onPrimaryPress?.();
           hideModal();

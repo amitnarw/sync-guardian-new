@@ -320,7 +320,7 @@ export default function PairingScreen() {
           <View style={styles.header}>
             <MaterialIcons name="family-restroom" size={32} color="#44674d" />
             <Text style={styles.title}>Parent Mode Setup</Text>
-            <Text style={styles.subtitle}>Secure your family's digital environment</Text>
+            <Text style={styles.subtitle}>Secure your family&apos;s digital environment</Text>
           </View>
 
           {parentMode === 'options' && (
@@ -333,7 +333,7 @@ export default function PairingScreen() {
                 <View style={styles.explainerWrapper}>
                   <Text style={styles.explainerTitle}>Link a Child Device</Text>
                   <Text style={styles.explainerText}>
-                    Sync Guardian creates a secure, real-time connection to your child's phone. Once paired, you can monitor their notifications seamlessly.
+                    Sync Guardian creates a secure, real-time connection to your child&apos;s phone. Once paired, you can monitor their notifications seamlessly.
                   </Text>
                 </View>
 

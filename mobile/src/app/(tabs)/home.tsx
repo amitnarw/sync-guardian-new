@@ -329,10 +329,10 @@ export default function HomeScreen() {
                 <Text style={s.flowLabel}>MORNING FLOW</Text>
                 <Text style={s.heroTitle}>
                   Gentle rhythm for{'\n'}
-                  <Text style={s.heroTitleAccent}>Leo's Wednesday</Text>
+                  <Text style={s.heroTitleAccent}>Leo&apos;s Wednesday</Text>
                 </Text>
                 <Text style={s.heroDescription}>
-                  Currently in "Creative Exploration" block. The digital sanctuary is maintaining a soft focus environment.
+                   Currently in &quot;Creative Exploration&quot; block. The digital sanctuary is maintaining a soft focus environment.
                 </Text>
                 <View style={s.heroButtons}>
                   <TouchableOpacity style={s.primaryBtn}>
@@ -503,7 +503,7 @@ export default function HomeScreen() {
               </View>
               <Text style={s.insightsTitle}>Healthy Balance{'\n'}Achieved Today.</Text>
               <Text style={s.insightsDesc}>
-                Educational content outpaced entertainment by 3:1 today. Great job guiding Leo's journey!
+                 Educational content outpaced entertainment by 3:1 today. Great job guiding Leo&apos;s journey!
               </Text>
               <TouchableOpacity style={s.insightsCta}>
                 <Text style={s.insightsCtaText}>Explore Detailed Insights</Text>
@@ -530,7 +530,7 @@ export default function HomeScreen() {
             <View style={s.dropdownMenu}>
               <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
                 <View style={s.dropdownHeaderInfo}>
-                  <Text style={s.dropdownUserTitle}>Mother's Space</Text>
+                   <Text style={s.dropdownUserTitle}>Mother&apos;s Space</Text>
                   <Text style={s.dropdownUserRole}>Atelier Curator</Text>
                 </View>
 

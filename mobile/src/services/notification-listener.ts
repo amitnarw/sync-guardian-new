@@ -1,8 +1,10 @@
-import { RNAndroidNotificationListenerHeadlessJsName } from 'react-native-android-notification-listener';
 import { AppRegistry } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { bufferNotification, flushBuffer } from './mmkv-buffer';
+import { bufferNotification, flushBuffer, getProcessedKeysSet, addToProcessedKeys } from './mmkv-buffer';
 import { useAuthStore } from '@/hooks/use-auth-store';
+
+// Headless task name matching NotificationHeadlessTaskService.kt
+const HEADLESS_TASK_NAME = 'RNAndroidNotificationListenerHeadlessJsName';
 
 export const headlessNotificationListener = async ({ notification }: { notification: string }) => {
   if (!notification) return;
@@ -24,6 +26,7 @@ export const headlessNotificationListener = async ({ notification }: { notificat
         notification_posted_at: parsed.time
           ? new Date(parseInt(parsed.time, 10)).toISOString()
           : new Date().toISOString(),
+        notification_key: parsed.notification_key || null,
       };
       await bufferNotification(fallbackPayload);
       return;
@@ -31,6 +34,15 @@ export const headlessNotificationListener = async ({ notification }: { notificat
 
     const { userRole, pairId, deviceId } = state;
     if (userRole !== 'child' || !pairId || !deviceId) {
+      return;
+    }
+
+    // Client-side dedup using processed keys Set
+    const notificationKey = parsed.notification_key || null;
+    const processedKeys = await getProcessedKeysSet();
+    
+    // Skip if already processed
+    if (notificationKey && processedKeys.has(notificationKey)) {
       return;
     }
 
@@ -44,6 +56,7 @@ export const headlessNotificationListener = async ({ notification }: { notificat
       notification_posted_at: parsed.time
         ? new Date(parseInt(parsed.time, 10)).toISOString()
         : new Date().toISOString(),
+      notification_key: notificationKey,
     };
 
     try {
@@ -51,6 +64,11 @@ export const headlessNotificationListener = async ({ notification }: { notificat
         body: payload,
       });
       if (error) throw error;
+
+      // Track processed key
+      if (notificationKey) {
+        addToProcessedKeys(notificationKey);
+      }
 
       await flushBuffer();
     } catch (e) {
@@ -63,6 +81,6 @@ export const headlessNotificationListener = async ({ notification }: { notificat
 };
 
 AppRegistry.registerHeadlessTask(
-  RNAndroidNotificationListenerHeadlessJsName,
+  'RNAndroidNotificationListenerHeadlessJsName',
   () => headlessNotificationListener
 );
