@@ -29,8 +29,16 @@ interface AuthState {
   userId: string | null;
   setUserId: (id: string | null) => void;
 
+  profileImage: string | null;
+  setProfileImage: (image: string | null) => void;
+  displayName: string | null;
+  setDisplayName: (name: string | null) => void;
+
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
+
+  sessionChecked: boolean;
+  setSessionChecked: (checked: boolean) => void;
 
   resetAuth: () => void;
 }
@@ -50,22 +58,27 @@ export const useAuthStore = create<AuthState>()(
       email: null,
       setEmail: (email) => set({ email }),
 
-      // NOT persisted - kept in memory only (SecureStore not yet installed)
       pairId: null,
       setPairId: (pairId) => set({ pairId }),
-      // NOT persisted - kept in memory only (SecureStore not yet installed)
       deviceId: null,
       setDeviceId: (deviceId) => set({ deviceId }),
 
       fcmToken: null,
       setFcmToken: (fcmToken) => set({ fcmToken }),
 
-      // NOT persisted - kept in memory only (SecureStore not yet installed)
       userId: null,
       setUserId: (id) => set({ userId: id }),
 
+      profileImage: null,
+      setProfileImage: (image) => set({ profileImage: image }),
+      displayName: null,
+      setDisplayName: (name) => set({ displayName: name }),
+
       _hasHydrated: false,
       setHasHydrated: (state) => set({ _hasHydrated: state }),
+
+      sessionChecked: false,
+      setSessionChecked: (checked) => set({ sessionChecked: checked }),
 
       resetAuth: () => {
         clearAppMetadataCache();
@@ -78,6 +91,8 @@ export const useAuthStore = create<AuthState>()(
           deviceId: null,
           fcmToken: null,
           userId: null,
+          profileImage: null,
+          displayName: null,
         });
       },
     }),
@@ -92,8 +107,12 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         userRole: state.userRole,
         hasCompletedOnboarding: state.hasCompletedOnboarding,
-        isAuthenticated: state.isAuthenticated,
         email: state.email,
+        pairId: state.pairId,
+        deviceId: state.deviceId,
+        fcmToken: state.fcmToken,
+        profileImage: state.profileImage,
+        displayName: state.displayName,
       }),
     },
   )

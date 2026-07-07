@@ -1,15 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Dimensions, Text, BackHandler } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { StyleSheet, ScrollView, View, Dimensions, Text, BackHandler, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, runOnJS } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
 import { BlurView, BlurTargetView } from 'expo-blur';
 import { ThemedView } from '@/components/themed-view';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
+import { UserAvatar } from '@/components/user-avatar';
 import { supabase } from '@/lib/supabase';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -46,6 +46,29 @@ export default function ChildHome() {
   const { pairId } = useAuthStore();
   const { showModal } = useAppModal();
   const [parentName, setParentName] = useState('Parent Device');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchParentName = useCallback(async () => {
+    if (!pairId) return;
+    const { data } = await supabase
+      .from('pairs')
+      .select('parent_device:devices!parent_device_id(device_name)')
+      .eq('id', pairId)
+      .single();
+    
+    if (data && data.parent_device) {
+      setParentName((data.parent_device as any).device_name || 'Parent Device');
+    }
+  }, [pairId]);
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchParentName();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchParentName]);
 
   useEffect(() => {
     const backAction = () => {
@@ -65,21 +88,8 @@ export default function ChildHome() {
   }, []);
 
   useEffect(() => {
-    // Fetch the parent's device name from the pairing table
-    const fetchParentName = async () => {
-      if (!pairId) return;
-      const { data, error } = await supabase
-        .from('pairs')
-        .select('parent_device:devices!parent_device_id(device_name)')
-        .eq('id', pairId)
-        .single();
-      
-      if (data && data.parent_device) {
-        setParentName((data.parent_device as any).device_name || 'Parent Device');
-      }
-    };
     fetchParentName();
-  }, [pairId]);
+  }, [fetchParentName]);
 
   const blurTargetRef = React.useRef<View>(null);
   
@@ -191,19 +201,19 @@ export default function ChildHome() {
               <Text style={s.headerTitle}>Sync Guardian</Text>
             </View>
             <View style={s.headerRight}>
-              <TouchableOpacity
-                style={s.iconButton}
-                onPress={() => router.push('/(child)/settings')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="settings-outline" size={22} color={C.primary} />
-              </TouchableOpacity>
+              <UserAvatar
+                fallbackSource={require('@/assets/images/leo_avatar.jpg')}
+                role="child"
+              />
             </View>
           </View>
 
           <ScrollView
             contentContainerStyle={s.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[C.primary]} tintColor={C.primary} />
+            }
           >
             {/* ========== HERO SECTION ========== */}
             <View style={s.heroSection}>
@@ -350,20 +360,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: C.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-
   /* ---------- Hero Section ---------- */
   heroSection: {
     marginBottom: 48,

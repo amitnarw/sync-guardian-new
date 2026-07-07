@@ -27,7 +27,9 @@ export interface UsePairDataResult {
   latestNotification: MirroredNotification | null;
   isOnline: boolean;
   isLoading: boolean;
+  isRefreshing: boolean;
   error: string | null;
+  refresh: () => Promise<void>;
 }
 
 export function usePairData(): UsePairDataResult {
@@ -36,8 +38,10 @@ export function usePairData(): UsePairDataResult {
   const [childDevice, setChildDevice] = useState<UsePairDataResult['childDevice']>(null);
   const [notifications, setNotifications] = useState<MirroredNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const channelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
+  const cancelledRef = useRef(false);
 
   // Only Parent devices should query pair data
   const isParent = userRole === 'parent';
@@ -56,59 +60,60 @@ export function usePairData(): UsePairDataResult {
 
   const latestNotification = notifications.length > 0 ? notifications[0] : null;
 
-  // Bootstrap: resolve pair, then fetch child + notifications + subscribe
-  useEffect(() => {
+  const init = useCallback(async (isRefresh = false) => {
+    const auth = useAuthStore.getState();
+    const dId = auth.deviceId;
+    const sPId = auth.pairId;
+
     if (!isParent) {
       setIsLoading(false)
       return
     }
 
-    let cancelled = false;
-
-    const init = async () => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
       setIsLoading(true);
-      setError(null);
+    }
+    setError(null);
 
-      console.log('usePairData init:', { storePairId, deviceId, isParent });
+    try {
+      // Unsubscribe old channels before re-fetching
+      channelsRef.current.forEach((ch) => supabase.removeChannel(ch));
+      channelsRef.current = [];
 
       // 1. Resolve the active pair
       let resolvedPair: { id: string; child_device_id: string } | null = null;
 
-      if (storePairId && deviceId) {
+      if (sPId && dId) {
         const { data, error: pairError } = await supabase
           .from('pairs')
           .select('id, child_device_id')
-          .eq('id', storePairId)
+          .eq('id', sPId)
           .single();
         if (!pairError && data) {
           resolvedPair = data;
-          console.log('usePairData: resolved pair by storePairId:', data);
-        } else {
-          console.warn('usePairData: storePairId query failed:', pairError);
         }
       }
 
-      if (!resolvedPair && deviceId) {
+      if (!resolvedPair && dId) {
         const { data, error: pairError } = await supabase
           .from('pairs')
           .select('id, child_device_id')
-          .eq('parent_device_id', deviceId)
+          .eq('parent_device_id', dId)
           .in('status', ['active', 'pending'])
           .limit(1);
         if (!pairError && data && data.length > 0) {
           resolvedPair = data[0];
-          console.log('usePairData: resolved pair by deviceId fallback:', data[0]);
-        } else if (pairError) {
-          console.warn('usePairData: fallback pair query error:', pairError);
-        } else {
-          console.warn('usePairData: fallback pair query returned empty array');
         }
       }
 
-      if (cancelled) return;
+      if (cancelledRef.current) return;
 
       if (!resolvedPair) {
-        setIsLoading(false);
+        setPair(null);
+        setChildDevice(null);
+        setNotifications([]);
         return;
       }
 
@@ -120,9 +125,8 @@ export function usePairData(): UsePairDataResult {
         .select('id, device_name, is_foreground, last_seen_at, push_token')
         .eq('id', resolvedPair.child_device_id)
         .single();
-      if (devData && !cancelled) {
+      if (devData && !cancelledRef.current) {
         setChildDevice(devData as any);
-        console.log('usePairData: child device fetched:', devData.id);
       } else if (devError) {
         console.warn('usePairData: child device query error:', devError);
       }
@@ -134,14 +138,13 @@ export function usePairData(): UsePairDataResult {
         .eq('pair_id', resolvedPair.id)
         .order('notification_posted_at', { ascending: false })
         .limit(50);
-      if (notifData && !cancelled) {
+      if (notifData && !cancelledRef.current) {
         setNotifications(notifData as MirroredNotification[]);
-        console.log('usePairData: fetched', notifData.length, 'notifications');
       } else if (notifError) {
         console.warn('usePairData: notifications query error:', notifError);
       }
 
-      if (cancelled) return;
+      if (cancelledRef.current) return;
 
       // 4. Subscribe to realtime changes
       const deviceChannel = supabase
@@ -183,18 +186,33 @@ export function usePairData(): UsePairDataResult {
         .subscribe();
 
       channelsRef.current = [deviceChannel, notifChannel];
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load pair data');
+      console.warn('usePairData: init error:', err);
+    } finally {
+      if (isRefresh) {
+        setIsRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
+    }
+  }, [isParent]);
 
-      setIsLoading(false);
-    };
-
-    init();
+  // Bootstrap: resolve pair, then fetch child + notifications + subscribe
+  useEffect(() => {
+    cancelledRef.current = false;
+    init(false);
 
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
       channelsRef.current.forEach((ch) => supabase.removeChannel(ch));
       channelsRef.current = [];
     };
   }, [deviceId, storePairId, isParent]);
+
+  const refresh = useCallback(async () => {
+    await init(true);
+  }, [init]);
 
   // Re-evaluate isOnline every 30s for the last_seen_at timeout
   const [, forceUpdate] = useState(0);
@@ -204,7 +222,7 @@ export function usePairData(): UsePairDataResult {
   }, []);
 
   if (!isParent) {
-    return { pair: null, childDevice: null, notifications: [], latestNotification: null, isOnline: false, isLoading: false, error: null };
+    return { pair: null, childDevice: null, notifications: [], latestNotification: null, isOnline: false, isLoading: false, isRefreshing: false, error: null, refresh: async () => {} };
   }
 
   return {
@@ -214,6 +232,8 @@ export function usePairData(): UsePairDataResult {
     latestNotification,
     isOnline,
     isLoading,
+    isRefreshing,
     error,
+    refresh,
   };
 }

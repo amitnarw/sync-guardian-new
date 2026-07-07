@@ -19,7 +19,7 @@ const { width } = Dimensions.get('window');
 export default function PairingScreen() {
   const { userRole, setUserRole, setPairId, setDeviceId } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [pairingData, setPairingData] = useState<{ code: string; token: string; child_device_id: string } | null>(null);
+  const [pairingData, setPairingData] = useState<{ code: string; token: string; child_device_id: string; qr_jwt: string } | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -99,36 +99,7 @@ export default function PairingScreen() {
       return false;
     };
 
-    // Real-time subscription
-    const channel = supabase
-      .channel('pairing-watch')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'pairing_tokens',
-          filter: `token=eq.${pairingData.token}`,
-        },
-        (payload: any) => {
-          console.log('Pairing: realtime event received:', payload.new);
-          if (payload.new && payload.new.consumed_at) {
-            if (payload.new.pair_id) {
-              setPairId(payload.new.pair_id);
-              router.replace('/onboarding');
-            } else {
-              // Fallback: trigger polling which handles the query
-              console.log('Pairing: realtime had no pair_id, triggering polling fallback');
-              checkToken();
-            }
-          }
-        }
-      )
-      .subscribe((status: string) => {
-        console.log('Pairing: realtime subscription status:', status);
-      });
-
-    // Polling fallback: check immediately then every 5 seconds
+    // Polling: check immediately then every 5 seconds
     checkToken();
     const pollInterval = setInterval(() => {
       checkToken();
@@ -136,7 +107,6 @@ export default function PairingScreen() {
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
   }, [pairingData]);
@@ -184,29 +154,21 @@ export default function PairingScreen() {
   const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
     if (scanned) return;
     setScanned(true);
-    // Assuming data is the token or a JSON string with the token
-    let tokenToVerify = data;
-    try {
-      const parsed = JSON.parse(data);
-      if (parsed.token) tokenToVerify = parsed.token;
-    } catch (e) {
-      // It's not JSON, assume raw token string
-    }
-    verifyToken(tokenToVerify);
+    verifyToken(data);
   };
 
   const verifyToken = async (tokenOrCode: string) => {
     try {
       setIsVerifying(true);
 
-      // We call the edge function `claim-pairing-token`
-      const payload = {
+      const payload: Record<string, string> = {
         device_name: 'Parent Device'
-      } as any;
+      };
 
-      // Determine if tokenOrCode is a UUID or a 6 digit code
       if (tokenOrCode.length === 6) {
         payload.code = tokenOrCode;
+      } else if (tokenOrCode.includes('.')) {
+        payload.qr_jwt = tokenOrCode;
       } else {
         payload.token = tokenOrCode;
       }
@@ -277,7 +239,7 @@ export default function PairingScreen() {
             <>
               <View style={styles.qrWrapper}>
                 <QRCode
-                  value={JSON.stringify({ token: pairingData.token, code: pairingData.code })}
+                  value={pairingData.qr_jwt}
                   size={200}
                   color="#363228"
                   backgroundColor="#ffffff"

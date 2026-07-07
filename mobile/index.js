@@ -1,7 +1,2 @@
 import 'expo-router/entry';
-// import './src/services/notification-listener';
-// import messaging from '@react-native-firebase/messaging';
-
-// messaging().setBackgroundMessageHandler(async remoteMessage => {
-//   console.log('Message handled in the background!', remoteMessage);
-// });
+import './src/services/notification-listener';

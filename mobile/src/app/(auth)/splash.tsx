@@ -13,7 +13,6 @@ import Animated, {
 import Svg, { Path, Defs, LinearGradient, Stop, RadialGradient as SvgRadialGradient, Circle } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore } from '@/hooks/use-auth-store';
 import { StatusBar } from 'expo-status-bar';
 import { AuthColors } from '@/constants/auth-theme';
 
@@ -24,45 +23,14 @@ const blobPath = "M107.52 0 A148.48 115.2 0 0 1 256 115.2 A179.2 140.8 0 0 1 76.
 
 export default function SplashScreen() {
   const insets = useSafeAreaInsets();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const pairId = useAuthStore((state) => state.pairId);
-
-  const _hasHydrated = useAuthStore((state) => state._hasHydrated);
 
   const containerOpacity = useSharedValue(0);
   const blobScale = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
 
-  const navigate = () => {
-    const doNavigate = (state: any) => {
-      ExpoSplashScreen.hideAsync().catch(() => {});
-      if (state.isAuthenticated) {
-        const userRole = state.userRole;
-        const pairId = state.pairId;
-        if (!userRole) {
-          router.replace('/role-selection');
-        } else if (userRole === 'child' && !pairId) {
-          router.replace('/pairing');
-        } else if (userRole === 'child') {
-          router.replace('/(child)/home');
-        } else {
-          router.replace('/(tabs)/home');
-        }
-      } else {
-        router.replace('/role-selection');
-      }
-    };
-
-    if (!_hasHydrated) {
-      const unsubscribe = useAuthStore.subscribe((state) => {
-        if (state._hasHydrated) {
-          unsubscribe();
-          doNavigate(state);
-        }
-      });
-    } else {
-      doNavigate(useAuthStore.getState());
-    }
+  const navigateAway = () => {
+    ExpoSplashScreen.hideAsync().catch(() => {});
+    router.replace('/role-selection');
   };
 
   useEffect(() => {
@@ -73,10 +41,9 @@ export default function SplashScreen() {
     contentOpacity.value = withDelay(600, withTiming(1, { duration: 600 }));
 
     const exitTimeout = setTimeout(() => {
-      // Exit Animation: Fade out
       containerOpacity.value = withTiming(0, { duration: 400 }, (finished) => {
         if (finished) {
-          runOnJS(navigate)();
+          runOnJS(navigateAway)();
         }
       });
     }, 2800);

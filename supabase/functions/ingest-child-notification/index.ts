@@ -2,40 +2,30 @@ import { serve } from "https://deno.land/std@0.192.0/http/server.ts"
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
+import { sendParentPush } from '../_shared/fcm.ts'
+import { isValidUUID, isValidString, sanitizeString, requireBody, ValidationError } from '../_shared/validation.ts'
 
-function isValidNotification(n: Record<string, unknown>): boolean {
-  return !!(n.child_device_id && n.pair_id)
+function deterministicKey(n: Record<string, unknown>): string {
+  const raw = `${n.source_package || ''}|${n.notification_posted_at || ''}|${n.notification_title || ''}|${n.notification_body || ''}`
+  const encoder = new TextEncoder()
+  const data = encoder.encode(raw)
+  return crypto.subtle.digest('SHA-256', data).then(hash => {
+    const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
+    return `auto_${hex.slice(0, 32)}`
+  })
 }
 
-async function sendFcmPush(
-  supabaseUrl: string,
-  serviceRoleKey: string,
-  deviceToken: string,
-  title: string,
-  body: string,
-  notificationCount?: number,
-): Promise<boolean> {
-  const url = `${supabaseUrl}/functions/v1/send-parent-push`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${serviceRoleKey}`,
-    },
-    body: JSON.stringify({
-      device_token: deviceToken,
-      title,
-      body,
-      notification_count: notificationCount,
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    console.error('FCM push failed:', err)
-    return false
-  }
-  return true
+interface NotificationRow {
+  pair_id: string
+  child_device_id: string
+  source_package: string | null
+  source_app_name: string | null
+  notification_title: string
+  notification_body: string
+  notification_posted_at: string
+  notification_key: string
+  metadata_json: unknown
+  delivery_mode: 'pending'
 }
 
 serve(async (req) => {
@@ -46,39 +36,41 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     const user = await verifyAuth(authHeader)
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     const adminClient = getAdminClient()
-
     const payload = await req.json()
 
-    const notifications: Record<string, unknown>[] = payload.notifications
+    const rawNotifications: Record<string, unknown>[] = payload.notifications
       ? payload.notifications
       : [payload]
 
-    if (notifications.length === 0) {
+    if (rawNotifications.length === 0) {
       return new Response(
         JSON.stringify({ error: 'No notifications provided' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
       )
     }
 
-    if (notifications.length > 100) {
+    if (rawNotifications.length > 100) {
       return new Response(
         JSON.stringify({ error: 'Batch size exceeds limit of 100' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
       )
     }
 
-    // Validate all notifications have same pair_id and belong to user
-    const pairId = notifications[0].pair_id as string
-    const child_device_id = notifications[0].child_device_id as string
+    const pairId = rawNotifications[0].pair_id as string
+    const childDeviceId = rawNotifications[0].child_device_id as string
 
-    // Verify user owns the child_device
+    if (!isValidUUID(pairId) || !isValidUUID(childDeviceId)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid pair_id or child_device_id format' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
+      )
+    }
+
     const { data: childDevice } = await adminClient
       .from('devices')
       .select('user_id')
-      .eq('id', child_device_id)
+      .eq('id', childDeviceId)
       .eq('role', 'child')
       .single()
 
@@ -89,12 +81,11 @@ serve(async (req) => {
       )
     }
 
-    // Verify pair exists and is active
     const { data: pairData } = await adminClient
       .from('pairs')
       .select('parent_device_id, child_device_id, status')
       .eq('id', pairId)
-      .eq('child_device_id', child_device_id)
+      .eq('child_device_id', childDeviceId)
       .single()
 
     if (!pairData || pairData.status !== 'active') {
@@ -104,31 +95,43 @@ serve(async (req) => {
       )
     }
 
-    const rows = notifications.map((n) => ({
-      pair_id: n.pair_id,
-      child_device_id: n.child_device_id,
-      source_package: n.source_package || null,
-      source_app_name: n.source_app_name || null,
-      notification_title: n.notification_title || '',
-      notification_body: n.notification_body || '',
-      notification_posted_at: n.notification_posted_at || new Date().toISOString(),
-      notification_key: n.notification_key || null,
-      metadata_json: n.metadata_json || null,
-      delivery_mode: 'pending' as const,
-    }))
+    const rows: NotificationRow[] = await Promise.all(
+      rawNotifications.map(async (n) => {
+        const rawKey = n.notification_key as string | null
+        return {
+          pair_id: pairId,
+          child_device_id: childDeviceId,
+          source_package: sanitizeString(n.source_package, 200) || null,
+          source_app_name: sanitizeString(n.source_app_name, 200) || null,
+          notification_title: sanitizeString(n.notification_title, 500),
+          notification_body: sanitizeString(n.notification_body, 2000),
+          notification_posted_at: sanitizeString(n.notification_posted_at, 30) || new Date().toISOString(),
+          notification_key: rawKey && rawKey.length > 0
+            ? rawKey.slice(0, 256)
+            : await deterministicKey(n),
+          metadata_json: n.metadata_json || null,
+          delivery_mode: 'pending' as const,
+        }
+      })
+    )
 
-    // Use ON CONFLICT for deduplication
     const { data: inserted, error } = await adminClient
       .from('mirrored_notifications')
       .upsert(rows, { onConflict: 'pair_id, child_device_id, notification_key' })
       .select()
 
     if (error) throw error
+    if (!inserted || inserted.length === 0) {
+      return new Response(
+        JSON.stringify({ data: [], count: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+      )
+    }
 
     const parentDeviceId = pairData.parent_device_id
     const { data: parentDevice } = await adminClient
       .from('devices')
-      .select('is_foreground, push_token')
+      .select('is_foreground, push_token, id')
       .eq('id', parentDeviceId)
       .single()
 
@@ -136,7 +139,6 @@ serve(async (req) => {
 
     if (parentDevice) {
       const isForeground = parentDevice.is_foreground === true
-      const pushToken = parentDevice.push_token
 
       if (isForeground) {
         await adminClient
@@ -145,59 +147,73 @@ serve(async (req) => {
           .in('id', notificationIds)
       }
 
+      const pushToken = parentDevice.push_token
       if (pushToken) {
         const batchCount = inserted.length
         if (batchCount >= 4) {
           const firstApp = rows[0]?.source_app_name || 'apps'
-          const success = await sendFcmPush(
-            supabaseUrl,
-            serviceRoleKey,
+          const result = await sendParentPush(
             pushToken,
             `${batchCount} new notifications`,
             `${batchCount} notification${batchCount > 1 ? 's' : ''} from ${firstApp}${batchCount > 1 ? ' and others' : ''}`,
             batchCount,
           )
-          if (success) {
+          if (result.success) {
             await adminClient
               .from('mirrored_notifications')
               .update({ delivery_mode: 'push' })
               .in('id', notificationIds)
           }
+          if (result.unregisteredToken) {
+            await adminClient
+              .from('devices')
+              .update({ push_token: null })
+              .eq('id', parentDeviceId)
+          }
         } else {
-          const successCount = await Promise.all(
-            rows.map(async (n) => {
-              const sent = await sendFcmPush(
-                supabaseUrl,
-                serviceRoleKey,
+          const results = await Promise.all(
+            rows.map(async (n, idx) => {
+              const sent = await sendParentPush(
                 pushToken,
                 n.source_app_name || 'Notification',
-                n.notification_title?.slice(0, 120) || '',
+                n.notification_title.slice(0, 120) || '',
               )
-              return sent ? 1 : 0
+              return { id: (inserted[idx] as any).id, success: sent.success }
             })
-          ).then(counts => counts.reduce((sum, c) => sum + c, 0))
+          )
 
-          if (successCount > 0) {
+          const succeededIds = results.filter(r => r.success).map(r => r.id)
+          if (succeededIds.length > 0) {
             await adminClient
               .from('mirrored_notifications')
               .update({ delivery_mode: 'push' })
-              .in('id', notificationIds.slice(0, successCount))
+              .in('id', succeededIds)
+          }
+
+          const hasUnregistered = results.some(r => !r.success)
+          if (hasUnregistered) {
+            await adminClient
+              .from('devices')
+              .update({ push_token: null })
+              .eq('id', parentDeviceId)
           }
         }
       }
     }
 
     return new Response(
-      JSON.stringify({ data: inserted, count: inserted?.length ?? 0 }),
+      JSON.stringify({ data: inserted, count: inserted.length }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {
-    const status = error.message.includes('Unauthorized') ? 401
-      : error.message.includes('Too many') ? 429
-      : error.message.includes('Not authorized') ? 403
+    const msg = error.message || 'Unknown error'
+    const status = msg.includes('Unauthorized') ? 401
+      : msg.includes('Too many') ? 429
+      : msg.includes('Not authorized') ? 403
+      : msg.includes('ValidationError') || msg.includes('Invalid') ? 400
       : 400
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: msg }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
     )
   }

@@ -1,20 +1,18 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, TouchableWithoutFeedback, BackHandler, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, BackHandler, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SymbolView } from 'expo-symbols';
 import { BlurView, BlurTargetView } from 'expo-blur';
 import { usePairData } from '@/hooks/use-pair-data';
 import { useAppModal } from '@/hooks/use-app-modal';
+import { UserAvatar } from '@/components/user-avatar';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 // ============================================================
 // EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
@@ -76,10 +74,7 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 export default function HomeScreen() {
-  const { childDevice, latestNotification, notifications, isOnline, isLoading, error } = usePairData();
-  const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
-  const [isDropdownRendered, setIsDropdownRendered] = React.useState(false);
-  const dropdownProgress = useSharedValue(0);
+  const { childDevice, latestNotification, notifications, isOnline, isLoading, isRefreshing, error, refresh } = usePairData();
   const { showModal } = useAppModal();
 
   React.useEffect(() => {
@@ -98,39 +93,6 @@ export default function HomeScreen() {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
   }, []);
-
-  React.useEffect(() => {
-    if (isDropdownVisible) {
-      setIsDropdownRendered(true);
-      dropdownProgress.value = withTiming(1, { duration: 250 });
-    } else {
-      dropdownProgress.value = withTiming(0, { duration: 200 }, (finished) => {
-        if (finished) {
-          runOnJS(setIsDropdownRendered)(false);
-        }
-      });
-    }
-  }, [isDropdownVisible]);
-
-  const handleProfilePress = () => {
-    setIsDropdownVisible(!isDropdownVisible);
-  };
-
-  const dropdownAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      opacity: dropdownProgress.value,
-      transform: [
-        { scale: dropdownProgress.value * 0.08 + 0.92 },
-        { translateY: (1 - dropdownProgress.value) * -12 },
-      ],
-    };
-  });
-
-  const backdropAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      opacity: dropdownProgress.value,
-    };
-  });
 
   const blurTargetRef = React.useRef<View>(null);
   const scale = useSharedValue(1);
@@ -296,31 +258,19 @@ export default function HomeScreen() {
               <Text style={s.headerTitle}>Nurturing Atelier</Text>
             </View>
             <View style={s.headerRight}>
-              <TouchableOpacity
-                onPress={handleProfilePress}
-                activeOpacity={0.8}
-              >
-                <View style={s.profileWrap}>
-                  <Image
-                    source={require('@/assets/images/mother_avatar.jpg')}
-                    style={s.profileAvatar}
-                  />
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={s.iconButton}
-                onPress={() => router.push('/notifications')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="notifications-outline" size={22} color={C.primary} />
-              </TouchableOpacity>
+              <UserAvatar
+                fallbackSource={require('@/assets/images/mother_avatar.jpg')}
+                role="parent"
+              />
             </View>
           </View>
 
           <ScrollView
             contentContainerStyle={s.scrollContent}
             showsVerticalScrollIndicator={false}
-            onScrollBeginDrag={() => setIsDropdownVisible(false)}
+            refreshControl={
+              <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
+            }
           >
             {/* ========== HERO SECTION (v2) ========== */}
             <View style={s.heroSection}>
@@ -521,74 +471,7 @@ export default function HomeScreen() {
           </ScrollView>
         </SafeAreaView>
       </BlurTargetView>
-      {isDropdownRendered && (
-        <>
-          <TouchableWithoutFeedback onPress={() => setIsDropdownVisible(false)}>
-            <Animated.View style={[s.dropdownBackdrop, backdropAnimatedStyle]} />
-          </TouchableWithoutFeedback>
-          <Animated.View style={[s.dropdownMenuContainer, dropdownAnimatedStyle]}>
-            <View style={s.dropdownMenu}>
-              <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
-                <View style={s.dropdownHeaderInfo}>
-                   <Text style={s.dropdownUserTitle}>Mother&apos;s Space</Text>
-                  <Text style={s.dropdownUserRole}>Atelier Curator</Text>
-                </View>
 
-                <View style={s.dropdownDivider} />
-
-                <TouchableOpacity
-                  style={s.dropdownItem}
-                  onPress={() => {
-                    setIsDropdownVisible(false);
-                    console.log("Profile");
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={s.dropdownItemLeft}>
-                    <Ionicons name="person-outline" size={18} color={C.primary} />
-                    <Text style={s.dropdownItemText}>View Profile</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
-                </TouchableOpacity>
-
-                <View style={s.dropdownDivider} />
-
-                <TouchableOpacity
-                  style={s.dropdownItem}
-                  onPress={() => {
-                    setIsDropdownVisible(false);
-                    router.push('/notifications');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={s.dropdownItemLeft}>
-                    <Ionicons name="notifications-outline" size={18} color={C.primary} />
-                    <Text style={s.dropdownItemText}>Daily Pulse</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
-                </TouchableOpacity>
-
-                <View style={s.dropdownDivider} />
-
-                <TouchableOpacity
-                  style={s.dropdownItem}
-                  onPress={() => {
-                    setIsDropdownVisible(false);
-                    router.push('/(tabs)/settings');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={s.dropdownItemLeft}>
-                    <Ionicons name="settings-outline" size={18} color={C.primary} />
-                    <Text style={s.dropdownItemText}>Sanctuary Settings</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
-                </TouchableOpacity>
-              </BlurView>
-            </View>
-          </Animated.View>
-        </>
-      )}
     </ThemedView>
   );
 }
@@ -802,73 +685,7 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'transparent',
   },
-  dropdownBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(54, 50, 40, 0.08)',
-    zIndex: 99,
-  },
-  dropdownMenuContainer: {
-    position: 'absolute',
-    top: 95,
-    right: 24,
-    width: 240,
-    zIndex: 100,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 10,
-  },
-  dropdownMenu: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(68, 103, 77, 0.12)',
-  },
-  dropdownBlur: {
-    padding: 8,
-    backgroundColor: 'rgba(255, 248, 240, 0.95)',
-  },
-  dropdownHeaderInfo: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 2,
-  },
-  dropdownUserTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 15,
-    color: C.onSurface,
-  },
-  dropdownUserRole: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 12,
-    color: C.primary,
-    opacity: 0.8,
-  },
-  dropdownDivider: {
-    height: 1,
-    backgroundColor: 'rgba(68, 103, 77, 0.08)',
-    marginVertical: 4,
-    marginHorizontal: 8,
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-  },
-  dropdownItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  dropdownItemText: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 14,
-    color: C.onSurface,
-  },
+
   timerHeader: {
     flexDirection: 'row',
     alignItems: 'center',

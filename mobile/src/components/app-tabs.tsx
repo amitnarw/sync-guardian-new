@@ -52,12 +52,6 @@ export default function AppTabs() {
             }}
           />
           <Tabs.Screen
-            name="rules"
-            options={{
-              title: 'Rules',
-            }}
-          />
-          <Tabs.Screen
             name="settings"
             options={{
               title: 'Settings',
@@ -71,7 +65,6 @@ export default function AppTabs() {
           { name: 'home', label: 'Home', icon: 'dashboard', href: '/(tabs)/home' },
           { name: 'activity', label: 'Activity', icon: 'analytics', href: '/(tabs)/activity' },
           { name: 'insights', label: 'Insights', icon: 'insights', href: '/(tabs)/insights' },
-          { name: 'rules', label: 'Rules', icon: 'gavel', href: '/(tabs)/rules' },
           { name: 'settings', label: 'Settings', icon: 'settings', href: '/(tabs)/settings' },
         ]}
       />

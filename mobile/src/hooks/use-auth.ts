@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
@@ -7,41 +5,25 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 
 WebBrowser.maybeCompleteAuthSession();
 
+function extractProfileData(user: { user_metadata?: Record<string, any> } | null) {
+  const meta = user?.user_metadata || {};
+  return {
+    profileImage: meta.avatar_url || meta.picture || null,
+    displayName: meta.full_name || meta.name || null,
+  };
+}
+
 export function useAuth() {
   const {
     setIsAuthenticated,
     setUserId,
     setEmail,
+    setProfileImage,
+    setDisplayName,
     email,
     userRole,
     resetAuth,
   } = useAuthStore();
-
-  // Restore session on mount and listen for auth changes
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setIsAuthenticated(true);
-        setUserId(session.user.id);
-        setEmail(session.user.email ?? null);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setIsAuthenticated(true);
-          setUserId(session?.user.id ?? null);
-          setEmail(session?.user.email ?? null);
-        } else if (event === 'SIGNED_OUT') {
-          resetAuth();
-          router.replace('/login');
-        }
-      },
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -52,6 +34,9 @@ export function useAuth() {
     setIsAuthenticated(true);
     setUserId(data.user.id);
     setEmail(data.user.email ?? null);
+    const { profileImage, displayName } = extractProfileData(data.user);
+    setProfileImage(profileImage);
+    setDisplayName(displayName);
   };
 
   const signUpWithEmail = async (email: string, password: string) => {
@@ -67,6 +52,9 @@ export function useAuth() {
       if (data.user) {
         setUserId(data.user.id);
         setEmail(data.user.email ?? null);
+        const { profileImage, displayName } = extractProfileData(data.user);
+        setProfileImage(profileImage);
+        setDisplayName(displayName);
       }
     }
     return data;
@@ -131,6 +119,9 @@ export function useAuth() {
       setIsAuthenticated(true);
       setUserId(sessionData.session.user.id);
       setEmail(sessionData.session.user.email ?? null);
+      const { profileImage, displayName } = extractProfileData(sessionData.session.user);
+      setProfileImage(profileImage);
+      setDisplayName(displayName);
     } else if (accessToken && refreshToken) {
       const { data: sessionData, error: sessionError } =
         await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
@@ -142,6 +133,9 @@ export function useAuth() {
       setIsAuthenticated(true);
       setUserId(sessionData.session.user.id);
       setEmail(sessionData.session.user.email ?? null);
+      const { profileImage, displayName } = extractProfileData(sessionData.session.user);
+      setProfileImage(profileImage);
+      setDisplayName(displayName);
     } else {
       const qs = redirectUrlStr.split('?')[1]?.split('#')[0];
       const errParams = qs ? new URLSearchParams(qs) : null;
@@ -154,7 +148,6 @@ export function useAuth() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     resetAuth();
-    router.replace('/login');
   };
 
   return {

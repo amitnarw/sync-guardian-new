@@ -1,126 +1,94 @@
 # Sync Guardian
 
-Cross-platform mobile app with Express backend for real-time device synchronization and push notifications.
+A notification mirroring app that lets parents monitor notifications on their child's Android device securely and in real-time.
 
-## Project Structure
+## Architecture
 
 ```
-sync-guardian/
-├── mobile/          # React Native/Expo mobile app (SDK 55)
-│   ├── src/
-│   │   ├── app/     # expo-router file-based routes
-│   │   ├── components/
-│   │   ├── constants/
-│   │   ├── hooks/
-│   │   └── lib/
-│   └── package.json
-├── backend/         # Express 5 + Firebase backend
-│   ├── src/
-│   └── package.json
-└── .claude/         # Claude Code configuration
+mobile/          — Expo (React Native) Android app
+supabase/        — Supabase project (PostgreSQL, Edge Functions, Auth)
+  config.toml    — Supabase configuration
+  migrations/    — Database schema migrations
+  functions/     — Edge Functions
+    _shared/     — Shared utilities (auth, FCM, validation, JWTs)
+    ingest-child-notification/
+    create-pairing-token/
+    claim-pairing-token/
+    health/
 ```
 
 ## Tech Stack
 
-### Mobile App
-- **Framework**: Expo SDK 55.0.15
-- **Runtime**: React Native 0.83.4, React 19.2.0
-- **Routing**: expo-router ~55.0.12 (file-based routing)
-- **Navigation**: Native tabs via `expo-router/unstable-native-tabs`
-- **Animations**: react-native-reanimated 4.2.1
-- **State**: Zustand (client) + TanStack Query (server)
+- **Mobile**: Expo SDK 55, React Native 0.83, TypeScript, Zustand
+- **Backend**: Supabase (PostgreSQL, Auth, Edge Functions)
+- **Push**: Firebase Cloud Messaging (FCM) v1 API
+- **Auth**: Supabase Auth (email/password, Google OAuth)
+- **Storage**: Supabase PostgreSQL with Row-Level Security
 
-### Backend
-- **Runtime**: Node.js with Express 5
-- **Firebase**: Admin SDK for push notifications
-- **Language**: TypeScript
-
-## Getting Started
+## Setup
 
 ### Prerequisites
-- Node.js 18+
-- npm or yarn
-- Expo CLI (`npm install -g expo-cli`)
-- Android Studio (for Android development)
-- Xcode (for iOS development, macOS only)
 
-### Mobile App Setup
+- Node.js 20+, npm
+- Expo CLI (`npx expo`)
+- Supabase CLI (`supabase`)
+- Android device/emulator for testing
+
+### Mobile
 
 ```bash
 cd mobile
+cp .env.example .env
+# Fill in your Supabase URL, anon key, and Google OAuth client IDs
 npm install
-npm start        # Start Expo (all platforms)
-npm run android  # Start for Android
-npm run ios      # Start for iOS (macOS only)
-npm run web      # Start for web
+npx expo run:android
 ```
 
-### Backend Setup
+### Supabase (local dev)
 
 ```bash
-cd backend
-npm install
-npm run dev      # Development mode with hot reload
-npm run build    # Build for production
-npm start        # Run production server
+cd supabase
+supabase start
+supabase db push
+supabase functions serve
 ```
 
-### Environment Variables
+### Required Environment Variables
 
-**Backend** (create `.env` in backend directory):
-```
-PORT=5000
-FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...}
-```
+See `mobile/.env.example` for the full list. Key variables:
 
-## API Endpoints
+| Variable | Description |
+|----------|-------------|
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Google OAuth web client ID |
+| `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` | Google OAuth Android client ID |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/sync/status` | Returns sync status (syncLevel, devices) |
-| POST | `/api/notifications/send` | Send Firebase push notification |
+Edge function secrets (set via `supabase secrets set` or EAS):
 
-### Sync Status Response
-```json
-{
-  "syncLevel": 94,
-  "lastSync": "2026-04-19T10:30:00.000Z",
-  "devices": [
-    { "name": "iPhone 15", "status": "connected" },
-    { "name": "iPad Pro", "status": "connected" },
-    { "name": "Samsung Tab S9", "status": "syncing" }
-  ]
-}
-```
+| Secret | Description |
+|--------|-------------|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (admin) |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase service account JSON |
+| `QR_JWT_SECRET` | Secret for signing QR pairing JWTs |
 
-### Send Notification Request
-```json
-{
-  "token": "device_fcm_token",
-  "title": "Sync Complete",
-  "body": "Your devices are now synced"
-}
-```
+## Security
 
-## Features
+- **Row-Level Security**: All database tables have RLS enabled. Mutations go through Edge Functions (service_role).
+- **Authentication**: JWT-based via Supabase Auth.
+- **Pairing**: QR codes use signed JWTs with 10-minute expiry.
+- **Push**: FCM v1 API with OAuth2 service account authentication.
 
-- Real-time device sync status monitoring
-- Cross-platform mobile app (Android, iOS, Web)
-- Firebase push notifications
-- Native tab navigation
-- File-based routing with type-safe routes
+## Compliance
 
-## Development Notes
+- [Privacy Policy](docs/PRIVACY_POLICY.md)
+- [Terms of Service](docs/TERMS_OF_SERVICE.md)
+- [COPPA Notice](docs/COPPA_NOTICE.md)
+- [GDPR Notice](docs/GDPR_NOTICE.md)
 
-### Metro Bundler Cache
-If routing issues occur, clear the cache:
-```bash
-npx expo start --clear
-```
-
-### Typed Routes
-The project has `typedRoutes: true` in `app.json > experiments` for type-safe routing.
+*Review these documents with legal counsel before public release.*
 
 ## License
 
-Private - All rights reserved
+Private — All rights reserved.

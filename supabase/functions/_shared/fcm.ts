@@ -1,0 +1,180 @@
+function base64url(data: Uint8Array): string {
+  return btoa(String.fromCharCode(...data))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+}
+
+function pemToBinary(pem: string): Uint8Array {
+  const base64 = pem
+    .replace(/-----BEGIN .*?-----/, '')
+    .replace(/-----END .*?-----/, '')
+    .replace(/\s/g, '')
+  const binaryString = atob(base64)
+  const bytes = new Uint8Array(binaryString.length)
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+  return bytes
+}
+
+export async function getFcmAccessToken(serviceAccount: Record<string, string>): Promise<string> {
+  const { client_email, private_key } = serviceAccount
+  const now = Math.floor(Date.now() / 1000)
+
+  const header = { alg: 'RS256', typ: 'JWT' }
+  const jwtPayload = {
+    iss: client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  }
+
+  const encoder = new TextEncoder()
+  const headerB64 = base64url(encoder.encode(JSON.stringify(header)))
+  const payloadB64 = base64url(encoder.encode(JSON.stringify(jwtPayload)))
+  const signatureInput = `${headerB64}.${payloadB64}`
+
+  const keyData = pemToBinary(private_key)
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    keyData,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+
+  const signature = await crypto.subtle.sign(
+    { name: 'RSASSA-PKCS1-v1_5' },
+    key,
+    encoder.encode(signatureInput),
+  )
+
+  const signatureB64 = base64url(new Uint8Array(signature))
+  const jwt = `${signatureInput}.${signatureB64}`
+
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  })
+
+  const tokenData = await tokenResponse.json()
+  if (!tokenData.access_token) {
+    throw new Error(`Failed to get FCM OAuth token: ${JSON.stringify(tokenData)}`)
+  }
+  return tokenData.access_token
+}
+
+export interface ParentPushResult {
+  success: boolean
+  messageId?: string
+  unregisteredToken?: boolean
+}
+
+export async function sendParentPush(
+  deviceToken: string,
+  title: string,
+  body: string,
+  notificationCount?: number,
+): Promise<ParentPushResult> {
+  const serviceAccountRaw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+  if (!serviceAccountRaw) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not configured')
+  }
+
+  const serviceAccount: Record<string, string> = JSON.parse(serviceAccountRaw)
+  const accessToken = await getFcmAccessToken(serviceAccount)
+
+  const safeTitle = (title || 'Sync Guardian').slice(0, 100)
+  const messageBody: string = notificationCount && notificationCount > 1
+    ? `${notificationCount} new notifications`
+    : (body || 'New notification').slice(0, 200)
+
+  const fcmPayload = {
+    message: {
+      token: deviceToken,
+      notification: {
+        title: safeTitle,
+        body: messageBody,
+      },
+      android: {
+        priority: 'high' as const,
+        notification: {
+          channel_id: 'sync_guardian_alerts',
+          priority: 'high' as const,
+          default_sound: true,
+        },
+      },
+    },
+  }
+
+  const fcmUrl = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`
+  const fcmResponse = await fetch(fcmUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(fcmPayload),
+  })
+
+  const fcmData = await fcmResponse.json()
+
+  if (!fcmResponse.ok) {
+    const errorCode = fcmData?.error?.details?.[0]?.errorCode
+    if (errorCode === 'UNREGISTERED' || errorCode === 'INVALID_ARGUMENT') {
+      return { success: false, unregisteredToken: true }
+    }
+    throw new Error(`FCM error: ${JSON.stringify(fcmData)}`)
+  }
+
+  return { success: true, messageId: fcmData.name }
+}
+
+export async function sendChildRecoveryPush(childDeviceId: string): Promise<ParentPushResult> {
+  const serviceAccountRaw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+  if (!serviceAccountRaw) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not configured')
+  }
+
+  const serviceAccount: Record<string, string> = JSON.parse(serviceAccountRaw)
+  const accessToken = await getFcmAccessToken(serviceAccount)
+
+  const fcmPayload = {
+    message: {
+      token: childDeviceId,
+      data: {
+        type: 'wake_child_notification_listener',
+        timestamp: String(Date.now()),
+      },
+      android: {
+        priority: 'high' as const,
+        ttl: '0s',
+      },
+    },
+  }
+
+  const fcmUrl = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`
+  const fcmResponse = await fetch(fcmUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(fcmPayload),
+  })
+
+  const fcmData = await fcmResponse.json()
+
+  if (!fcmResponse.ok) {
+    const errorCode = fcmData?.error?.details?.[0]?.errorCode
+    if (errorCode === 'UNREGISTERED' || errorCode === 'INVALID_ARGUMENT') {
+      return { success: false, unregisteredToken: true }
+    }
+    throw new Error(`FCM error: ${JSON.stringify(fcmData)}`)
+  }
+
+  return { success: true, messageId: fcmData.name }
+}

@@ -1,15 +1,11 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, Alert, TouchableWithoutFeedback } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Circle } from 'react-native-svg';
-import { router } from 'expo-router';
-import { ThemedView } from '@/components/themed-view';
-import { SymbolView } from 'expo-symbols';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+import { ThemedView } from '@/components/themed-view';
+import { UserAvatar } from '@/components/user-avatar';
+import { useInsightsData, type TimeWindow, type InsightsNotification } from '@/hooks/use-insights-data';
 
 // ============================================================
 // EXACT STITCH COLORS (from v3 HTML Tailwind config)
@@ -39,51 +35,147 @@ const C = {
   white: '#ffffff',
 } as const;
 
-// Donut dimensions
-const SVG_SIZE = 96;
-const RADIUS = 38;
-const STROKE_WIDTH = 6;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS; // ~238.76
-const PERCENTAGE = 0.72;
-const STROKE_OFFSET = CIRCUMFERENCE * (1 - PERCENTAGE);
+// ============================================================
+// INSIGHTS COMPUTATION HELPERS
+// ============================================================
+interface Bucket { label: string; count: number; }
+
+function getTrendBuckets(notifications: InsightsNotification[], window: TimeWindow): Bucket[] {
+  if (notifications.length === 0) return [];
+  switch (window) {
+    case 'today': {
+      const b = [
+        { label: '12\u20136AM', count: 0 },
+        { label: '6AM\u201312PM', count: 0 },
+        { label: '12\u20136PM', count: 0 },
+        { label: '6PM\u201312AM', count: 0 },
+      ];
+      for (const n of notifications) {
+        const h = new Date(n.notification_posted_at).getHours();
+        if (h < 6) b[0].count++;
+        else if (h < 12) b[1].count++;
+        else if (h < 18) b[2].count++;
+        else b[3].count++;
+      }
+      return b;
+    }
+    case 'week': {
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const now = new Date();
+      const b: Bucket[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - (6 - i));
+        b.push({ label: days[d.getDay()], count: 0 });
+      }
+      const nowMidnight = new Date(now);
+      nowMidnight.setHours(0, 0, 0, 0);
+      for (const n of notifications) {
+        const postDate = new Date(n.notification_posted_at);
+        const postMidnight = new Date(postDate);
+        postMidnight.setHours(0, 0, 0, 0);
+        const diffDays = Math.floor((nowMidnight.getTime() - postMidnight.getTime()) / (24 * 60 * 60 * 1000));
+        if (diffDays >= 0 && diffDays < 7) b[6 - diffDays].count++;
+      }
+      return b;
+    }
+    case 'month': {
+      const now = new Date();
+      const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      const b = [
+        { label: 'Wk 1', count: 0 },
+        { label: 'Wk 2', count: 0 },
+        { label: 'Wk 3', count: 0 },
+        { label: 'Wk 4', count: 0 },
+      ];
+      for (const n of notifications) {
+        const daysSinceStart = Math.floor((new Date(n.notification_posted_at).getTime() - startMs) / (24 * 60 * 60 * 1000));
+        b[Math.min(3, Math.floor(daysSinceStart / 7))].count++;
+      }
+      return b;
+    }
+    case 'year': {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const b = months.map(label => ({ label, count: 0 }));
+      for (const n of notifications) {
+        b[new Date(n.notification_posted_at).getMonth()].count++;
+      }
+      return b;
+    }
+  }
+}
+
+function getPeakWindows(notifications: InsightsNotification[]): Bucket[] {
+  const b = [
+    { label: '12\u20134AM', count: 0 },
+    { label: '4\u20138AM', count: 0 },
+    { label: '8AM\u201312PM', count: 0 },
+    { label: '12\u20134PM', count: 0 },
+    { label: '4\u20138PM', count: 0 },
+    { label: '8PM\u201312AM', count: 0 },
+  ];
+  for (const n of notifications) {
+    const h = new Date(n.notification_posted_at).getHours();
+    if (h < 4) b[0].count++;
+    else if (h < 8) b[1].count++;
+    else if (h < 12) b[2].count++;
+    else if (h < 16) b[3].count++;
+    else if (h < 20) b[4].count++;
+    else b[5].count++;
+  }
+  return b;
+}
+
+function getTopApps(notifications: InsightsNotification[], limit = 5): { name: string; count: number }[] {
+  const groups: Record<string, number> = {};
+  for (const n of notifications) {
+    const name = n.source_app_name?.trim() || n.source_package?.trim() || 'Unknown';
+    groups[name] = (groups[name] || 0) + 1;
+  }
+  return Object.entries(groups).sort((a, b) => b[1] - a[1]).slice(0, limit).map(([name, count]) => ({ name, count }));
+}
+
+function generateNarrative(notifications: InsightsNotification[], window: TimeWindow): string {
+  if (notifications.length === 0) return '';
+  const top = getTopApps(notifications, 1);
+  const name = top.length > 0 ? top[0].name : 'apps';
+  const total = notifications.length;
+  const period = window === 'today' ? 'today' : window === 'week' ? 'this week' : window === 'month' ? 'this month' : 'this year';
+  const peaks = getPeakWindows(notifications);
+  const topPeak = peaks.reduce((a, b) => a.count > b.count ? a : b, peaks[0]);
+  const peakLabel = topPeak.count > 1 ? ` Peak hours: ${topPeak.label}.` : '';
+  return `${total} signal${total !== 1 ? 's' : ''} ${period}. Most from ${name}.${peakLabel}`;
+}
+
+function formatTimeAgo(timestamp: string): string {
+  const diff = Date.now() - new Date(timestamp).getTime();
+  if (diff < 60000) return 'Just now';
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function formatLatestSignal(notifications: InsightsNotification[]): string {
+  if (notifications.length === 0) return 'No signals yet';
+  const n = notifications[0];
+  const app = n.source_app_name || n.source_package || '';
+  const title = n.notification_title || '';
+  if (app && title) return `${app} \u2014 ${title}`;
+  if (app) return app;
+  if (title) return title;
+  return 'Unknown signal';
+}
 
 export default function InsightsScreen() {
-  const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
-  const [isDropdownRendered, setIsDropdownRendered] = React.useState(false);
-  const dropdownProgress = useSharedValue(0);
+  const { notifications, isLoading, error, window, setWindow, refresh } = useInsightsData();
 
-  React.useEffect(() => {
-    if (isDropdownVisible) {
-      setIsDropdownRendered(true);
-      dropdownProgress.value = withTiming(1, { duration: 250 });
-    } else {
-      dropdownProgress.value = withTiming(0, { duration: 200 }, (finished) => {
-        if (finished) {
-          runOnJS(setIsDropdownRendered)(false);
-        }
-      });
-    }
-  }, [isDropdownVisible]);
+  const trendBuckets = React.useMemo(() => getTrendBuckets(notifications, window), [notifications, window]);
+  const peakWindowsData = React.useMemo(() => getPeakWindows(notifications), [notifications]);
+  const topApps = React.useMemo(() => getTopApps(notifications), [notifications]);
+  const narrative = React.useMemo(() => generateNarrative(notifications, window), [notifications, window]);
 
-  const handleProfilePress = () => {
-    setIsDropdownVisible(!isDropdownVisible);
-  };
-
-  const dropdownAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      opacity: dropdownProgress.value,
-      transform: [
-        { scale: dropdownProgress.value * 0.08 + 0.92 },
-        { translateY: (1 - dropdownProgress.value) * -12 },
-      ],
-    };
-  });
-
-  const backdropAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      opacity: dropdownProgress.value,
-    };
-  });
   return (
     <ThemedView style={s.container}>
       <SafeAreaView style={s.safeArea} edges={['top']}>
@@ -94,248 +186,141 @@ export default function InsightsScreen() {
             <Text style={s.headerTitle}>Nurturing Atelier</Text>
           </View>
           <View style={s.headerRight}>
-            <TouchableOpacity 
-              onPress={handleProfilePress}
-              activeOpacity={0.8}
-            >
-              <View style={s.profileWrap}>
-                <Image
-                  source={require('@/assets/images/mother_avatar.jpg')}
-                  style={s.profileAvatar}
-                />
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={s.iconButton}
-              onPress={() => router.push('/notifications')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="notifications-outline" size={22} color={C.primary} />
-            </TouchableOpacity>
+            <UserAvatar
+              fallbackSource={require('@/assets/images/mother_avatar.jpg')}
+              role="parent"
+            />
           </View>
         </View>
 
         <ScrollView
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
-          onScrollBeginDrag={() => setIsDropdownVisible(false)}
         >
-          {/* ========== HERO: GROWTH NARRATIVE ========== */}
-          <View style={s.heroSection}>
-            <View style={s.badgePill}>
-              <Text style={s.badgeText}>Weekly Narrative</Text>
+          {isLoading ? (
+            <View style={s.centerState}>
+              <ActivityIndicator size="large" color={C.primary} />
             </View>
-            <Text style={s.heroTitle}>
-              A week of <Text style={s.heroTitleAccent}>gentle</Text> focus.
-            </Text>
-            <Text style={s.heroDescription}>
-               Leo&apos;s digital presence felt balanced this week. Screen time drifted toward creative tools, reflecting a peak in curiosity.
-            </Text>
-          </View>
-
-          {/* ========== BENTO SECTION: HIGH-LEVEL STATS ========== */}
-          <View style={s.bentoGrid}>
-            {/* Usage Balance Card (Donut) */}
-            <View style={s.donutCard}>
-              <View style={s.donutTextWrap}>
-                <Text style={s.donutLabel}>Usage Balance</Text>
-                <Text style={s.donutValue}>72%</Text>
-                <Text style={s.donutSub}>Target reach: Optimal</Text>
-              </View>
-
-              {/* Polished SVG Circle Donut */}
-              <View style={s.donutSvgContainer}>
-                <Svg width={SVG_SIZE} height={SVG_SIZE} viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`} style={s.donutSvg}>
-                  {/* Track Circle */}
-                  <Circle
-                    cx={SVG_SIZE / 2}
-                    cy={SVG_SIZE / 2}
-                    r={RADIUS}
-                    fill="transparent"
-                    stroke={C.surfaceContainer}
-                    strokeWidth={STROKE_WIDTH}
-                  />
-                  {/* Animated Progress Circle */}
-                  <Circle
-                    cx={SVG_SIZE / 2}
-                    cy={SVG_SIZE / 2}
-                    r={RADIUS}
-                    fill="transparent"
-                    stroke={C.primary}
-                    strokeWidth={STROKE_WIDTH}
-                    strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-                    strokeDashoffset={STROKE_OFFSET}
-                    strokeLinecap="round"
-                  />
-                </Svg>
-                {/* Central Leaf Indicator */}
-                <View style={s.donutIconCenter}>
-                  <Ionicons name="leaf" size={20} color={C.primary} />
-                </View>
-              </View>
-            </View>
-
-            {/* Small Growth Insight Card */}
-            <View style={s.growthInsightCard}>
-              <Ionicons name="sparkles" size={24} color={C.secondary} style={s.growthIcon} />
-              <Text style={s.growthInsightTitle}>Deep Focus</Text>
-              <Text style={s.growthInsightDesc}>3.2 hours of uninterrupted learning logged today.</Text>
-            </View>
-          </View>
-
-          {/* ========== BELOVED SPACES: APP ITEMS ========== */}
-          <View style={s.spacesSection}>
-            <View style={s.spacesHeader}>
-              <Text style={s.spacesTitle}>Beloved Spaces</Text>
-              <TouchableOpacity>
-                <Text style={s.viewHistoryBtn}>View History</Text>
+          ) : error ? (
+            <View style={s.centerState}>
+              <Text style={s.emptyTitle}>Unable to load insights</Text>
+              <Text style={s.emptyText}>{error}</Text>
+              <TouchableOpacity style={s.retryBtn} onPress={refresh} activeOpacity={0.7}>
+                <Text style={s.retryBtnText}>Retry</Text>
               </TouchableOpacity>
             </View>
-
-            <View style={s.spacesList}>
-              {/* App Item 1: Canvas Kids */}
-              <View style={s.spaceItem}>
-                <View style={[s.appIconContainer, { backgroundColor: '#E8F1EB' }]}>
-                  <Ionicons name="color-palette-outline" size={26} color={C.primary} />
-                </View>
-                <View style={s.appTextContainer}>
-                  <Text style={s.appNameText}>Canvas Kids</Text>
-                  <Text style={s.appCategoryText}>Creativity • 2h 15m</Text>
-                </View>
-                <View style={s.trendContainer}>
-                  <View style={[s.trendBadgePill, { backgroundColor: C.primaryContainer }]}>
-                    <Text style={[s.trendBadgeText, { color: C.primary }]}>+12%</Text>
-                  </View>
-                  <Text style={s.trendCaption}>vs last week</Text>
-                </View>
-              </View>
-
-              {/* App Item 2: StoryTime Academy */}
-              <View style={s.spaceItem}>
-                <View style={[s.appIconContainer, { backgroundColor: '#FDF1EE' }]}>
-                  <Ionicons name="book-outline" size={26} color={C.secondary} />
-                </View>
-                <View style={s.appTextContainer}>
-                  <Text style={s.appNameText}>StoryTime Academy</Text>
-                  <Text style={s.appCategoryText}>Education • 1h 45m</Text>
-                </View>
-                <View style={s.trendContainer}>
-                  <View style={[s.trendBadgePill, { backgroundColor: C.surfaceVariant }]}>
-                    <Text style={[s.trendBadgeText, { color: C.onSurfaceVariant }]}>Stable</Text>
-                  </View>
-                  <Text style={s.trendCaption}>consistent growth</Text>
-                </View>
-              </View>
-
-              {/* App Item 3: Logic Puzzles */}
-              <View style={s.spaceItem}>
-                <View style={[s.appIconContainer, { backgroundColor: '#F5F1E9' }]}>
-                  <Ionicons name="grid-outline" size={26} color={C.onSurfaceVariant} />
-                </View>
-                <View style={s.appTextContainer}>
-                  <Text style={s.appNameText}>Logic Puzzles</Text>
-                  <Text style={s.appCategoryText}>Problem Solving • 45m</Text>
-                </View>
-                <View style={s.trendContainer}>
-                  <View style={[s.trendBadgePill, { backgroundColor: C.secondaryContainer }]}>
-                    <Text style={[s.trendBadgeText, { color: C.secondary }]}>-5%</Text>
-                  </View>
-                  <Text style={s.trendCaption}>evening dip</Text>
-                </View>
-              </View>
+          ) : notifications.length === 0 ? (
+            <View style={s.centerState}>
+              <Text style={s.emptyTitle}>No signals yet</Text>
+              <Text style={s.emptyText}>
+                Activity will appear here once{'\n'}notifications are received on the{'\n'}child device.
+              </Text>
             </View>
-          </View>
+          ) : (
+            <>
+              {/* Window Selector */}
+              <View style={s.windowSelectorRow}>
+                {(['today', 'week', 'month', 'year'] as TimeWindow[]).map((w) => (
+                  <TouchableOpacity
+                    key={w}
+                    style={[s.windowPill, window === w && s.windowPillActive]}
+                    onPress={() => setWindow(w)}
+                    activeOpacity={0.7}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: window === w }}
+                  >
+                    <Text style={[s.windowPillText, window === w && s.windowPillTextActive]}>
+                      {w.charAt(0).toUpperCase() + w.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-          {/* ========== NARRATIVE INSIGHT CARD ========== */}
-          <View style={s.narrativeCard}>
-            {/* Hearth Shape watermark blob behind */}
-            <View style={s.watermarkHearthShape} />
+              {/* Pulse Narrative */}
+              <View style={s.pulseCard}>
+                <Text style={s.pulseLabel}>Signal Pulse</Text>
+                <Text style={s.pulseText}>{narrative}</Text>
+              </View>
 
-            <View style={s.narrativeLabelRow}>
-              <Ionicons name="bulb" size={20} color={C.primary} />
-              <Text style={s.narrativeLabelText}>A Maker&apos;s Observation</Text>
-            </View>
-            <Text style={s.narrativeTitle}>Digital creation is outweighing consumption.</Text>
-            <Text style={s.narrativeDesc}>
-              Most of the activity this week was concentrated in creative &quot;Sandbox&quot; mode. This suggests a transition from passive viewing to active building. Consider introducing a new drawing tool.
-            </Text>
-            <TouchableOpacity style={s.exploreBtn}>
-              <Text style={s.exploreBtnText}>Explore Creative Tools</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Activity Trend */}
+              <View style={s.trendCard}>
+                <Text style={s.trendTitle}>Activity Trend</Text>
+                <View style={s.trendBarsRow}>
+                  {trendBuckets.map((bucket, i) => {
+                    const maxVal = Math.max(...trendBuckets.map(b => b.count), 1);
+                    const barHeight = Math.max((bucket.count / maxVal) * 100, 4);
+                    return (
+                      <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={s.trendBarCount}>{bucket.count}</Text>
+                        <View style={[s.trendBar, { height: barHeight }]} />
+                        <Text style={s.trendBarLabel}>{bucket.label}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Peak Activity Windows */}
+              <View style={s.peakCard}>
+                <Text style={s.peakTitle}>Peak Hours</Text>
+                {peakWindowsData.map((bucket, i) => {
+                  const maxVal = Math.max(...peakWindowsData.map(b => b.count), 1);
+                  const barWidth = Math.max((bucket.count / maxVal) * 100, 2);
+                  return (
+                    <View key={i} style={s.peakRow}>
+                      <Text style={s.peakLabel}>{bucket.label}</Text>
+                      <View style={s.peakBarBg}>
+                        <View style={[s.peakBarFill, { width: `${barWidth}%` }]} />
+                      </View>
+                      <Text style={s.peakBarCount}>{bucket.count}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* App Insights */}
+              <View style={s.appInsightsCard}>
+                <Text style={s.appInsightsTitle}>App Insights</Text>
+                {topApps.length > 0 ? topApps.map((app, i) => {
+                  const maxCount = topApps[0].count;
+                  const barWidth = Math.max((app.count / maxCount) * 100, 2);
+                  return (
+                    <View key={i} style={s.appInsightsItem}>
+                      <View style={s.appInsightsIconWrap}>
+                        <Ionicons name="apps-outline" size={20} color={C.primary} />
+                      </View>
+                      <Text style={s.appInsightsName} numberOfLines={1}>{app.name}</Text>
+                      <View style={s.appInsightsBarBg}>
+                        <View style={[s.appInsightsBarFill, { width: `${barWidth}%` }]} />
+                      </View>
+                      <Text style={s.appInsightsCount}>{app.count}</Text>
+                    </View>
+                  );
+                }) : null}
+              </View>
+
+              {/* Latest Signal */}
+              <View style={s.latestCard}>
+                <View style={s.latestIcon}>
+                  <Ionicons name="notifications" size={20} color={C.primary} />
+                </View>
+                <View style={s.latestTextWrap}>
+                  <Text style={s.latestLabel}>Latest Signal</Text>
+                  <Text style={s.latestTitle} numberOfLines={1}>
+                    {formatLatestSignal(notifications)}
+                  </Text>
+                </View>
+                <Text style={s.latestTimeAgo}>
+                  {formatTimeAgo(notifications[0]?.notification_posted_at || '')}
+                </Text>
+              </View>
+            </>
+          )}
 
           {/* Spacer to avoid bottom custom tab bar overlay */}
           <View style={s.bottomSpacer} />
         </ScrollView>
       </SafeAreaView>
-      {isDropdownRendered && (
-        <>
-          <TouchableWithoutFeedback onPress={() => setIsDropdownVisible(false)}>
-            <Animated.View style={[s.dropdownBackdrop, backdropAnimatedStyle]} />
-          </TouchableWithoutFeedback>
-          <Animated.View style={[s.dropdownMenuContainer, dropdownAnimatedStyle]}>
-            <View style={s.dropdownMenu}>
-              <BlurView intensity={90} tint="light" style={s.dropdownBlur}>
-                <View style={s.dropdownHeaderInfo}>
-                   <Text style={s.dropdownUserTitle}>Mother&apos;s Space</Text>
-                  <Text style={s.dropdownUserRole}>Atelier Curator</Text>
-                </View>
-                
-                <View style={s.dropdownDivider} />
-                
-                <TouchableOpacity 
-                  style={s.dropdownItem} 
-                  onPress={() => {
-                    setIsDropdownVisible(false);
-                    console.log("Profile");
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={s.dropdownItemLeft}>
-                    <Ionicons name="person-outline" size={18} color={C.primary} />
-                    <Text style={s.dropdownItemText}>View Profile</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
-                </TouchableOpacity>
-                
-                <View style={s.dropdownDivider} />
-                
-                <TouchableOpacity 
-                  style={s.dropdownItem} 
-                  onPress={() => {
-                    setIsDropdownVisible(false);
-                    router.push('/notifications');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={s.dropdownItemLeft}>
-                    <Ionicons name="notifications-outline" size={18} color={C.primary} />
-                    <Text style={s.dropdownItemText}>Daily Pulse</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
-                </TouchableOpacity>
-                
-                <View style={s.dropdownDivider} />
-                
-                <TouchableOpacity 
-                  style={s.dropdownItem} 
-                  onPress={() => {
-                    setIsDropdownVisible(false);
-                    router.push('/(tabs)/settings');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={s.dropdownItemLeft}>
-                    <Ionicons name="settings-outline" size={18} color={C.primary} />
-                    <Text style={s.dropdownItemText}>Sanctuary Settings</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ opacity: 0.3 }} />
-                </TouchableOpacity>
-              </BlurView>
-            </View>
-          </Animated.View>
-        </>
-      )}
     </ThemedView>
   );
 }
@@ -384,371 +369,265 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: C.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  profileWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: C.surfaceContainerLowest,
-    backgroundColor: C.surfaceContainerHighest,
-    overflow: 'hidden',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-  },
-  profileAvatar: {
-    width: '100%',
-    height: '100%',
-  },
-  dropdownBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(54, 50, 40, 0.08)',
-    zIndex: 99,
-  },
-  dropdownMenuContainer: {
-    position: 'absolute',
-    top: 95,
-    right: 24,
-    width: 240,
-    zIndex: 100,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 10,
-  },
-  dropdownMenu: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(68, 103, 77, 0.12)',
-  },
-  dropdownBlur: {
-    padding: 8,
-    backgroundColor: 'rgba(255, 248, 240, 0.95)',
-  },
-  dropdownHeaderInfo: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 2,
-  },
-  dropdownUserTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 15,
-    color: C.onSurface,
-  },
-  dropdownUserRole: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 12,
-    color: C.primary,
-    opacity: 0.8,
-  },
-  dropdownDivider: {
-    height: 1,
-    backgroundColor: 'rgba(68, 103, 77, 0.08)',
-    marginVertical: 4,
-    marginHorizontal: 8,
-  },
-  dropdownItem: {
+  /* ---------- Window Selector ---------- */
+  windowSelectorRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-  },
-  dropdownItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  dropdownItemText: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 14,
-    color: C.onSurface,
-  },
-
-  /* ---------- Hero Section ---------- */
-  heroSection: {
+    gap: 8,
+    marginBottom: 24,
     marginTop: 16,
-    marginBottom: 32,
-    alignItems: 'flex-start',
-    gap: 12,
   },
-  badgePill: {
-    backgroundColor: C.primaryContainer,
+  windowPill: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 9999,
+    backgroundColor: C.surfaceContainer,
   },
-  badgeText: {
+  windowPillActive: {
+    backgroundColor: C.primary,
+  },
+  windowPillText: {
     fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
-    color: C.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  heroTitle: {
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 36,
-    lineHeight: 44,
-    color: C.onSurface,
-    letterSpacing: -0.8,
-  },
-  heroTitleAccent: {
-    fontFamily: 'PlusJakartaSans-ExtraBoldItalic',
-    color: C.primary,
-  },
-  heroDescription: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 13,
     color: C.onSurfaceVariant,
-    maxWidth: SCREEN_W - 64,
+  },
+  windowPillTextActive: {
+    color: C.white,
   },
 
-  /* ---------- Bento Grid ---------- */
-  bentoGrid: {
-    flexDirection: 'column',
-    gap: 16,
-    marginBottom: 40,
-  },
-  donutCard: {
+  /* ---------- Pulse Narrative Card ---------- */
+  pulseCard: {
     backgroundColor: C.surfaceContainerLowest,
     borderRadius: 32,
     padding: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    marginBottom: 16,
   },
-  donutTextWrap: {
-    flex: 1,
-    gap: 4,
-  },
-  donutLabel: {
+  pulseLabel: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 12,
-    lineHeight: 16,
     color: C.onSurfaceVariant,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
-  },
-  donutValue: {
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 36,
-    lineHeight: 44,
-    color: C.onSurface,
-  },
-  donutSub: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 13,
-    lineHeight: 18,
-    color: C.onSurfaceVariant,
-  },
-  donutSvgContainer: {
-    position: 'relative',
-    width: SVG_SIZE,
-    height: SVG_SIZE,
-  },
-  donutSvg: {
-    transform: [{ rotate: '-90deg' }],
-  },
-  donutIconCenter: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  growthInsightCard: {
-    backgroundColor: 'rgba(255, 218, 211, 0.3)', // bg-secondary-container/30
-    borderRadius: 32,
-    padding: 24,
-    justifyContent: 'center',
-  },
-  growthIcon: {
     marginBottom: 8,
   },
-  growthInsightTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-    color: C.secondary,
-    marginBottom: 4,
-  },
-  growthInsightDesc: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 14,
-    lineHeight: 20,
-    color: 'rgba(160, 65, 45, 0.8)', // secondary text opacity
-  },
-
-  /* ---------- Beloved Spaces ---------- */
-  spacesSection: {
-    marginBottom: 40,
-  },
-  spacesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  spacesTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 22,
-    lineHeight: 28,
-    color: C.onSurface,
-  },
-  viewHistoryBtn: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.primary,
-  },
-  spacesList: {
-    gap: 12,
-  },
-  spaceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: C.surfaceContainerLow,
-    borderRadius: 24,
-  },
-  appIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  appTextContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  appNameText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 16,
+  pulseText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 15,
     lineHeight: 22,
     color: C.onSurface,
+  },
+
+  /* ---------- Activity Trend Card ---------- */
+  trendCard: {
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 32,
+    padding: 24,
+    marginBottom: 16,
+  },
+  trendTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 18,
+    color: C.onSurface,
+    marginBottom: 16,
+  },
+  trendBarsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 120,
+    gap: 4,
+  },
+  trendBar: {
+    flex: 1,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    backgroundColor: C.primary,
+    minHeight: 2,
+  },
+  trendBarLabel: {
+    fontFamily: 'Manrope-Medium',
+    fontSize: 10,
+    color: C.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  trendBarCount: {
+    fontFamily: 'Manrope-Medium',
+    fontSize: 10,
+    color: C.onSurface,
+    textAlign: 'center',
     marginBottom: 2,
   },
-  appCategoryText: {
-    fontFamily: 'PlusJakartaSans-Medium',
+
+  /* ---------- Peak Hours Card ---------- */
+  peakCard: {
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 32,
+    padding: 24,
+    marginBottom: 16,
+  },
+  peakTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 18,
+    color: C.onSurface,
+    marginBottom: 16,
+  },
+  peakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 12,
+  },
+  peakLabel: {
+    fontFamily: 'Manrope-Medium',
     fontSize: 13,
-    lineHeight: 18,
+    color: C.onSurfaceVariant,
+    width: 105,
+  },
+  peakBarBg: {
+    flex: 1,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: C.surfaceContainer,
+    overflow: 'hidden',
+  },
+  peakBarFill: {
+    height: '100%',
+    borderRadius: 6,
+    backgroundColor: C.secondary,
+  },
+  peakBarCount: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 12,
+    color: C.onSurface,
+    width: 32,
+    textAlign: 'right',
+  },
+
+  /* ---------- App Insights Card ---------- */
+  appInsightsCard: {
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 32,
+    padding: 24,
+    marginBottom: 16,
+  },
+  appInsightsTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 18,
+    color: C.onSurface,
+    marginBottom: 16,
+  },
+  appInsightsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  appInsightsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: C.surfaceContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appInsightsName: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 14,
+    color: C.onSurface,
+    width: 100,
+  },
+  appInsightsBarBg: {
+    flex: 1,
+    height: 16,
+    borderRadius: 4,
+    backgroundColor: C.surfaceContainer,
+    overflow: 'hidden',
+  },
+  appInsightsBarFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: C.primary,
+  },
+  appInsightsCount: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 12,
+    color: C.onSurfaceVariant,
+    width: 32,
+    textAlign: 'right',
+  },
+
+  /* ---------- Latest Signal Card ---------- */
+  latestCard: {
+    backgroundColor: C.surfaceContainerLow,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  latestIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.primaryContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  latestTextWrap: {
+    flex: 1,
+  },
+  latestLabel: {
+    fontFamily: 'Manrope-Medium',
+    fontSize: 12,
     color: C.onSurfaceVariant,
   },
-  trendContainer: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
+  latestTitle: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 15,
+    color: C.onSurface,
   },
-  trendBadgePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  trendBadgeText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 11,
-    lineHeight: 14,
-  },
-  trendCaption: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 11,
-    lineHeight: 14,
+  latestTimeAgo: {
+    fontFamily: 'Manrope-Medium',
+    fontSize: 12,
     color: C.onSurfaceVariant,
   },
 
-  /* ---------- Narrative Insight Card ---------- */
-  narrativeCard: {
-    backgroundColor: C.surfaceContainerHigh,
-    borderRadius: 32,
-    padding: 24,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  watermarkHearthShape: {
-    position: 'absolute',
-    top: -24,
-    right: -24,
-    width: 144,
-    height: 144,
-    borderTopLeftRadius: 85,
-    borderTopRightRadius: 55,
-    borderBottomLeftRadius: 45,
-    borderBottomRightRadius: 100,
-    backgroundColor: 'rgba(68, 103, 77, 0.08)', // primary with low opacity
-  },
-  narrativeLabelRow: {
-    flexDirection: 'row',
+  /* ---------- Loading / Empty / Error ---------- */
+  centerState: {
+    paddingVertical: 80,
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    justifyContent: 'center',
   },
-  narrativeLabelText: {
+  emptyTitle: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    lineHeight: 18,
-    color: C.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  narrativeTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 18,
     color: C.onSurface,
-    marginBottom: 12,
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  narrativeDesc: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
+  emptyText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 15,
     color: C.onSurfaceVariant,
-    marginBottom: 20,
+    textAlign: 'center',
   },
-  exploreBtn: {
+  errorText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 14,
+    color: C.error,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: 16,
     backgroundColor: C.primary,
     paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderRadius: 9999,
-    alignSelf: 'flex-start',
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 3,
   },
-  exploreBtnText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+  retryBtnText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
     fontSize: 14,
-    lineHeight: 20,
-    color: C.onPrimary,
+    color: C.white,
   },
 
   /* ---------- Spacer ---------- */

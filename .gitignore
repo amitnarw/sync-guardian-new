@@ -5,7 +5,22 @@
 *.key
 *-service-account*.json
 firebase-service-account.json
+google-services.json
+supabase_status.json
 secrets/
+
+# Build artifacts
+node_modules/
+dist/
+.temp/
+mobile/android/app/build/
+mobile/android/.gradle/
+ios/
+*.hprof
+
+# Expo
+mobile/.expo/
+mobile/*.tsbuildinfo
 
 # IDE
 .idea/

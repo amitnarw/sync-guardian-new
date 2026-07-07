@@ -138,7 +138,7 @@ export default function CustomTabBar({ blurTargetRef, routes }: CustomTabBarProp
               isFocused={isFocused}
               onPress={() => {
                 if (!isFocused) {
-                  router.replace(route.href as any);
+                  router.push(route.href as any);
                 }
               }}
               onLayout={(e) => handleLayout(index, e)}

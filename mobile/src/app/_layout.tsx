@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppState } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { useAuthTheme } from '@/hooks/use-auth-theme';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { ModalProvider } from '@/hooks/use-app-modal';
@@ -38,7 +39,7 @@ const LightTheme = {
 
 export default function RootLayout() {
   const authTheme = useAuthTheme();
-  const { userRole, isAuthenticated, deviceId, userId, setFcmToken, setUserId, setIsAuthenticated, setEmail } = useAuthStore();
+  const { userRole, isAuthenticated, deviceId, userId, setFcmToken, setUserId, setIsAuthenticated, setEmail, setProfileImage, setDisplayName, setPairId, setDeviceId, setSessionChecked } = useAuthStore();
 
   const [loaded, error] = useFonts({
     'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
@@ -62,35 +63,47 @@ export default function RootLayout() {
     async function restoreSession() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // Verify the session user still exists in Supabase
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error || !user) {
-          // Session is invalid - sign out locally
           await supabase.auth.signOut();
           setIsAuthenticated(false);
           setUserId(null);
           setEmail(null);
+          setProfileImage(null);
+          setDisplayName(null);
+          setPairId(null);
+          setDeviceId(null);
+          setSessionChecked(true);
           return;
         }
         setIsAuthenticated(true);
         setUserId(user.id);
         setEmail(user.email ?? null);
+        const meta = user.user_metadata || {};
+        setProfileImage(meta.avatar_url || meta.picture || null);
+        setDisplayName(meta.full_name || meta.name || null);
       }
+      setSessionChecked(true);
     }
     restoreSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async       (event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             setIsAuthenticated(true);
             setUserId(user.id);
             setEmail(user.email ?? null);
+            const meta = user.user_metadata || {};
+            setProfileImage(meta.avatar_url || meta.picture || null);
+            setDisplayName(meta.full_name || meta.name || null);
           }
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setUserId(null);
+          setProfileImage(null);
+          setDisplayName(null);
         }
       },
     );
@@ -189,6 +202,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
       <ModalProvider>
       <ThemeProvider value={LightTheme}>
         <StatusBar style="dark" />
@@ -201,6 +215,7 @@ export default function RootLayout() {
         />
       </ThemeProvider>
       </ModalProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

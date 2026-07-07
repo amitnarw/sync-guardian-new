@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, ActivityIndicator, Modal, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Dimensions, Text, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { ThemedView } from '@/components/themed-view';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
+import { UserAvatar } from '@/components/user-avatar';
 import { supabase } from '@/lib/supabase';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -43,6 +43,18 @@ export default function ChildSettingsScreen() {
   const { showModal } = useAppModal();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      if (deviceId) {
+        await supabase.from('devices').update({ last_seen_at: new Date().toISOString() }).eq('id', deviceId);
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [deviceId]);
 
   const screenOpacity = useSharedValue(1);
   const containerAnimatedStyle = useAnimatedStyle(() => ({
@@ -109,11 +121,20 @@ export default function ChildSettingsScreen() {
               <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
               <Text style={s.headerTitle}>Sync Guardian</Text>
             </View>
+            <View style={s.headerRight}>
+              <UserAvatar
+                fallbackSource={require('@/assets/images/leo_avatar.jpg')}
+                role="child"
+              />
+            </View>
           </View>
 
           <ScrollView
             contentContainerStyle={s.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[C.primary]} tintColor={C.primary} />
+            }
           >
             {/* ========== HERO SECTION ========== */}
             <View style={s.heroSection}>
@@ -246,6 +267,11 @@ const s = StyleSheet.create({
     lineHeight: 24,
     color: C.primary,
     letterSpacing: -0.5,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   heroSection: {
     marginTop: 24,

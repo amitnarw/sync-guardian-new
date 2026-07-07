@@ -432,7 +432,12 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/create-pairing-token/index.ts"
 
-[functions.send-parent-push]
+[functions.ingest-child-notification]
 enabled = true
 verify_jwt = false
-entrypoint = "./functions/send-parent-push/index.ts"
+entrypoint = "./functions/ingest-child-notification/index.ts"
+
+[functions.health]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/health/index.ts"

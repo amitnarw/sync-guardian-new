@@ -27,7 +27,7 @@ const COVER_IMG_URL = "https://lh3.googleusercontent.com/aida-public/AB6AXuDMwCM
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
-  const { setHasCompletedOnboarding, setIsAuthenticated, userRole } = useAuthStore();
+  const { setHasCompletedOnboarding, userRole } = useAuthStore();
 
   const screenOpacity = useSharedValue(0);
 
@@ -37,7 +37,6 @@ export default function OnboardingScreen() {
 
   const handleBeginJourney = async () => {
     setHasCompletedOnboarding(true);
-    setIsAuthenticated(true);
     if (userRole === 'child') {
       router.replace('/(child)/home');
     } else {

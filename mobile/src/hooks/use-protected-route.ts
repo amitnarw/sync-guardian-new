@@ -9,9 +9,11 @@ import { useAuthStore } from '@/hooks/use-auth-store';
  * Usage: Call this hook in any route that should be restricted by role.
  */
 export function useProtectedRoute(allowedRoles: 'parent' | 'child' | ('parent' | 'child')[]) {
-  const { isAuthenticated, userRole } = useAuthStore();
+  const { _hasHydrated, isAuthenticated, userRole } = useAuthStore();
 
   useEffect(() => {
+    if (!_hasHydrated) return;
+
     if (!isAuthenticated) {
       router.replace('/login');
       return;
@@ -21,5 +23,5 @@ export function useProtectedRoute(allowedRoles: 'parent' | 'child' | ('parent' |
     if (!allowed.includes(userRole as any)) {
       router.replace('/role-selection');
     }
-  }, [isAuthenticated, userRole]);
+  }, [_hasHydrated, isAuthenticated, userRole]);
 }

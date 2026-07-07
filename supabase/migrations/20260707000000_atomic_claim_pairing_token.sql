@@ -55,11 +55,11 @@ BEGIN
 
   -- Insert pair
   INSERT INTO pairs (
-    parent_device_id, child_device_id, parent_user_id, child_user_id, status
+    parent_device_id, child_device_id, parent_user_id, child_user_id, status, paired_at
   )
   VALUES (
     v_parent_device_id, v_token_data.child_device_id,
-    p_parent_user_id, v_child_user_id, 'active'
+    p_parent_user_id, v_child_user_id, 'active', now()
   )
   RETURNING id INTO v_pair_id;
 

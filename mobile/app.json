@@ -6,10 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
-    "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/images/splash-icon.png"
-    },
+    "userInterfaceStyle": "light",
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -17,7 +14,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "usesCleartextTraffic": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.amitnarw.mobile",
       "googleServicesFile": "./google-services.json"
@@ -28,18 +24,13 @@
     },
     "plugins": [
       "expo-router",
-      "./plugins/withAndroidNotificationListener.js",
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FAF7F2",
+          "backgroundColor": "#fff8f0",
           "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          },
-          "ios": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
           },

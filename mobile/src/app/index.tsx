@@ -4,13 +4,13 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 
 export default function Index() {
   const _hasHydrated = useAuthStore((state) => state._hasHydrated);
+  const sessionChecked = useAuthStore((state) => state.sessionChecked);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const userRole = useAuthStore((state) => state.userRole);
   const pairId = useAuthStore((state) => state.pairId);
 
   useEffect(() => {
-    // Wait for auth store to hydrate before checking state
-    if (!_hasHydrated) return;
+    if (!_hasHydrated || !sessionChecked) return;
 
     if (isAuthenticated) {
       if (!userRole) {
@@ -25,7 +25,7 @@ export default function Index() {
     } else {
       router.replace('/splash');
     }
-  }, [_hasHydrated, isAuthenticated, userRole, pairId]);
+  }, [_hasHydrated, sessionChecked, isAuthenticated, userRole, pairId]);
 
   return null;
 }

@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Text, Dimensions } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Text, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/hooks/use-auth-store';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 // ============================================================
 // EXACT STITCH COLORS (from design theme & HTML config)
@@ -51,6 +49,7 @@ export default function NotificationsScreen() {
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All Activity');
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { pairId } = useAuthStore();
 
   const mapDbNotification = (dbRow: any): NotificationItem => {
@@ -73,22 +72,32 @@ export default function NotificationsScreen() {
     };
   };
 
-  React.useEffect(() => {
+  const fetchHistory = useCallback(async () => {
     if (!pairId) return;
+    const { data } = await supabase
+      .from('mirrored_notifications')
+      .select('*')
+      .eq('pair_id', pairId)
+      .order('notification_posted_at', { ascending: false });
+      
+    if (data) {
+      setNotifications(data.map(mapDbNotification));
+    }
+  }, [pairId]);
 
-    const fetchHistory = async () => {
-      const { data, error } = await supabase
-        .from('mirrored_notifications')
-        .select('*')
-        .eq('pair_id', pairId)
-        .order('notification_posted_at', { ascending: false });
-        
-      if (data) {
-        setNotifications(data.map(mapDbNotification));
-      }
-    };
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchHistory();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchHistory]);
 
+  React.useEffect(() => {
     fetchHistory();
+
+    if (!pairId) return;
 
     const channel = supabase
       .channel('realtime_notifications')
@@ -109,7 +118,7 @@ export default function NotificationsScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [pairId]);
+  }, [pairId, fetchHistory]);
 
   const filters: FilterType[] = ['All Activity', 'Insights'];
 
@@ -144,6 +153,9 @@ export default function NotificationsScreen() {
         <ScrollView 
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[C.primary]} tintColor={C.primary} />
+          }
         >
           {/* ========== SCREEN HEADER & FILTERS ========== */}
           <View style={s.headerBlock}>
