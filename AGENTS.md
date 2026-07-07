@@ -25,6 +25,25 @@
 - Use `crypto.getRandomValues()` for cryptographic randomness.
 - HMAC-SHA256 for JWT signing (QR codes), not raw tokens in URLs.
 
+## Edge Functions Reference
+
+| Function | Auth | Purpose |
+|----------|------|---------|
+| `ingest-child-notification` | JWT (child user) | Ingest and route notifications to parent |
+| `create-pairing-token` | JWT (child user) | Generate QR pairing token + code |
+| `claim-pairing-token` | JWT (parent user) | Claim a pairing token and create pair |
+| `ping-child` | JWT (parent user) | Send wake-up FCM to child device |
+| `revoke-pair` | JWT (either user) | Revoke/unpair a device pair |
+| `sync-device` | JWT (device owner) | Update device presence, push_token, foreground |
+| `health` | None (public) | Health check with DB + env var validation |
+
+## Known Gaps (not production-blocking)
+
+- Google OAuth uses URL fragment parsing (deferred; see Phase 1.7 plan)
+- Rate limiter in `auth-verifier.ts` is in-memory (per-instance only)
+- No Sentry/Crashlytics integration for crash reporting
+- No test suite yet
+
 ## Testing
 
 - Edge Functions: Deno test framework

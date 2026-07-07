@@ -7,8 +7,6 @@ import { ThemedView } from '@/components/themed-view';
 import { usePairData } from '@/hooks/use-pair-data';
 import { UserAvatar } from '@/components/user-avatar';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
 // ============================================================
 // EXACT STITCH COLORS (from HTML Tailwind config)
 // ============================================================
@@ -94,7 +92,7 @@ export default function ActivityScreen() {
 
           {isLoading ? (
             <ActivityIndicator size="large" color={C.primary} style={{ padding: 32 }} />
-          ) : error ? (
+          ) : error && notifications.length === 0 ? (
             <View style={{ padding: 32, alignItems: 'center' }}>
               <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
             </View>

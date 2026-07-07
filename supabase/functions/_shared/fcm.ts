@@ -18,7 +18,13 @@ function pemToBinary(pem: string): Uint8Array {
   return bytes
 }
 
+let cachedToken: { token: string; expiresAt: number } | null = null
+
 export async function getFcmAccessToken(serviceAccount: Record<string, string>): Promise<string> {
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 300000) {
+    return cachedToken.token
+  }
+
   const { client_email, private_key } = serviceAccount
   const now = Math.floor(Date.now() / 1000)
 
@@ -60,10 +66,21 @@ export async function getFcmAccessToken(serviceAccount: Record<string, string>):
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
   })
 
+  if (!tokenResponse.ok) {
+    const body = await tokenResponse.text()
+    throw new Error(`FCM OAuth token request failed (${tokenResponse.status}): ${body}`)
+  }
+
   const tokenData = await tokenResponse.json()
   if (!tokenData.access_token) {
     throw new Error(`Failed to get FCM OAuth token: ${JSON.stringify(tokenData)}`)
   }
+
+  cachedToken = {
+    token: tokenData.access_token,
+    expiresAt: Date.now() + (tokenData.expires_in ? tokenData.expires_in * 1000 : 3600000) - 60000,
+  }
+
   return tokenData.access_token
 }
 
@@ -133,7 +150,9 @@ export async function sendParentPush(
   return { success: true, messageId: fcmData.name }
 }
 
-export async function sendChildRecoveryPush(childDeviceId: string): Promise<ParentPushResult> {
+export async function sendChildRecoveryPush(
+  pushToken: string,
+): Promise<ParentPushResult> {
   const serviceAccountRaw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')
   if (!serviceAccountRaw) {
     throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not configured')
@@ -144,7 +163,7 @@ export async function sendChildRecoveryPush(childDeviceId: string): Promise<Pare
 
   const fcmPayload = {
     message: {
-      token: childDeviceId,
+      token: pushToken,
       data: {
         type: 'wake_child_notification_listener',
         timestamp: String(Date.now()),

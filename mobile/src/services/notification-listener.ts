@@ -1,10 +1,11 @@
 import { AppRegistry } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { bufferNotification, flushBuffer, getProcessedKeysSet, addToProcessedKeys } from './mmkv-buffer';
+import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
-// Headless task name matching NotificationHeadlessTaskService.kt
-const HEADLESS_TASK_NAME = 'RNAndroidNotificationListenerHeadlessJsName';
+// Must match NotificationHeadlessTaskService.kt exactly
+const HEADLESS_TASK_NAME = 'RNAndroidNotificationListenerHeadlessJs';
 
 export const headlessNotificationListener = async ({ notification }: { notification: string }) => {
   if (!notification) return;
@@ -72,15 +73,15 @@ export const headlessNotificationListener = async ({ notification }: { notificat
 
       await flushBuffer();
     } catch (e) {
-      console.log("Failed to send notification, buffering...", e);
+      logger.warn('Failed to send notification, buffering...', e);
       await bufferNotification(payload);
     }
   } catch (err) {
-    console.error('Error processing notification:', err);
+    logger.error('Error processing notification:', err);
   }
 };
 
 AppRegistry.registerHeadlessTask(
-  'RNAndroidNotificationListenerHeadlessJsName',
+  HEADLESS_TASK_NAME,
   () => headlessNotificationListener
 );

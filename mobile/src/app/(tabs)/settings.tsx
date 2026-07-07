@@ -82,7 +82,7 @@ export default function SettingsScreen() {
   const handlePingChild = async (childDeviceId: string, pairId: string) => {
     setPingingId(pairId);
     try {
-      const { error } = await supabase.functions.invoke('send-child-recovery-push', {
+      const { error } = await supabase.functions.invoke('ping-child', {
         body: { child_device_id: childDeviceId },
       });
       if (error) throw error;
@@ -109,7 +109,9 @@ export default function SettingsScreen() {
       icon: 'warning',
       primaryButton: 'Unpair',
       onPrimaryPress: async () => {
-        await supabase.from('pairs').update({ status: 'revoked' }).eq('id', pairId);
+        try {
+          await supabase.functions.invoke('revoke-pair', { body: { pair_id: pairId } });
+        } catch { }
         setChildren(children.filter(c => c.id !== pairId));
       },
       secondaryButton: 'Cancel',

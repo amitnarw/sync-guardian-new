@@ -1,5 +1,7 @@
 import React, { Component, type ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { AuthColors } from '@/constants/auth-theme';
+import { logger } from '@/services/logger';
 
 interface Props {
   children: ReactNode;
@@ -17,8 +19,8 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: { componentStack?: string }) {
-    console.error('ErrorBoundary caught:', error, info?.componentStack);
+  componentDidCatch(error: Error) {
+    logger.error('ErrorBoundary caught:', error);
   }
 
   handleReset = () => {
@@ -49,23 +51,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#fff8f0',
+    backgroundColor: AuthColors.background,
   },
   title: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 20,
-    color: '#1b1d0e',
+    color: AuthColors.onSurface,
     marginBottom: 12,
   },
   message: {
     fontFamily: 'Manrope-Regular',
     fontSize: 14,
-    color: '#43483d',
+    color: AuthColors.onSurfaceVariant,
     textAlign: 'center',
     marginBottom: 24,
   },
   button: {
-    backgroundColor: '#486730',
+    backgroundColor: AuthColors.primary,
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 9999,

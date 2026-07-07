@@ -5,6 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } fr
 import { MaterialIcons, AntDesign } from '@expo/vector-icons';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAuth } from '@/hooks/use-auth';
+import { logger } from '@/services/logger';
 import { useAppModal } from '@/hooks/use-app-modal';
 import Svg, { Path } from 'react-native-svg';
 import { Button } from '@/components/ui/button';
@@ -67,7 +68,7 @@ export default function LoginScreen() {
         router.replace('/pairing');
       }
     } catch (err: any) {
-      console.error('Google sign-in error:', err?.message);
+      logger.error('Google sign-in error:', err?.message);
       if (!err.message?.includes('cancelled')) {
         showModal({
           title: 'Google Sign-In Failed',

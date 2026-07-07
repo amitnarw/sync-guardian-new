@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { AppState, Platform } from 'react-native'
 import { useAuthStore } from '@/hooks/use-auth-store'
+import { logger } from '@/services/logger'
 
 interface PermissionItem {
   key: string
@@ -28,7 +29,7 @@ export function usePermissionStatus(role: 'parent' | 'child') {
   const refresh = useCallback(() => {
     if (!NotificationAccess) {
       if (Platform.OS === 'android') {
-        console.warn('usePermissionStatus: NotificationAccess native module not loaded')
+        logger.warn('usePermissionStatus: NotificationAccess native module not loaded')
       }
       return
     }
@@ -39,7 +40,7 @@ export function usePermissionStatus(role: 'parent' | 'child') {
       setFcmPermissionGranted(NotificationAccess.isFcmPermissionGranted())
       setBatteryOptDisabled(NotificationAccess.isBatteryOptimizationDisabled())
     } catch (e) {
-      console.warn('usePermissionStatus: error reading permission status', e)
+      logger.warn('usePermissionStatus: error reading permission status', e)
     }
   }, [role])
 

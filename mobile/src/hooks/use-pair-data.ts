@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
 export interface MirroredNotification {
@@ -128,7 +129,7 @@ export function usePairData(): UsePairDataResult {
       if (devData && !cancelledRef.current) {
         setChildDevice(devData as any);
       } else if (devError) {
-        console.warn('usePairData: child device query error:', devError);
+        logger.warn('usePairData: child device query error:', devError);
       }
 
       // 3. Fetch recent notifications
@@ -141,7 +142,7 @@ export function usePairData(): UsePairDataResult {
       if (notifData && !cancelledRef.current) {
         setNotifications(notifData as MirroredNotification[]);
       } else if (notifError) {
-        console.warn('usePairData: notifications query error:', notifError);
+        logger.warn('usePairData: notifications query error:', notifError);
       }
 
       if (cancelledRef.current) return;
@@ -188,7 +189,7 @@ export function usePairData(): UsePairDataResult {
       channelsRef.current = [deviceChannel, notifChannel];
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load pair data');
-      console.warn('usePairData: init error:', err);
+      logger.warn('usePairData: init error:', err);
     } finally {
       if (isRefresh) {
         setIsRefreshing(false);

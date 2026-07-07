@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '@/services/logger';
 
 const PENDING_QUEUE_KEY = 'pending_notifications_queue';
 const PROCESSED_KEYS_KEY = 'processed_notification_keys';
@@ -154,7 +155,7 @@ export const flushBuffer = async () => {
             remaining.push({ ...n, _retryCount: retry });
           }
         }
-        console.error('Flush batch failed, re-buffered', error);
+        logger.error('Flush batch failed, re-buffered', error);
       } else {
         // Track sent notification keys
         for (const n of batch) {
@@ -171,15 +172,15 @@ export const flushBuffer = async () => {
           remaining.push({ ...n, _retryCount: retry });
         }
       }
-      console.error('Flush batch error, re-buffered', err);
+      logger.error('Flush batch error, re-buffered', err);
     }
   }
 
   if (remaining.length === 0) {
     await deleteQueue();
-    console.log('Successfully flushed buffered notifications');
+    logger.info('Successfully flushed buffered notifications');
   } else {
     await replaceBufferedNotifications(remaining);
-    console.log(`Flushed partially. ${remaining.length} items re-buffered for retry.`);
+    logger.info(`Flushed partially. ${remaining.length} items re-buffered for retry.`);
   }
 };

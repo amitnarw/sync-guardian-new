@@ -1,6 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
+import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -20,8 +21,6 @@ export function useAuth() {
     setEmail,
     setProfileImage,
     setDisplayName,
-    email,
-    userRole,
     resetAuth,
   } = useAuthStore();
 
@@ -108,11 +107,11 @@ export function useAuth() {
       refreshToken = fragParams.get('refresh_token');
     }
 
-    if (code) {
-      const { data: sessionData, error: sessionError } =
-        await supabase.auth.exchangeCodeForSession(code);
+      if (code) {
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.exchangeCodeForSession(code);
       if (sessionError) {
-        console.error('exchangeCodeForSession error:', sessionError, 'redirectUrl:', redirectUrlStr);
+        logger.error('exchangeCodeForSession failed');
         throw new Error('Google sign-in was not allowed for this account. Try a different account.');
       }
       if (!sessionData?.session) throw new Error('Could not sign in. Please try again.');
@@ -126,7 +125,7 @@ export function useAuth() {
       const { data: sessionData, error: sessionError } =
         await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
       if (sessionError) {
-        console.error('setSession error:', sessionError, 'redirectUrl:', redirectUrlStr);
+        logger.error('setSession failed for Google sign-in');
         throw new Error('Google sign-in was not allowed for this account. Try a different account.');
       }
       if (!sessionData?.session) throw new Error('Could not sign in. Please try again.');

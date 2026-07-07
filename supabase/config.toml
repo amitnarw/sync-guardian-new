@@ -441,3 +441,18 @@ entrypoint = "./functions/ingest-child-notification/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/health/index.ts"
+
+[functions.ping-child]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/ping-child/index.ts"
+
+[functions.revoke-pair]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/revoke-pair/index.ts"
+
+[functions.sync-device]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/sync-device/index.ts"

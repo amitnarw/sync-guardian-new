@@ -5,17 +5,10 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  if (__DEV__) {
-    console.error(
-      'EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY must be set. ' +
-      'Create a mobile/.env file from mobile/.env.example and fill in your credentials.'
-    );
-  } else {
-    throw new Error(
-      'Missing Supabase credentials. Configure EXPO_PUBLIC_SUPABASE_URL and ' +
-      'EXPO_PUBLIC_SUPABASE_ANON_KEY in EAS Build secrets or .env.'
-    )
-  }
+  throw new Error(
+    'Missing Supabase credentials. Configure EXPO_PUBLIC_SUPABASE_URL and ' +
+    'EXPO_PUBLIC_SUPABASE_ANON_KEY in mobile/.env or EAS Build secrets.'
+  )
 }
 
 export const supabase = createClient(

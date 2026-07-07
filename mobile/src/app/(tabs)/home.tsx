@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Dimensions, Text, BackHandler, ActivityIndicator, RefreshControl } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Text, BackHandler, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,8 +11,6 @@ import { BlurView, BlurTargetView } from 'expo-blur';
 import { usePairData } from '@/hooks/use-pair-data';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { UserAvatar } from '@/components/user-avatar';
-
-const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 // ============================================================
 // EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
@@ -342,7 +340,7 @@ export default function HomeScreen() {
             <View style={s.leoCard}>
               {isLoading ? (
                 <ActivityIndicator size="large" color={C.primary} style={{ padding: 32 }} />
-              ) : error ? (
+              ) : error && !childDevice ? (
                 <View style={{ padding: 32, alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
                 </View>

@@ -13,6 +13,7 @@ import { getApp } from '@react-native-firebase/app';
 import { getMessaging, requestPermission, getToken, AuthorizationStatus } from '@react-native-firebase/messaging';
 import '@/services/fcm-handler';
 import { flushBuffer } from '@/services/mmkv-buffer';
+import { logger } from '@/services/logger';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -65,6 +66,7 @@ export default function RootLayout() {
       if (session) {
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error || !user) {
+          logger.warn('Session invalid on restore, signing out');
           await supabase.auth.signOut();
           setIsAuthenticated(false);
           setUserId(null);
@@ -102,8 +104,11 @@ export default function RootLayout() {
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setUserId(null);
+          setEmail(null);
           setProfileImage(null);
           setDisplayName(null);
+          setPairId(null);
+          setDeviceId(null);
         }
       },
     );
@@ -111,24 +116,13 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Sync device presence + FCM token on auth state change
-  // Also links device.user_id to the authenticated user
+  // Sync device presence + FCM token via edge function
   useEffect(() => {
     async function syncDevice() {
       if (!isAuthenticated || !deviceId) return;
 
-      const updates: Record<string, any> = {
-        is_foreground: true,
-        last_seen_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      let pushToken: string | null = null;
 
-      // Link device to auth user if not already set
-      if (userId) {
-        updates.user_id = userId;
-      }
-
-      // Request FCM token for both Parent (push alerts) and Child (wake-up signal)
       try {
         const app = getApp();
         const messaging = getMessaging(app);
@@ -139,16 +133,22 @@ export default function RootLayout() {
         if (enabled) {
           const token = await getToken(messaging);
           setFcmToken(token);
-          updates.push_token = token;
+          pushToken = token;
         }
-      } catch (error) {
-        console.warn('Failed to get FCM token:', error);
+      } catch (err) {
+        logger.warn('Failed to get FCM token:', err);
       }
 
       try {
-        await supabase.from('devices').update(updates).eq('id', deviceId);
+        await supabase.functions.invoke('sync-device', {
+          body: {
+            device_id: deviceId,
+            is_foreground: true,
+            push_token: pushToken,
+          },
+        });
       } catch (e) {
-        console.warn('Failed to sync device:', e);
+        logger.warn('Failed to sync device:', e);
       }
     }
     syncDevice();
@@ -160,14 +160,12 @@ export default function RootLayout() {
 
     const updatePresence = async (foreground: boolean) => {
       try {
-        await supabase
-          .from('devices')
-          .update({
+        await supabase.functions.invoke('sync-device', {
+          body: {
+            device_id: deviceId,
             is_foreground: foreground,
-            last_seen_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', deviceId);
+          },
+        });
       } catch {}
     };
 
@@ -180,7 +178,6 @@ export default function RootLayout() {
       }
     });
 
-    // Heartbeat every 30 seconds while active
     let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
     const startHeartbeat = () => {
       if (heartbeatInterval) clearInterval(heartbeatInterval);

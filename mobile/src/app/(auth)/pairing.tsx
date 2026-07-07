@@ -6,6 +6,7 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 import QRCode from 'react-native-qrcode-svg';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { supabase } from '@/lib/supabase';
+import { logger } from '@/services/logger';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import { MaterialIcons } from '@expo/vector-icons';
@@ -64,18 +65,18 @@ export default function PairingScreen() {
         .maybeSingle();
 
       if (error) {
-        console.error('Pairing: polling query error:', error);
+        logger.error('Pairing: polling query error:', error);
         return false;
       }
 
-      console.log('Pairing: polling result:', data);
+      logger.debug('Pairing: polling result received');
 
       if (data?.consumed_at) {
         let newPairId = data.pair_id;
 
         // If pair_id is null (edge case), fallback to querying pairs by child_device_id
         if (!newPairId && pairingData.child_device_id) {
-          console.log('Pairing: pair_id null, looking up by child_device_id');
+          logger.debug('Pairing: pair_id null, looking up by child_device_id');
           const { data: pairData } = await supabase
             .from('pairs')
             .select('id')
@@ -84,7 +85,7 @@ export default function PairingScreen() {
             .limit(1);
           if (pairData && pairData.length > 0) {
             newPairId = pairData[0].id;
-            console.log('Pairing: found pair via fallback:', newPairId);
+            logger.debug('Pairing: found pair via fallback');
           }
         }
 
@@ -93,7 +94,7 @@ export default function PairingScreen() {
           router.replace('/onboarding');
           return true;
         } else {
-          console.warn('Pairing: token consumed but no pair_id found');
+          logger.warn('Pairing: token consumed but no pair_id found');
         }
       }
       return false;
@@ -129,14 +130,14 @@ export default function PairingScreen() {
       if (err instanceof FunctionsHttpError) {
         try {
           const body = await err.context.text();
-          console.error('create-pairing-token body:', body, 'status:', err.context.status);
+          logger.error('create-pairing-token failed, status:', err.context.status);
           const parsed = JSON.parse(body);
           msg = parsed.error || msg;
         } catch {
-          console.error('create-pairing-token response:', err.context.status, err.context.statusText);
+          logger.error('create-pairing-token response:', err.context.status, err.context.statusText);
         }
       } else if (err instanceof Error && err.message !== 'Failed to create session') {
-        console.error('create-pairing-token error:', err.message);
+        logger.error('create-pairing-token error:', err.message);
         msg = err.message;
       }
 
@@ -188,14 +189,14 @@ export default function PairingScreen() {
       if (err instanceof FunctionsHttpError) {
         try {
           const body = await err.context.text();
-          console.error('claim-pairing-token body:', body, 'status:', err.context.status);
+          logger.error('claim-pairing-token failed, status:', err.context.status);
           const parsed = JSON.parse(body);
           msg = parsed.error || msg;
         } catch {
-          console.error('claim-pairing-token response:', err.context.status, err.context.statusText);
+          logger.error('claim-pairing-token response:', err.context.status, err.context.statusText);
         }
       } else if (err instanceof Error) {
-        console.error('claim-pairing-token error:', err.message);
+        logger.error('claim-pairing-token error:', err.message);
         msg = err.message;
       }
 

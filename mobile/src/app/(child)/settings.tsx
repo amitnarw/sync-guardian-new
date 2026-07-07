@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, ScrollView, View, TouchableOpacity, Dimensions, Text, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -44,17 +44,33 @@ export default function ChildSettingsScreen() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pairStatus, setPairStatus] = useState<'active' | 'revoked' | 'pending' | null>(null);
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      if (deviceId) {
-        await supabase.from('devices').update({ last_seen_at: new Date().toISOString() }).eq('id', deviceId);
+      if (pairId) {
+        const { data } = await supabase
+          .from('pairs')
+          .select('status')
+          .eq('id', pairId)
+          .single();
+        if (data) {
+          setPairStatus(data.status as 'active' | 'revoked' | 'pending');
+        }
       }
     } finally {
       setIsRefreshing(false);
     }
-  }, [deviceId]);
+  }, [pairId]);
+
+  useEffect(() => {
+    if (pairId) {
+      supabase.from('pairs').select('status').eq('id', pairId).single().then(({ data }) => {
+        if (data) setPairStatus(data.status as 'active' | 'revoked' | 'pending');
+      });
+    }
+  }, [pairId]);
 
   const screenOpacity = useSharedValue(1);
   const containerAnimatedStyle = useAnimatedStyle(() => ({
@@ -71,9 +87,9 @@ export default function ChildSettingsScreen() {
         setIsDisconnecting(true);
         try {
           if (pairId) {
-            await supabase.from('pairs').update({ status: 'revoked' }).eq('id', pairId);
+            await supabase.functions.invoke('revoke-pair', { body: { pair_id: pairId } });
           }
-        } catch (e) { }
+        } catch { }
         resetAuth();
         router.replace('/splash');
       },
@@ -85,7 +101,7 @@ export default function ChildSettingsScreen() {
     setIsSigningOut(true);
     try {
       await supabase.auth.signOut();
-    } catch (e) { }
+    } catch { }
     resetAuth();
     router.replace('/login');
   };
@@ -152,7 +168,15 @@ export default function ChildSettingsScreen() {
                   <Ionicons name="link" size={26} color={C.primary} />
                 </View>
                 <Text style={s.cardTitle}>Paired Guardian</Text>
-                <Text style={s.cardDesc}>Connected to Parent Device securely.</Text>
+                <Text style={s.cardDesc}>
+                  {pairStatus === 'revoked'
+                    ? 'Connection has been removed.'
+                    : pairStatus === 'pending'
+                    ? 'Waiting for parent confirmation...'
+                    : pairStatus === 'active'
+                    ? 'Connected to Parent Device securely.'
+                    : 'Checking connection...'}
+                </Text>
                 <View style={s.cardBlobProfile} />
               </View>
 

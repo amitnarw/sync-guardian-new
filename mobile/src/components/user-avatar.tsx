@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, TouchableOpacity, Image, View, ImageSourcePropType } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/hooks/use-auth-store';
@@ -18,6 +18,10 @@ interface UserAvatarProps {
 export function UserAvatar({ size = 40, fallbackSource, role }: UserAvatarProps) {
   const profileImage = useAuthStore((state) => state.profileImage);
   const [showRemote, setShowRemote] = useState(true);
+
+  useEffect(() => {
+    setShowRemote(true);
+  }, [profileImage]);
 
   const handlePress = () => {
     if (role === 'parent') {

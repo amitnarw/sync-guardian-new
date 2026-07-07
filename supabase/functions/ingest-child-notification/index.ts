@@ -201,6 +201,22 @@ serve(async (req) => {
       }
     }
 
+    // Log push delivery attempts to push_delivery_logs
+    if (parentDevice?.push_token) {
+      const logRows = inserted.map((n: any) => ({
+        notification_id: n.id,
+        pair_id: pairId,
+        device_id: parentDeviceId,
+        delivery_mode: 'parent_push' as const,
+        status: (n as any).delivery_mode === 'push' ? 'success' as const : 'pending' as const,
+        attempted_at: new Date().toISOString(),
+      }))
+      await adminClient.from('push_delivery_logs').insert(logRows).then(
+        () => {},
+        () => {},
+      )
+    }
+
     return new Response(
       JSON.stringify({ data: inserted, count: inserted.length }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
