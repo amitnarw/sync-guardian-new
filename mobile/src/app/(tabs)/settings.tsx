@@ -311,6 +311,13 @@ export default function SettingsScreen() {
             {children.length === 0 ? (
               <View style={s.emptyStateCard}>
                 <Text style={s.emptyStateText}>No children connected yet.</Text>
+                <TouchableOpacity
+                  style={s.pairNewDeviceBtn}
+                  onPress={() => router.push('/pairing')}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color={C.onPrimary} />
+                  <Text style={s.pairNewDeviceBtnText}>Pair New Device</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               children.map(child => (
@@ -624,6 +631,22 @@ const s = StyleSheet.create({
     fontFamily: 'PlusJakartaSans-Medium',
     fontSize: 14,
     color: C.outline,
+    marginBottom: 16,
+  },
+  pairNewDeviceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 9999,
+    gap: 8,
+  },
+  pairNewDeviceBtnText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    color: C.onPrimary,
   },
   childRowCard: {
     flexDirection: 'row',

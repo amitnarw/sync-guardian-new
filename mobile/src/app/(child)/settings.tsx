@@ -41,7 +41,7 @@ const C = {
 } as const;
 
 export default function ChildSettingsScreen() {
-  const { deviceId, pairId, resetAuth } = useAuthStore();
+  const { deviceId, pairId, resetAuth, clearPair } = useAuthStore();
   const { showModal } = useAppModal();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
@@ -79,10 +79,15 @@ export default function ChildSettingsScreen() {
     opacity: screenOpacity.value,
   }));
 
+  const handleReconnect = () => {
+    clearPair();
+    router.replace('/pairing');
+  };
+
   const handleDisconnect = () => {
     showModal({
       title: 'Disconnect',
-      message: 'Are you sure you want to unpair from the Parent Device?',
+      message: 'Are you sure you want to unpair from the Parent Device? You can reconnect later without signing out.',
       icon: 'warning',
       primaryButton: 'Disconnect',
       onPrimaryPress: async () => {
@@ -92,8 +97,8 @@ export default function ChildSettingsScreen() {
             await supabase.functions.invoke('revoke-pair', { body: { pair_id: pairId } });
           }
         } catch { }
-        resetAuth();
-        router.replace('/splash');
+        clearPair();
+        router.replace('/pairing');
       },
       secondaryButton: 'Cancel',
     });
@@ -235,20 +240,44 @@ export default function ChildSettingsScreen() {
             {/* ========== PERMISSIONS SECTION ========== */}
             <PermissionsSection />
 
+            {/* ========== REVOKED BANNER ========== */}
+            {pairStatus === 'revoked' && (
+              <View style={s.revokedBanner}>
+                <Ionicons name="alert-circle" size={24} color={C.error} />
+                <View style={s.revokedBannerText}>
+                  <Text style={s.revokedBannerTitle}>Pair Disconnected</Text>
+                  <Text style={s.revokedBannerDesc}>Your parent has disconnected this device.</Text>
+                </View>
+                <TouchableOpacity style={s.reconnectBannerBtn} onPress={handleReconnect}>
+                  <Text style={s.reconnectBannerBtnText}>Reconnect</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* ========== ACTION AREA ========== */}
             <View style={s.actionSection}>
               <TouchableOpacity
-                style={s.disconnectButton}
-                onPress={handleDisconnect}
-                disabled={isDisconnecting}
+                style={s.reconnectButton}
+                onPress={handleReconnect}
               >
-                {isDisconnecting ? (
-                  <ActivityIndicator size="small" color={C.secondary} style={s.actionIcon} />
-                ) : (
-                  <Ionicons name="close-circle-outline" size={20} color={C.secondary} style={s.actionIcon} />
-                )}
-                <Text style={s.disconnectText}>Disconnect Parent</Text>
+                <Ionicons name="refresh-outline" size={20} color={C.primary} style={s.actionIcon} />
+                <Text style={s.reconnectText}>Reconnect to Parent</Text>
               </TouchableOpacity>
+
+              {pairStatus !== 'revoked' && (
+                <TouchableOpacity
+                  style={s.disconnectButton}
+                  onPress={handleDisconnect}
+                  disabled={isDisconnecting}
+                >
+                  {isDisconnecting ? (
+                    <ActivityIndicator size="small" color={C.secondary} style={s.actionIcon} />
+                  ) : (
+                    <Ionicons name="close-circle-outline" size={20} color={C.secondary} style={s.actionIcon} />
+                  )}
+                  <Text style={s.disconnectText}>Disconnect Parent</Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={s.logoutButton}
@@ -430,6 +459,61 @@ const s = StyleSheet.create({
   },
   actionIcon: {
     marginRight: 2,
+  },
+  reconnectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primaryContainer,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    borderRadius: 9999,
+    gap: 8,
+    width: '100%',
+  },
+  reconnectText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.primary,
+  },
+  revokedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: C.error,
+  },
+  revokedBannerText: {
+    flex: 1,
+    gap: 2,
+  },
+  revokedBannerTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: C.onSurface,
+  },
+  revokedBannerDesc: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: C.onSurfaceVariant,
+  },
+  reconnectBannerBtn: {
+    backgroundColor: C.error,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  reconnectBannerBtnText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    color: C.white,
   },
   disconnectButton: {
     flexDirection: 'row',

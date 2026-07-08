@@ -5,12 +5,14 @@ import { BlurTargetView } from 'expo-blur';
 import CustomTabBar from '@/components/custom-tab-bar';
 import { AuthColors } from '@/constants/auth-theme';
 import { useProtectedRoute } from '@/hooks/use-protected-route';
+import { usePairStatusGuard } from '@/hooks/use-pair-status-guard';
 
 const SCREEN_W = Dimensions.get('window').width;
 
 export default function ChildLayout() {
   const blurTargetRef = useRef<View>(null);
   useProtectedRoute('child');
+  usePairStatusGuard('child');
 
   return (
     <View style={{ flex: 1, backgroundColor: AuthColors.background }}>

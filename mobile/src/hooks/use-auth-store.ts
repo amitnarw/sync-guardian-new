@@ -41,6 +41,7 @@ interface AuthState {
   setSessionChecked: (checked: boolean) => void;
 
   resetAuth: () => void;
+  clearPair: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -79,6 +80,8 @@ export const useAuthStore = create<AuthState>()(
 
       sessionChecked: false,
       setSessionChecked: (checked) => set({ sessionChecked: checked }),
+
+      clearPair: () => set({ pairId: null, deviceId: null }),
 
       resetAuth: () => {
         clearAppMetadataCache();

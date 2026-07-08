@@ -197,3 +197,53 @@ export async function sendChildRecoveryPush(
 
   return { success: true, messageId: fcmData.name }
 }
+
+export async function sendPairRevokedPush(
+  deviceToken: string,
+  revokedBy: 'parent' | 'child',
+): Promise<ParentPushResult> {
+  const serviceAccountRaw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+  if (!serviceAccountRaw) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not configured')
+  }
+
+  const serviceAccount: Record<string, string> = JSON.parse(serviceAccountRaw)
+  const accessToken = await getFcmAccessToken(serviceAccount)
+
+  const fcmPayload = {
+    message: {
+      token: deviceToken,
+      data: {
+        type: 'pair_revoked',
+        revoked_by: revokedBy,
+        timestamp: String(Date.now()),
+      },
+      android: {
+        priority: 'high' as const,
+        ttl: '0s',
+      },
+    },
+  }
+
+  const fcmUrl = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`
+  const fcmResponse = await fetch(fcmUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(fcmPayload),
+  })
+
+  const fcmData = await fcmResponse.json()
+
+  if (!fcmResponse.ok) {
+    const errorCode = fcmData?.error?.details?.[0]?.errorCode
+    if (errorCode === 'UNREGISTERED' || errorCode === 'INVALID_ARGUMENT') {
+      return { success: false, unregisteredToken: true }
+    }
+    throw new Error(`FCM error: ${JSON.stringify(fcmData)}`)
+  }
+
+  return { success: true, messageId: fcmData.name }
+}
