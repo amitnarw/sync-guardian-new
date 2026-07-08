@@ -16,6 +16,7 @@ export interface NotificationPayload {
   notification_body: string;
   notification_posted_at: string;
   notification_key: string | null;
+  app_icon_base64: string | null;
   _retryCount?: number;
 }
 

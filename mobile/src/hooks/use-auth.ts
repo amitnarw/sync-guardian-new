@@ -38,10 +38,11 @@ export function useAuth() {
     setDisplayName(displayName);
   };
 
-  const signUpWithEmail = async (email: string, password: string) => {
+  const signUpWithEmail = async (email: string, password: string, displayName?: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: displayName ? { data: { full_name: displayName } } : undefined,
     });
     if (error) throw error;
     // signUp creates the user but may require email confirmation

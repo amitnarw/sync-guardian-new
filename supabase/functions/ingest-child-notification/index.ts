@@ -20,6 +20,7 @@ interface NotificationRow {
   child_device_id: string
   source_package: string | null
   source_app_name: string | null
+  app_icon_base64: string | null
   notification_title: string
   notification_body: string
   notification_posted_at: string
@@ -103,6 +104,7 @@ serve(async (req) => {
           child_device_id: childDeviceId,
           source_package: sanitizeString(n.source_package, 200) || null,
           source_app_name: sanitizeString(n.source_app_name, 200) || null,
+          app_icon_base64: sanitizeString(n.app_icon_base64 as string, 500000) || null,
           notification_title: sanitizeString(n.notification_title, 500),
           notification_body: sanitizeString(n.notification_body, 2000),
           notification_posted_at: sanitizeString(n.notification_posted_at, 30) || new Date().toISOString(),

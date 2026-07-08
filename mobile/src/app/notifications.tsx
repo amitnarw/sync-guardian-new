@@ -144,7 +144,7 @@ export default function NotificationsScreen() {
           >
             <Ionicons name="chevron-back" size={24} color={C.onSurface} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Nurturing Atelier</Text>
+          <Text style={s.headerTitle}>Sync Guardian</Text>
           <View style={s.headerRight}>
             <Ionicons name="notifications" size={22} color={C.primary} />
           </View>

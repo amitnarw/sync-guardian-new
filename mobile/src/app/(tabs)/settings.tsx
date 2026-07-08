@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedView } from '@/components/themed-view';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
+import { usePermissionStatus } from '@/hooks/use-permission-status';
+import { PermissionStatusRow } from '@/components/permission-status-row';
 import { supabase } from '@/lib/supabase';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import { UserAvatar } from '@/components/user-avatar';
@@ -149,6 +151,36 @@ export default function SettingsScreen() {
     }
   }, [showDialog]);
 
+  const { showModal: showPermModal } = useAppModal();
+  const permissions = usePermissionStatus('parent');
+
+  function PermissionsSection() {
+    if (permissions.length === 0) return null;
+    return (
+      <View style={s.permissionsSection}>
+        <Text style={s.permissionsSectionTitle}>Permissions</Text>
+        {permissions.map((p) => (
+          <PermissionStatusRow
+            key={p.key}
+            label={p.label}
+            granted={p.granted}
+            onRequest={() =>
+              showPermModal({
+                title: p.guideTitle,
+                message: p.guideMessage,
+                steps: p.guideSteps,
+                icon: 'info',
+                primaryButton: 'Open Settings',
+                onPrimaryPress: p.openSettings,
+                secondaryButton: 'Cancel',
+              })
+            }
+          />
+        ))}
+      </View>
+    );
+  }
+
   const handleOpenDialog = () => setShowDialog(true);
 
   const handleStay = () => {
@@ -203,7 +235,7 @@ export default function SettingsScreen() {
         <View style={s.header}>
           <View style={s.headerLeft}>
             <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-            <Text style={s.headerTitle}>Nurturing Atelier</Text>
+            <Text style={s.headerTitle}>Sync Guardian</Text>
           </View>
           <View style={s.headerRight}>
             <UserAvatar
@@ -312,6 +344,9 @@ export default function SettingsScreen() {
               ))
             )}
           </View>
+
+          {/* ========== PERMISSIONS SECTION ========== */}
+          <PermissionsSection />
 
           {/* ========== ACTION AREA: SIGN OUT GENTLY ========== */}
           <View style={s.actionSection}>
@@ -649,6 +684,18 @@ const s = StyleSheet.create({
   /* Bottom Spacer */
   bottomSpacer: {
     height: 130,
+  },
+  permissionsSection: {
+    marginBottom: 32,
+    gap: 8,
+  },
+  permissionsSectionTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    color: C.onSurfaceVariant,
+    letterSpacing: 0.5,
+    marginLeft: 8,
+    marginBottom: 4,
   },
 
   /* ---------- Sign Out Dialog ---------- */

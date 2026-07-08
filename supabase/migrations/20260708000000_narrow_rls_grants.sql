@@ -24,9 +24,17 @@ GRANT SELECT ON TABLE pairing_tokens TO authenticated;
 GRANT SELECT ON TABLE child_app_filters TO authenticated;
 
 -- Add UPDATE policy on devices (already has SELECT policy)
-CREATE POLICY "users_update_own_device" ON devices
-  FOR UPDATE USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'users_update_own_device' AND tablename = 'devices'
+  ) THEN
+    EXECUTE 'CREATE POLICY "users_update_own_device" ON devices
+      FOR UPDATE USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id)';
+  END IF;
+END
+$$;
 
 -- Drop the overly permissive "anyone_read_unconsumed_token" policy
 -- since token/code based lookup is handled by the SECURITY DEFINER RPC

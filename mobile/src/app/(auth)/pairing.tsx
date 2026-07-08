@@ -20,7 +20,7 @@ const { width } = Dimensions.get('window');
 export default function PairingScreen() {
   const { userRole, setUserRole, setPairId, setDeviceId } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [pairingData, setPairingData] = useState<{ code: string; token: string; child_device_id: string; qr_jwt: string } | null>(null);
+  const [pairingData, setPairingData] = useState<{ code: string; token: string; child_device_id: string; qr_jwt: string; expires_at: string } | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -30,6 +30,9 @@ export default function PairingScreen() {
 
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(600);
 
   useEffect(() => {
     if (userRole === 'child') {
@@ -112,9 +115,25 @@ export default function PairingScreen() {
     };
   }, [pairingData]);
 
-  const generatePairingToken = async () => {
+  // Countdown timer for pairing code expiry
+  useEffect(() => {
+    if (!pairingData?.expires_at) return;
+    const expiresAt = new Date(pairingData.expires_at).getTime();
+    const tick = () => {
+      setTimeLeft(Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [pairingData?.expires_at]);
+
+  const generatePairingToken = async (isRegen = false) => {
     try {
-      setLoading(true);
+      if (isRegen) {
+        setIsRegenerating(true);
+      } else {
+        setLoading(true);
+      }
       const { data, error } = await supabase.functions.invoke('create-pairing-token', {
         body: { device_name: 'Child Device' },
       });
@@ -148,7 +167,11 @@ export default function PairingScreen() {
       setErrorMessage(msg);
       setErrorModalVisible(true);
     } finally {
-      setLoading(false);
+      if (isRegen) {
+        setIsRegenerating(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
@@ -189,8 +212,8 @@ export default function PairingScreen() {
       if (err instanceof FunctionsHttpError) {
         try {
           const body = await err.context.text();
-          logger.error('claim-pairing-token failed, status:', err.context.status);
           const parsed = JSON.parse(body);
+          logger.error('claim-pairing-token failed, status:', err.context.status, 'error:', parsed.error);
           msg = parsed.error || msg;
         } catch {
           logger.error('claim-pairing-token response:', err.context.status, err.context.statusText);
@@ -227,6 +250,8 @@ export default function PairingScreen() {
   }
 
   if (userRole === 'child') {
+    const isExpired = timeLeft <= 0 && !!pairingData;
+
     return (
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false} style={styles.container}>
         <View style={styles.header}>
@@ -238,32 +263,64 @@ export default function PairingScreen() {
         <View style={styles.qrContainer}>
           {pairingData ? (
             <>
-              <View style={styles.qrWrapper}>
-                <QRCode
-                  value={pairingData.qr_jwt}
-                  size={200}
-                  color="#363228"
-                  backgroundColor="#ffffff"
-                />
+              <View style={styles.qrContent}>
+                <View style={[styles.qrWrapper, isExpired && styles.expired]}>
+                  <QRCode
+                    value={pairingData.qr_jwt}
+                    size={200}
+                    color="#363228"
+                    backgroundColor="#ffffff"
+                  />
+                </View>
+                <Text style={styles.orText}>OR ENTER CODE</Text>
+                <View style={[styles.codeWrapper, isExpired && styles.expired]}>
+                  <Text style={[styles.codeText, isExpired && styles.expiredText]}>
+                    {isExpired ? '— EXPIRED —' : pairingData.code}
+                  </Text>
+                </View>
+
+                <View style={styles.countdownContainer}>
+                  <MaterialIcons name="timer" size={16} color={isExpired ? '#ba1a1a' : '#486730'} />
+                  {isExpired ? (
+                    <Text style={[styles.countdownText, styles.countdownExpired]}>Code expired</Text>
+                  ) : (
+                    <Text style={styles.countdownText}>
+                      Code expires in{' '}
+                      <Text style={styles.countdownDigits}>
+                        {String(Math.floor(timeLeft / 60)).padStart(2, '0')}:{String(timeLeft % 60).padStart(2, '0')}
+                      </Text>
+                    </Text>
+                  )}
+                </View>
               </View>
-              <Text style={styles.orText}>OR ENTER CODE</Text>
-              <View style={styles.codeWrapper}>
-                <Text style={styles.codeText}>{pairingData.code}</Text>
+
+              <View style={styles.bottomRow}>
+                <Button
+                  title="Regenerate"
+                  icon="refresh"
+                  variant="secondary"
+                  onPress={() => generatePairingToken(true)}
+                  loading={isRegenerating}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Go Back"
+                  variant="secondary"
+                  onPress={() => {
+                    setUserRole(null);
+                    router.replace('/role-selection');
+                  }}
+                  style={{ flex: 1 }}
+                />
               </View>
             </>
           ) : (
-            <Button title="Retry Generation" onPress={generatePairingToken} variant="secondary" />
+            <>
+              <View style={{ flex: 1 }} />
+              <Button title="Generate Pairing Code" onPress={() => generatePairingToken()} variant="secondary" />
+              <View style={{ flex: 1 }} />
+            </>
           )}
-
-          <Button
-            title="Go Back"
-            variant="secondary"
-            onPress={() => {
-              setUserRole(null);
-              router.replace('/role-selection');
-            }}
-            style={{ marginTop: 24 }}
-          />
         </View>
 
         <ErrorModal
@@ -420,7 +477,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   header: {
-    paddingTop: 80,
+    paddingTop: 40,
     paddingHorizontal: 24,
     alignItems: 'center',
     marginBottom: 40,
@@ -443,6 +500,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingHorizontal: 24,
+    paddingBottom: 48,
+  },
+  qrContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
   },
   qrWrapper: {
     padding: 24,
@@ -465,13 +533,13 @@ const styles = StyleSheet.create({
   codeWrapper: {
     paddingVertical: 16,
     paddingHorizontal: 32,
-    backgroundColor: '#eae1d2',
+    backgroundColor: '#486730',
     borderRadius: 16,
   },
   codeText: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
     fontSize: 32,
-    color: '#363228',
+    color: '#f8f8f8',
     letterSpacing: 4,
   },
   cameraPlaceholder: {
@@ -563,5 +631,32 @@ const styles = StyleSheet.create({
   manualEntryContainer: {
     padding: 24,
     paddingBottom: 48,
+  },
+  expired: {
+    opacity: 0.5,
+  },
+  expiredText: {
+    color: '#ba1a1a',
+  },
+  countdownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 20,
+    marginBottom: 50,
+  },
+  countdownText: {
+    fontFamily: 'Manrope-Medium',
+    fontSize: 14,
+    color: '#807a6d',
+    letterSpacing: 0.5,
+  },
+  countdownExpired: {
+    color: '#ba1a1a',
+    fontFamily: 'PlusJakartaSans-Bold',
+  },
+  countdownDigits: {
+    color: '#486730',
+    fontFamily: 'PlusJakartaSans-Bold',
   },
 });

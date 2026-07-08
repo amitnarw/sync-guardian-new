@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedView } from '@/components/themed-view';
 import { usePairData } from '@/hooks/use-pair-data';
 import { UserAvatar } from '@/components/user-avatar';
+import { AppIcon } from '@/components/app-icon';
 
 // ============================================================
 // EXACT STITCH COLORS (from HTML Tailwind config)
@@ -46,7 +47,7 @@ export default function ActivityScreen() {
         <View style={s.header}>
           <View style={s.headerLeft}>
             <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-            <Text style={s.headerTitle}>Nurturing Atelier</Text>
+            <Text style={s.headerTitle}>Sync Guardian</Text>
           </View>
           <View style={s.headerRight}>
             <UserAvatar
@@ -145,13 +146,11 @@ export default function ActivityScreen() {
                     }
                   >
                     <View style={s.iconNodeWrap}>
-                      <View style={[s.iconNodeInner, { backgroundColor: C.primaryContainer }]}>
-                        <Ionicons name="notifications" size={18} color={C.primary} />
-                      </View>
+                      <AppIcon iconBase64={n.app_icon_base64} size={44} fallbackSize={18} />
                     </View>
                     <View style={s.activityCard}>
                       <View style={s.cardHeader}>
-                        <Text style={[s.cardSubLabel, { color: C.primary }]}>{n.source_app_name || 'Notification'}</Text>
+                        <Text style={[s.cardSubLabel, { color: C.primary }]} numberOfLines={1} ellipsizeMode="tail">{n.source_app_name || 'Notification'}</Text>
                         <View style={s.timeBadgePill}>
                           <Text style={s.timeBadgeText}>{timeStr}</Text>
                         </View>
@@ -440,12 +439,15 @@ const s = StyleSheet.create({
     lineHeight: 16,
     textTransform: 'uppercase',
     letterSpacing: 1,
+    flexShrink: 1,
+    marginRight: 8,
   },
   timeBadgePill: {
     backgroundColor: C.surfaceContainerLow,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 9999,
+    flexShrink: 0,
   },
   timeBadgeText: {
     fontFamily: 'PlusJakartaSans-Medium',

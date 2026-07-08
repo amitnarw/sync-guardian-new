@@ -11,6 +11,7 @@ import { BlurView, BlurTargetView } from 'expo-blur';
 import { usePairData } from '@/hooks/use-pair-data';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { UserAvatar } from '@/components/user-avatar';
+import { AppIcon } from '@/components/app-icon';
 
 // ============================================================
 // EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
@@ -40,18 +41,11 @@ const C = {
   white: '#ffffff',
 } as const;
 
-const APP_ICONS: Record<string, string> = {
-  'com.google.android.youtube': 'logo-youtube',
-  'com.khan.android.academy': 'school-outline',
-  'com.duolingo': 'language-outline',
-  default: 'apps-outline',
-};
-
-function groupNotificationsByApp(notifs: { source_package: string | null; source_app_name: string | null }[]) {
-  const groups: Record<string, { name: string; package: string; count: number }> = {};
+function groupNotificationsByApp(notifs: { source_package: string | null; source_app_name: string | null; app_icon_base64: string | null }[]) {
+  const groups: Record<string, { name: string; package: string; count: number; icon: string | null }> = {};
   for (const n of notifs) {
     const pkg = n.source_package?.trim() || 'unknown';
-    if (!groups[pkg]) groups[pkg] = { name: n.source_app_name?.trim() || pkg, package: pkg, count: 0 };
+    if (!groups[pkg]) groups[pkg] = { name: n.source_app_name?.trim() || pkg, package: pkg, count: 0, icon: n.app_icon_base64 };
     groups[pkg].count++;
   }
   const sorted = Object.values(groups).sort((a, b) => b.count - a.count);
@@ -74,6 +68,13 @@ function formatTimeAgo(timestamp: number): string {
 export default function HomeScreen() {
   const { childDevice, latestNotification, notifications, isOnline, isLoading, isRefreshing, error, refresh } = usePairData();
   const { showModal } = useAppModal();
+
+  const childName = childDevice?.device_name || 'Child';
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const weekday = weekdays[new Date().getDay()];
+  const groupedApps = groupNotificationsByApp(notifications);
+  const uniqueAppCount = groupedApps.length;
+  const lastSeenTime = childDevice?.last_seen_at ? new Date(childDevice.last_seen_at).getTime() : null;
 
   React.useEffect(() => {
     const backAction = () => {
@@ -253,7 +254,7 @@ export default function HomeScreen() {
           <View style={s.header}>
             <View style={s.headerLeft}>
               <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-              <Text style={s.headerTitle}>Nurturing Atelier</Text>
+              <Text style={s.headerTitle}>Sync Guardian</Text>
             </View>
             <View style={s.headerRight}>
               <UserAvatar
@@ -277,17 +278,17 @@ export default function HomeScreen() {
                 <Text style={s.flowLabel}>MORNING FLOW</Text>
                 <Text style={s.heroTitle}>
                   Gentle rhythm for{'\n'}
-                  <Text style={s.heroTitleAccent}>Leo&apos;s Wednesday</Text>
+                  <Text style={s.heroTitleAccent}>{childName}&apos;s {weekday}</Text>
                 </Text>
                 <Text style={s.heroDescription}>
-                   Currently in &quot;Creative Exploration&quot; block. The digital sanctuary is maintaining a soft focus environment.
+                  {childName} is {isOnline ? 'online' : 'away'} at the moment.
                 </Text>
                 <View style={s.heroButtons}>
-                  <TouchableOpacity style={s.primaryBtn}>
-                    <Text style={s.primaryBtnText}>Adjust Rhythm</Text>
+                  <TouchableOpacity style={s.primaryBtn} onPress={() => router.push('/(tabs)/activity')}>
+                    <Text style={s.primaryBtnText}>View Activity</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={s.secondaryBtn}>
-                    <Text style={s.secondaryBtnText}>View Schedule</Text>
+                  <TouchableOpacity style={s.secondaryBtn} onPress={() => router.push('/(tabs)/insights')}>
+                    <Text style={s.secondaryBtnText}>View Insights</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -317,7 +318,7 @@ export default function HomeScreen() {
                   </Animated.View>
                 </Animated.View>
 
-                {/* Floating Timer Card */}
+                {/* Floating Presence Card */}
                 <View style={s.timerCardContainer}>
                   <BlurView
                     intensity={80}
@@ -325,11 +326,14 @@ export default function HomeScreen() {
                     style={s.timerCard}
                   >
                     <View style={s.timerHeader}>
-                      <SymbolView name="timer" size={20} tintColor={C.secondary} />
-                      <Text style={s.timerText}>1h 12m Remaining</Text>
-                    </View>
-                    <View style={s.timerTrack}>
-                      <View style={s.timerFill} />
+                      <View style={[s.presenceDot, { backgroundColor: isOnline ? C.primary : C.outline }]} />
+                      <Text style={s.timerText}>
+                        {isOnline
+                          ? 'Online now'
+                          : lastSeenTime
+                            ? `Last seen ${formatTimeAgo(lastSeenTime)}`
+                            : 'No activity yet'}
+                      </Text>
                     </View>
                   </BlurView>
                 </View>
@@ -373,7 +377,7 @@ export default function HomeScreen() {
                       'No recent activity'
                     )}
                   </Text>
-                  {isOnline && childDevice.last_seen_at && (
+                  {childDevice.last_seen_at && (
                     <View style={s.leoBadges}>
                       <View style={s.badge}>
                         <Ionicons name="time-outline" size={14} color={C.primary} />
@@ -381,30 +385,30 @@ export default function HomeScreen() {
                           {formatTimeAgo(new Date(childDevice.last_seen_at).getTime())}
                         </Text>
                       </View>
-                      <View style={s.badge}>
-                        <Ionicons name="notifications" size={14} color={C.primary} />
-                        <Text style={s.badgeText}>{notifications.length} today</Text>
-                      </View>
                     </View>
                   )}
                 </View>
                 <View style={s.harmonyBlock}>
-                  <Text style={s.harmonyStat}>
-                    {notifications.length > 0 ? `${notifications.length >= 100 ? '99+' : notifications.length}` : '--'}
-                  </Text>
-                  <Text style={s.harmonyLabel}>Notifications</Text>
+                  <View style={[s.harmonyDot, { backgroundColor: isOnline ? C.primary : C.outline }]} />
+                  <Text style={s.harmonyLabel}>{isOnline ? 'Online' : 'Away'}</Text>
                 </View>
               </View>
               )}
             </View>
 
-            {/* ========== BEDTIME ROUTINE CARD (v1) ========== */}
+            {/* ========== LATEST ACTIVITY CARD ========== */}
             <View style={s.bedtimeCard}>
               <Ionicons name="sparkles" size={28} color={C.onPrimary} />
               <View style={s.bedtimeTextBlock}>
-                <Text style={s.bedtimeTitle}>Bedtime Routine starts in 2h</Text>
+                <Text style={s.bedtimeTitle}>
+                  {latestNotification
+                    ? `${latestNotification.source_app_name || 'App'} activity`
+                    : 'No recent activity'}
+                </Text>
                 <Text style={s.bedtimeSub}>
-                  Devices will automatically enter Focus Mode at 8:00 PM.
+                  {latestNotification
+                    ? (latestNotification.notification_title || latestNotification.notification_body || `via ${latestNotification.source_app_name || 'app'}`)
+                    : 'Waiting for child device activity...'}
                 </Text>
               </View>
             </View>
@@ -420,12 +424,10 @@ export default function HomeScreen() {
               <View style={s.appsList}>
                 {groupNotificationsByApp(notifications).slice(0, 3).map((app, i) => (
                   <View key={app.name} style={s.appItem}>
-                    <View style={s.appIconBox}>
-                      <Ionicons name={(APP_ICONS[app.package] || APP_ICONS.default) as any} size={20} color={C.primary} />
-                    </View>
+                    <AppIcon iconBase64={app.icon} size={40} fallbackSize={20} />
                     <View style={s.appDetails}>
                       <View style={s.appMeta}>
-                        <Text style={s.appName}>{app.name}</Text>
+                        <Text style={s.appName} numberOfLines={1} ellipsizeMode="tail">{app.name}</Text>
                         <Text style={s.appDuration}>{app.count} notification{app.count !== 1 ? 's' : ''}</Text>
                       </View>
                       <View style={s.appTrack}>
@@ -442,19 +444,23 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* ========== DAILY INSIGHTS CARD (v1) ========== */}
+            {/* ========== APP VARIETY CARD ========== */}
             <View style={s.insightsCard}>
               <View style={s.insightsLabelRow}>
                 <View style={s.insightsLabelPill}>
-                  <Text style={s.insightsLabelText}>Daily Insights</Text>
+                  <Text style={s.insightsLabelText}>App Variety</Text>
                 </View>
               </View>
-              <Text style={s.insightsTitle}>Healthy Balance{'\n'}Achieved Today.</Text>
-              <Text style={s.insightsDesc}>
-                 Educational content outpaced entertainment by 3:1 today. Great job guiding Leo&apos;s journey!
+              <Text style={s.insightsTitle}>
+                {uniqueAppCount > 0 ? `${uniqueAppCount} app${uniqueAppCount !== 1 ? 's' : ''}` : 'No activity yet'}
               </Text>
-              <TouchableOpacity style={s.insightsCta}>
-                <Text style={s.insightsCtaText}>Explore Detailed Insights</Text>
+              <Text style={s.insightsDesc}>
+                {uniqueAppCount > 0
+                  ? `${childName} used ${uniqueAppCount} different app${uniqueAppCount !== 1 ? 's' : ''} today`
+                  : 'App diversity will appear here once the child device is active.'}
+              </Text>
+              <TouchableOpacity style={s.insightsCta} onPress={() => router.push('/(tabs)/insights')}>
+                <Text style={s.insightsCtaText}>Explore Insights</Text>
               </TouchableOpacity>
 
               {/* Decorative blurred blob */}
@@ -696,18 +702,10 @@ const s = StyleSheet.create({
     lineHeight: 22,
     color: C.onSurface,
   },
-  timerTrack: {
-    height: 6,
-    width: '100%',
-    backgroundColor: C.surfaceContainerHigh,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  timerFill: {
-    height: '100%',
-    width: '66%',
-    backgroundColor: C.secondary,
-    borderRadius: 3,
+  presenceDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 
   /* ---------- Leo Card ---------- */
@@ -803,11 +801,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  harmonyStat: {
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 36,
-    lineHeight: 40,
-    color: C.secondary,
+  harmonyDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginBottom: 8,
   },
   harmonyLabel: {
     fontFamily: 'PlusJakartaSans-Medium',
@@ -902,11 +900,14 @@ const s = StyleSheet.create({
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 14,
     color: C.onSurface,
+    flexShrink: 1,
+    marginRight: 8,
   },
   appDuration: {
     fontFamily: 'PlusJakartaSans-SemiBold',
     fontSize: 12,
     color: 'rgba(54,50,40,0.5)',
+    flexShrink: 0,
   },
   appTrack: {
     height: 6,

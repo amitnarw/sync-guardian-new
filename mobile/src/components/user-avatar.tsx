@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, TouchableOpacity, Image, View, ImageSourcePropType } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, ImageSourcePropType } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
@@ -36,7 +37,13 @@ export function UserAvatar({ size = 40, fallbackSource, role }: UserAvatarProps)
   return (
     <TouchableOpacity onPress={handlePress} activeOpacity={0.8}>
       <View style={[s.wrap, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Image source={source} style={[s.image, { width: size, height: size }]} onError={() => setShowRemote(false)} />
+        <Image
+          source={source}
+          style={[s.image, { width: size, height: size, borderRadius: size / 2 }]}
+          contentFit="cover"
+          onError={() => setShowRemote(false)}
+          cachePolicy="memory-disk"
+        />
       </View>
     </TouchableOpacity>
   );
@@ -54,6 +61,6 @@ const s = StyleSheet.create({
     shadowRadius: 32,
   },
   image: {
-    borderRadius: 0,
+    backgroundColor: C.surfaceContainerHighest,
   },
 });

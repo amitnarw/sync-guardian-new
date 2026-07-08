@@ -57,7 +57,7 @@ export default function RegisterScreen() {
     }
     try {
       setLoading(true);
-      const data = await signUpWithEmail(email.trim(), password.trim());
+      const data = await signUpWithEmail(email.trim(), password.trim(), name.trim());
       setHasCompletedOnboarding(false);
 
       if (data.session) {

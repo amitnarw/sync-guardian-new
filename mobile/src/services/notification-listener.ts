@@ -21,13 +21,14 @@ export const headlessNotificationListener = async ({ notification }: { notificat
         child_device_id: '',
         pair_id: '',
         source_package: parsed.app || 'unknown.package',
-        source_app_name: parsed.app || 'Unknown App',
+        source_app_name: parsed.app_label || parsed.app || 'Unknown App',
         notification_title: parsed.title || '',
         notification_body: parsed.text || '',
         notification_posted_at: parsed.time
           ? new Date(parseInt(parsed.time, 10)).toISOString()
           : new Date().toISOString(),
         notification_key: parsed.notification_key || null,
+        app_icon_base64: parsed.app_icon_base64 || null,
       };
       await bufferNotification(fallbackPayload);
       return;
@@ -51,13 +52,14 @@ export const headlessNotificationListener = async ({ notification }: { notificat
       child_device_id: deviceId,
       pair_id: pairId,
       source_package: parsed.app || 'unknown.package',
-      source_app_name: parsed.app || 'Unknown App',
+      source_app_name: parsed.app_label || parsed.app || 'Unknown App',
       notification_title: parsed.title || '',
       notification_body: parsed.text || '',
       notification_posted_at: parsed.time
         ? new Date(parseInt(parsed.time, 10)).toISOString()
         : new Date().toISOString(),
       notification_key: notificationKey,
+      app_icon_base64: parsed.app_icon_base64 || null,
     };
 
     try {

@@ -1,11 +1,14 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Text, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { ThemedView } from '@/components/themed-view';
 import { UserAvatar } from '@/components/user-avatar';
+import { InsightsEmptyState } from '@/components/insights-empty-state';
+import { AppIcon } from '@/components/app-icon';
 import { useInsightsData, type TimeWindow, type InsightsNotification } from '@/hooks/use-insights-data';
+import { useAuthStore } from '@/hooks/use-auth-store';
 
 // ============================================================
 // EXACT STITCH COLORS (from v3 HTML Tailwind config)
@@ -126,13 +129,14 @@ function getPeakWindows(notifications: InsightsNotification[]): Bucket[] {
   return b;
 }
 
-function getTopApps(notifications: InsightsNotification[], limit = 5): { name: string; count: number }[] {
-  const groups: Record<string, number> = {};
+function getTopApps(notifications: InsightsNotification[], limit = 5): { name: string; count: number; icon: string | null; package: string }[] {
+  const groups: Record<string, { name: string; count: number; icon: string | null; package: string }> = {};
   for (const n of notifications) {
-    const name = n.source_app_name?.trim() || n.source_package?.trim() || 'Unknown';
-    groups[name] = (groups[name] || 0) + 1;
+    const pkg = n.source_package?.trim() || 'unknown';
+    if (!groups[pkg]) groups[pkg] = { name: n.source_app_name?.trim() || pkg, count: 0, icon: n.app_icon_base64, package: pkg };
+    groups[pkg].count++;
   }
-  return Object.entries(groups).sort((a, b) => b[1] - a[1]).slice(0, limit).map(([name, count]) => ({ name, count }));
+  return Object.values(groups).sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
 function generateNarrative(notifications: InsightsNotification[], window: TimeWindow): string {
@@ -169,7 +173,8 @@ function formatLatestSignal(notifications: InsightsNotification[]): string {
 }
 
 export default function InsightsScreen() {
-  const { notifications, isLoading, error, window, setWindow, refresh } = useInsightsData();
+  const { notifications, isLoading, isRefreshing, error, window, setWindow, refresh } = useInsightsData();
+  const { pairId } = useAuthStore();
 
   const trendBuckets = React.useMemo(() => getTrendBuckets(notifications, window), [notifications, window]);
   const peakWindowsData = React.useMemo(() => getPeakWindows(notifications), [notifications]);
@@ -183,7 +188,7 @@ export default function InsightsScreen() {
         <View style={s.header}>
           <View style={s.headerLeft}>
             <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-            <Text style={s.headerTitle}>Nurturing Atelier</Text>
+            <Text style={s.headerTitle}>Sync Guardian</Text>
           </View>
           <View style={s.headerRight}>
             <UserAvatar
@@ -196,8 +201,11 @@ export default function InsightsScreen() {
         <ScrollView
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
+          }
         >
-          {isLoading ? (
+          {isLoading && !isRefreshing ? (
             <View style={s.centerState}>
               <ActivityIndicator size="large" color={C.primary} />
             </View>
@@ -210,12 +218,7 @@ export default function InsightsScreen() {
               </TouchableOpacity>
             </View>
           ) : notifications.length === 0 ? (
-            <View style={s.centerState}>
-              <Text style={s.emptyTitle}>No signals yet</Text>
-              <Text style={s.emptyText}>
-                Activity will appear here once{'\n'}notifications are received on the{'\n'}child device.
-              </Text>
-            </View>
+            <InsightsEmptyState hasPair={!!pairId} />
           ) : (
             <>
               {/* Window Selector */}
@@ -285,11 +288,9 @@ export default function InsightsScreen() {
                   const maxCount = topApps[0].count;
                   const barWidth = Math.max((app.count / maxCount) * 100, 2);
                   return (
-                    <View key={i} style={s.appInsightsItem}>
-                      <View style={s.appInsightsIconWrap}>
-                        <Ionicons name="apps-outline" size={20} color={C.primary} />
-                      </View>
-                      <Text style={s.appInsightsName} numberOfLines={1}>{app.name}</Text>
+                    <View key={app.package + i} style={s.appInsightsItem}>
+                      <AppIcon iconBase64={app.icon} size={40} fallbackSize={20} />
+                      <Text style={s.appInsightsName} numberOfLines={1} ellipsizeMode="tail">{app.name}</Text>
                       <View style={s.appInsightsBarBg}>
                         <View style={[s.appInsightsBarFill, { width: `${barWidth}%` }]} />
                       </View>
@@ -301,9 +302,7 @@ export default function InsightsScreen() {
 
               {/* Latest Signal */}
               <View style={s.latestCard}>
-                <View style={s.latestIcon}>
-                  <Ionicons name="notifications" size={20} color={C.primary} />
-                </View>
+                <AppIcon iconBase64={notifications[0]?.app_icon_base64} size={40} fallbackSize={20} />
                 <View style={s.latestTextWrap}>
                   <Text style={s.latestLabel}>Latest Signal</Text>
                   <Text style={s.latestTitle} numberOfLines={1}>
@@ -533,7 +532,9 @@ const s = StyleSheet.create({
     fontFamily: 'PlusJakartaSans-SemiBold',
     fontSize: 14,
     color: C.onSurface,
-    width: 100,
+    flexBasis: 100,
+    flexShrink: 1,
+    marginRight: 12,
   },
   appInsightsBarBg: {
     flex: 1,
@@ -553,6 +554,7 @@ const s = StyleSheet.create({
     color: C.onSurfaceVariant,
     width: 32,
     textAlign: 'right',
+    flexShrink: 0,
   },
 
   /* ---------- Latest Signal Card ---------- */

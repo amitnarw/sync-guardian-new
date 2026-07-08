@@ -8,6 +8,7 @@ export interface InsightsNotification {
   source_app_name: string | null;
   notification_title: string;
   notification_posted_at: string;
+  app_icon_base64: string | null;
 }
 
 export type TimeWindow = 'today' | 'week' | 'month' | 'year';
@@ -15,6 +16,7 @@ export type TimeWindow = 'today' | 'week' | 'month' | 'year';
 export interface UseInsightsDataResult {
   notifications: InsightsNotification[];
   isLoading: boolean;
+  isRefreshing: boolean;
   error: string | null;
   window: TimeWindow;
   setWindow: (w: TimeWindow) => void;
@@ -45,11 +47,15 @@ export function useInsightsData(): UseInsightsDataResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const isParent = userRole === 'parent';
 
-  const refresh = useCallback(() => setRefreshCounter(c => c + 1), []);
+  const refresh = useCallback(() => {
+    setIsRefreshing(true);
+    setRefreshCounter(c => c + 1);
+  }, []);
 
   const resolvePair = useCallback(async (): Promise<string | null> => {
     if (storePairId && deviceId) {
@@ -98,7 +104,7 @@ export function useInsightsData(): UseInsightsDataResult {
 
         const { data, error: fetchError } = await supabase
           .from('mirrored_notifications')
-          .select('id, source_package, source_app_name, notification_title, notification_posted_at')
+          .select('id, source_package, source_app_name, notification_title, notification_posted_at, app_icon_base64')
           .eq('pair_id', pairId)
           .gte('notification_posted_at', startDate)
           .order('notification_posted_at', { ascending: false })
@@ -146,6 +152,7 @@ export function useInsightsData(): UseInsightsDataResult {
       } finally {
         if (!cancelled) {
           setIsLoading(false);
+          setIsRefreshing(false);
         }
       }
     };
@@ -162,8 +169,8 @@ export function useInsightsData(): UseInsightsDataResult {
   }, [isParent, resolvePair, window, refreshCounter]);
 
   if (!isParent) {
-    return { notifications: [], isLoading: false, error: null, window, setWindow, refresh };
+    return { notifications: [], isLoading: false, isRefreshing: false, error: null, window, setWindow, refresh };
   }
 
-  return { notifications, isLoading, error, window, setWindow, refresh };
+  return { notifications, isLoading, isRefreshing, error, window, setWindow, refresh };
 }
