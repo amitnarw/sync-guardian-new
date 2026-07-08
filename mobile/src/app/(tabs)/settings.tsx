@@ -110,6 +110,7 @@ export default function SettingsScreen() {
       message: `Are you sure you want to unpair ${name}?`,
       icon: 'warning',
       primaryButton: 'Unpair',
+      primaryVariant: 'destructive',
       onPrimaryPress: async () => {
         try {
           await supabase.functions.invoke('revoke-pair', { body: { pair_id: pairId } });

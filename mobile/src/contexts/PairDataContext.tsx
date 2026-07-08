@@ -112,6 +112,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
           .from('pairs')
           .select('id, child_device_id')
           .eq('id', sPId)
+          .in('status', ['active', 'pending'])
           .single();
         if (!pairError && data) {
           resolvedPair = data;

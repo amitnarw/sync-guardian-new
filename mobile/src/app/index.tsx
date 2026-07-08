@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { supabase } from '@/lib/supabase';
@@ -10,7 +10,7 @@ export default function Index() {
   const userRole = useAuthStore((state) => state.userRole);
   const pairId = useAuthStore((state) => state.pairId);
   const clearPair = useAuthStore((state) => state.clearPair);
-  const [isValidating, setIsValidating] = useState(false);
+  const validatingRef = useRef(false);
 
   useEffect(() => {
     if (!_hasHydrated || !sessionChecked) return;
@@ -36,9 +36,9 @@ export default function Index() {
     }
 
     // Child has a stored pairId — validate it's still active on boot
-    if (isValidating) return;
+    if (validatingRef.current) return;
 
-    setIsValidating(true);
+    validatingRef.current = true;
     (async () => {
       try {
         const { data, error } = await supabase
@@ -55,10 +55,10 @@ export default function Index() {
       } catch {
         router.replace('/(child)/home');
       } finally {
-        setIsValidating(false);
+        validatingRef.current = false;
       }
     })();
-  }, [_hasHydrated, sessionChecked, isAuthenticated, userRole, pairId, isValidating, clearPair]);
+  }, [_hasHydrated, sessionChecked, isAuthenticated, userRole, pairId, clearPair]);
 
   return null;
 }

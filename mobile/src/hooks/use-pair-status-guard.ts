@@ -9,7 +9,6 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
   const pairId = useAuthStore((s) => s.pairId)
   const clearPair = useAuthStore((s) => s.clearPair)
   const { showModal } = useAppModal()
-  const initDoneRef = useRef(false)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
   const handleRevoked = useCallback(() => {
@@ -24,12 +23,18 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
         secondaryButton: 'Cancel',
         onSecondaryPress: () => router.replace('/pairing'),
       })
+    } else {
+      showModal({
+        title: 'Child Disconnected',
+        message: 'A child device has disconnected from your account.',
+        icon: 'warning',
+        primaryButton: 'Okay',
+      })
     }
   }, [role, clearPair, showModal])
 
   useEffect(() => {
     if (!pairId) return
-    initDoneRef.current = false
 
     const validate = async () => {
       try {
@@ -67,7 +72,6 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
       .subscribe()
 
     channelRef.current = channel
-    initDoneRef.current = true
 
     return () => {
       if (channelRef.current) {

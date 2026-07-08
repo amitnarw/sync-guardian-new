@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { AppModal, AppModalProps, AppModalIcon } from '@/components/ui/app-modal';
+import { AppModal, AppModalProps, AppModalIcon, ButtonVariant } from '@/components/ui/app-modal';
 
 interface ShowModalOptions {
   title: string;
@@ -11,6 +11,8 @@ interface ShowModalOptions {
   onSecondaryPress?: () => void;
   dismissable?: boolean;
   steps?: string[];
+  primaryVariant?: ButtonVariant;
+  autoDismissMs?: number;
 }
 
 interface ModalContextValue {
@@ -52,6 +54,8 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         onSecondaryPress,
         dismissable = true,
         steps = [],
+        primaryVariant = 'default',
+        autoDismissMs,
       } = opts;
 
       setModalProps({
@@ -63,6 +67,8 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         secondaryButton,
         dismissable,
         steps,
+        primaryVariant,
+        autoDismissMs,
         onPrimaryPress: () => {
           onPrimaryPress?.();
           hideModal();
@@ -90,6 +96,9 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         primaryButton={modalProps.primaryButton}
         secondaryButton={modalProps.secondaryButton}
         dismissable={modalProps.dismissable}
+        steps={modalProps.steps}
+        primaryVariant={modalProps.primaryVariant}
+        autoDismissMs={modalProps.autoDismissMs}
         onPrimaryPress={modalProps.onPrimaryPress}
         onSecondaryPress={modalProps.onSecondaryPress}
         onDismiss={modalProps.onDismiss}

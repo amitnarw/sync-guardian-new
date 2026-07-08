@@ -10,8 +10,10 @@ function handlePairRevoked(revokedBy: unknown) {
     // Child device received notification that parent revoked the pair
     useAuthStore.getState().clearPair()
     logger.info('Pair revoked by parent — cleared local pair state')
+  } else if (revokedBy === 'child') {
+    // Parent device received notification that child self-disconnected
+    logger.info('Child self-disconnected — parent will refresh on next focus')
   }
-  // If revoked_by === 'child', it's the parent receiving — nothing to clear
 }
 
 setBackgroundMessageHandler(messaging, async (remoteMessage) => {

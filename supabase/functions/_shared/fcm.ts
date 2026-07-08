@@ -201,6 +201,7 @@ export async function sendChildRecoveryPush(
 export async function sendPairRevokedPush(
   deviceToken: string,
   revokedBy: 'parent' | 'child',
+  pairId?: string,
 ): Promise<ParentPushResult> {
   const serviceAccountRaw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')
   if (!serviceAccountRaw) {
@@ -216,6 +217,7 @@ export async function sendPairRevokedPush(
       data: {
         type: 'pair_revoked',
         revoked_by: revokedBy,
+        pair_id: pairId || '',
         timestamp: String(Date.now()),
       },
       android: {

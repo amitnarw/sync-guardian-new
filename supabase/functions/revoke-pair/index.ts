@@ -75,7 +75,7 @@ serve(async (req) => {
       .maybeSingle()
 
     if (otherDevice?.push_token) {
-      await sendPairRevokedPush(otherDevice.push_token, revokedBy).catch(() => {})
+      await sendPairRevokedPush(otherDevice.push_token, revokedBy, pairId).catch(() => {})
     }
 
     return new Response(

@@ -90,6 +90,7 @@ export default function ChildSettingsScreen() {
       message: 'Are you sure you want to unpair from the Parent Device? You can reconnect later without signing out.',
       icon: 'warning',
       primaryButton: 'Disconnect',
+      primaryVariant: 'destructive',
       onPrimaryPress: async () => {
         setIsDisconnecting(true);
         try {
@@ -256,13 +257,15 @@ export default function ChildSettingsScreen() {
 
             {/* ========== ACTION AREA ========== */}
             <View style={s.actionSection}>
-              <TouchableOpacity
-                style={s.reconnectButton}
-                onPress={handleReconnect}
-              >
-                <Ionicons name="refresh-outline" size={20} color={C.primary} style={s.actionIcon} />
-                <Text style={s.reconnectText}>Reconnect to Parent</Text>
-              </TouchableOpacity>
+              {pairStatus !== 'active' && (
+                <TouchableOpacity
+                  style={s.reconnectButton}
+                  onPress={handleReconnect}
+                >
+                  <Ionicons name="refresh-outline" size={20} color={C.primary} style={s.actionIcon} />
+                  <Text style={s.reconnectText}>Reconnect to Parent</Text>
+                </TouchableOpacity>
+              )}
 
               {pairStatus !== 'revoked' && (
                 <TouchableOpacity

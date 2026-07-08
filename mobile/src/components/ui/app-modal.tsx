@@ -1,10 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { StyleSheet, View, Text, Modal, TouchableWithoutFeedback, Pressable } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 
 export type AppModalIcon = 'error' | 'warning' | 'info' | 'success';
+
+export type ButtonVariant = 'default' | 'destructive';
 
 export interface AppModalProps {
   visible: boolean;
@@ -18,6 +21,8 @@ export interface AppModalProps {
   dismissable?: boolean;
   onDismiss?: () => void;
   steps?: string[];
+  primaryVariant?: ButtonVariant;
+  autoDismissMs?: number;
 }
 
 const ICON_CONFIG: Record<AppModalIcon, { name: keyof typeof MaterialIcons.glyphMap; bg: string; color: string }> = {
@@ -25,6 +30,11 @@ const ICON_CONFIG: Record<AppModalIcon, { name: keyof typeof MaterialIcons.glyph
   warning: { name: 'warning-amber', bg: '#fff3cd', color: '#856404' },
   info: { name: 'info-outline', bg: '#d4edda', color: '#486730' },
   success: { name: 'check-circle-outline', bg: '#d4edda', color: '#2d6a4f' },
+};
+
+const PRIMARY_VARIANTS = {
+  default: { bg: '#486730', text: '#ffffff' },
+  destructive: { bg: '#9f402d', text: '#ffffff' },
 };
 
 export const AppModal = ({
@@ -39,35 +49,79 @@ export const AppModal = ({
   dismissable = true,
   onDismiss,
   steps,
+  primaryVariant = 'default',
+  autoDismissMs,
 }: AppModalProps) => {
   const scale = useSharedValue(0.9);
   const backdropOpacity = useSharedValue(0);
+  const translateY = useSharedValue(20);
 
   useEffect(() => {
     if (visible) {
       scale.value = withSpring(1, { damping: 15, stiffness: 150 });
+      translateY.value = withSpring(0, { damping: 15, stiffness: 150 });
       backdropOpacity.value = withTiming(1, { duration: 200 });
-    } else {
-      scale.value = withSpring(0.9, { damping: 15, stiffness: 150 });
-      backdropOpacity.value = withTiming(0, { duration: 150 });
+
+      if (icon) {
+        const hapticMap = {
+          error: Haptics.NotificationFeedbackType.Error,
+          warning: Haptics.NotificationFeedbackType.Warning,
+          info: Haptics.NotificationFeedbackType.Success,
+          success: Haptics.NotificationFeedbackType.Success,
+        };
+        Haptics.notificationAsync(hapticMap[icon]);
+      }
     }
   }, [visible]);
 
+  useEffect(() => {
+    if (visible && autoDismissMs && !secondaryButton) {
+      const timer = setTimeout(() => {
+        animateOutAndCall(onDismiss);
+      }, autoDismissMs);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, autoDismissMs, secondaryButton, onDismiss, animateOutAndCall]);
+
   const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [
+      { scale: scale.value },
+      { translateY: translateY.value },
+    ],
   }));
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
   }));
 
+  const animateOutAndCall = useCallback((callback?: () => void) => {
+    scale.value = withTiming(0.95, { duration: 200 });
+    translateY.value = withTiming(20, { duration: 200 });
+    backdropOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
+      if (finished && callback) {
+        runOnJS(callback)();
+      }
+    });
+  }, []);
+
+  const handlePrimary = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateOutAndCall(() => onPrimaryPress?.());
+  };
+
+  const handleSecondary = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateOutAndCall(() => onSecondaryPress?.());
+  };
+
   const handleBackdrop = () => {
     if (dismissable) {
-      onDismiss?.();
+      animateOutAndCall(() => onDismiss?.());
     }
   };
 
   const iconCfg = icon ? ICON_CONFIG[icon] : undefined;
+  const primColors = PRIMARY_VARIANTS[primaryVariant];
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleBackdrop}>
@@ -78,30 +132,42 @@ export const AppModal = ({
           </Animated.View>
         </TouchableWithoutFeedback>
         <Animated.View style={[styles.card, cardStyle]}>
-           {iconCfg && (
-             <View style={[styles.iconContainer, { backgroundColor: iconCfg.bg }]}>
-               <MaterialIcons name={iconCfg.name} size={32} color={iconCfg.color} />
-             </View>
-           )}
-           <Text style={styles.title}>{title}</Text>
-           <Text style={styles.message}>{message}</Text>
-           {steps && steps.length > 0 && (
-             <View style={styles.stepsContainer}>
-               {steps.map((step, idx) => (
-                 <Text key={idx} style={styles.stepText}>{idx + 1}. {step}</Text>
-               ))}
-             </View>
-           )}
-           <View style={[styles.actions, !secondaryButton && styles.actionsSingle]}>
-             {secondaryButton && (
-               <Pressable style={styles.secondaryButton} onPress={onSecondaryPress}>
-                 <Text style={styles.secondaryText}>{secondaryButton}</Text>
-               </Pressable>
-             )}
-             <Pressable style={[styles.primaryButton, !secondaryButton && styles.primaryButtonFull]} onPress={onPrimaryPress}>
-               <Text style={styles.primaryText}>{primaryButton}</Text>
-             </Pressable>
-           </View>
+          {dismissable && (
+            <Pressable style={styles.closeButton} onPress={handleBackdrop} hitSlop={8}>
+              <MaterialIcons name="close" size={20} color="#645e53" />
+            </Pressable>
+          )}
+          {iconCfg && (
+            <View style={[styles.iconContainer, { backgroundColor: iconCfg.bg }]}>
+              <MaterialIcons name={iconCfg.name} size={32} color={iconCfg.color} />
+            </View>
+          )}
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.message}>{message}</Text>
+          {steps && steps.length > 0 && (
+            <View style={styles.stepsContainer}>
+              {steps.map((step, idx) => (
+                <Text key={idx} style={styles.stepText}>{idx + 1}. {step}</Text>
+              ))}
+            </View>
+          )}
+          <View style={[styles.actions, !secondaryButton && styles.actionsSingle]}>
+            {secondaryButton && (
+              <Pressable style={styles.secondaryButton} onPress={handleSecondary}>
+                <Text style={styles.secondaryText}>{secondaryButton}</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={[
+                styles.primaryButton,
+                { backgroundColor: primColors.bg },
+                !secondaryButton && styles.primaryButtonFull,
+              ]}
+              onPress={handlePrimary}
+            >
+              <Text style={[styles.primaryText, { color: primColors.text }]}>{primaryButton}</Text>
+            </Pressable>
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -131,6 +197,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 24,
     elevation: 8,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#efe7da',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   iconContainer: {
     width: 64,
@@ -177,7 +255,6 @@ const styles = StyleSheet.create({
   primaryButton: {
     flex: 1,
     height: 52,
-    backgroundColor: '#486730',
     borderRadius: 9999,
     justifyContent: 'center',
     alignItems: 'center',
@@ -189,7 +266,6 @@ const styles = StyleSheet.create({
   primaryText: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 16,
-    color: '#ffffff',
   },
   secondaryButton: {
     flex: 1,
