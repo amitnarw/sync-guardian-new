@@ -87,7 +87,14 @@ export default function SettingsScreen() {
       const { error } = await supabase.functions.invoke('ping-child', {
         body: { child_device_id: childDeviceId },
       });
-      if (error) throw error;
+      if (error) {
+        let realMsg = error.message;
+        try {
+          const body = error.context && await error.context.json();
+          if (body?.error) realMsg = body.error;
+        } catch {}
+        throw new Error(realMsg);
+      }
       showModal({
         title: 'Ping Sent',
         message: 'Wake-up signal sent to child device.',
@@ -113,9 +120,23 @@ export default function SettingsScreen() {
       primaryVariant: 'destructive',
       onPrimaryPress: async () => {
         try {
-          await supabase.functions.invoke('revoke-pair', { body: { pair_id: pairId } });
-        } catch { }
-        setChildren(children.filter(c => c.id !== pairId));
+          const { error } = await supabase.functions.invoke('revoke-pair', { body: { pair_id: pairId } });
+          if (error) {
+            let realMsg = error.message;
+            try {
+              const body = error.context && await error.context.json();
+              if (body?.error) realMsg = body.error;
+            } catch {}
+            throw new Error(realMsg);
+          }
+          setChildren(children.filter(c => c.id !== pairId));
+        } catch (e: any) {
+          showModal({
+            title: 'Unpair Failed',
+            message: e?.message || 'Could not unpair the child device. Please try again.',
+            icon: 'error',
+          });
+        }
       },
       secondaryButton: 'Cancel',
     });

@@ -1,6 +1,6 @@
 import { AppRegistry } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { bufferNotification, flushBuffer, getProcessedKeysSet, addToProcessedKeys } from './mmkv-buffer';
+import { bufferNotification, flushBuffer, getProcessedKeysSet, addToProcessedKeys, QUEUE_SCHEMA_VERSION } from './mmkv-buffer';
 import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
@@ -29,6 +29,7 @@ export const headlessNotificationListener = async ({ notification }: { notificat
           : new Date().toISOString(),
         notification_key: parsed.notification_key || null,
         app_icon_base64: parsed.app_icon_base64 || null,
+        _schemaVersion: QUEUE_SCHEMA_VERSION,
       };
       await bufferNotification(fallbackPayload);
       return;
@@ -75,7 +76,15 @@ export const headlessNotificationListener = async ({ notification }: { notificat
 
       await flushBuffer();
     } catch (e) {
-      logger.warn('Failed to send notification, buffering...', e);
+      let realMsg = e instanceof Error ? e.message : 'unknown';
+      try {
+        const ctx = (e as any)?.context;
+        if (ctx) {
+          const body = await ctx.json();
+          if (body?.error) realMsg = body.error;
+        }
+      } catch {}
+      logger.warn('Failed to send notification, buffering...', new Error(realMsg));
       await bufferNotification(payload);
     }
   } catch (err) {

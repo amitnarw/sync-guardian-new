@@ -40,6 +40,14 @@ interface AuthState {
   sessionChecked: boolean;
   setSessionChecked: (checked: boolean) => void;
 
+  pairRevokedAt: number | null;
+  markPairRevoked: () => void;
+
+  syncDeviceErrorCount: number;
+  syncDeviceError: string | null;
+  incrementSyncDeviceError: (msg: string) => void;
+  clearSyncDeviceError: () => void;
+
   resetAuth: () => void;
   clearPair: () => void;
 }
@@ -81,6 +89,17 @@ export const useAuthStore = create<AuthState>()(
       sessionChecked: false,
       setSessionChecked: (checked) => set({ sessionChecked: checked }),
 
+      pairRevokedAt: null,
+      markPairRevoked: () => set({ pairRevokedAt: Date.now() }),
+
+      syncDeviceErrorCount: 0,
+      syncDeviceError: null,
+      incrementSyncDeviceError: (msg) => set((s) => ({
+        syncDeviceErrorCount: s.syncDeviceErrorCount + 1,
+        syncDeviceError: msg,
+      })),
+      clearSyncDeviceError: () => set({ syncDeviceErrorCount: 0, syncDeviceError: null }),
+
       clearPair: () => set({ pairId: null, deviceId: null }),
 
       resetAuth: () => {
@@ -96,6 +115,9 @@ export const useAuthStore = create<AuthState>()(
           userId: null,
           profileImage: null,
           displayName: null,
+          pairRevokedAt: null,
+          syncDeviceErrorCount: 0,
+          syncDeviceError: null,
         });
       },
     }),

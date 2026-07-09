@@ -1,6 +1,5 @@
 import { useRef, useCallback } from 'react';
 import { Platform } from 'react-native';
-import { resolveAppInfo } from 'notification-access';
 
 const cache = new Map<string, { label: string; icon: string | null }>();
 
@@ -25,7 +24,9 @@ export function useAppMetadata() {
 
     pendingRef.current.add(packageName);
     try {
-      const info = await resolveAppInfo(packageName);
+      // Lazy-load the Android-only native module only when needed.
+      const { resolveAppInfo } = require('notification-access');
+      const info = resolveAppInfo(packageName);
       cache.set(packageName, info);
       return info;
     } catch {

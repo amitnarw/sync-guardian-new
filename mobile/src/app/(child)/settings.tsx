@@ -11,6 +11,7 @@ import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
 import { UserAvatar } from '@/components/user-avatar';
 import { supabase } from '@/lib/supabase';
+import { clearBufferedNotifications } from '@/services/mmkv-buffer';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -95,11 +96,28 @@ export default function ChildSettingsScreen() {
         setIsDisconnecting(true);
         try {
           if (pairId) {
-            await supabase.functions.invoke('revoke-pair', { body: { pair_id: pairId } });
+            const { error } = await supabase.functions.invoke('revoke-pair', { body: { pair_id: pairId } });
+            if (error) {
+              let realMsg = error.message;
+              try {
+                const body = error.context && await error.context.json();
+                if (body?.error) realMsg = body.error;
+              } catch {}
+              throw new Error(realMsg);
+            }
           }
-        } catch { }
-        clearPair();
-        router.replace('/pairing');
+          clearPair();
+          clearBufferedNotifications();
+          router.replace('/pairing');
+        } catch (e: any) {
+          showModal({
+            title: 'Disconnect Failed',
+            message: e?.message || 'Could not disconnect from the parent device. Please try again.',
+            icon: 'error',
+          });
+        } finally {
+          setIsDisconnecting(false);
+        }
       },
       secondaryButton: 'Cancel',
     });

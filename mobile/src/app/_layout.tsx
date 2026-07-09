@@ -147,8 +147,18 @@ export default function RootLayout() {
             push_token: pushToken,
           },
         });
+        useAuthStore.getState().clearSyncDeviceError();
       } catch (e) {
-        logger.warn('Failed to sync device:', e);
+        let realMsg = e instanceof Error ? e.message : 'unknown';
+        try {
+          const ctx = (e as any)?.context;
+          if (ctx) {
+            const body = await ctx.json();
+            if (body?.error) realMsg = body.error;
+          }
+        } catch {}
+        logger.warn('Failed to sync device:', new Error(realMsg));
+        useAuthStore.getState().incrementSyncDeviceError(realMsg);
       }
     }
     syncDevice();
@@ -158,6 +168,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (!deviceId || !isAuthenticated) return;
 
+    const { incrementSyncDeviceError, clearSyncDeviceError } = useAuthStore.getState();
+
     const updatePresence = async (foreground: boolean) => {
       try {
         await supabase.functions.invoke('sync-device', {
@@ -166,26 +178,46 @@ export default function RootLayout() {
             is_foreground: foreground,
           },
         });
-      } catch {}
+        clearSyncDeviceError();
+      } catch (e) {
+        let realMsg = e instanceof Error ? e.message : 'unknown';
+        try {
+          const ctx = (e as any)?.context;
+          if (ctx) {
+            const body = await ctx.json();
+            if (body?.error) realMsg = body.error;
+          }
+        } catch {}
+        logger.warn('Failed to update presence:', new Error(realMsg));
+        incrementSyncDeviceError(realMsg);
+      }
     };
+
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    const startHeartbeat = () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      heartbeatInterval = setInterval(() => {
+        const { syncDeviceErrorCount } = useAuthStore.getState();
+        if (syncDeviceErrorCount >= 5) {
+          return;
+        }
+        updatePresence(true);
+      }, 30000);
+    };
+    startHeartbeat();
 
     const subscription = AppState.addEventListener('change', (nextState) => {
       const foreground = nextState === 'active';
+      clearSyncDeviceError();
+      if (foreground) {
+        startHeartbeat();
+      }
       updatePresence(foreground);
       // Flush buffered notifications when app returns to foreground
       if (foreground && userRole === 'child') {
         flushBuffer().catch(() => {});
       }
     });
-
-    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-    const startHeartbeat = () => {
-      if (heartbeatInterval) clearInterval(heartbeatInterval);
-      heartbeatInterval = setInterval(() => {
-        updatePresence(true);
-      }, 30000);
-    };
-    startHeartbeat();
 
     return () => {
       subscription.remove();

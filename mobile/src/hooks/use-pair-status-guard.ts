@@ -11,7 +11,12 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
   const { showModal } = useAppModal()
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
+  const shownRef = useRef(false);
+
   const handleRevoked = useCallback(() => {
+    if (shownRef.current) return;
+    shownRef.current = true;
+
     if (role === 'child') {
       clearPair()
       showModal({
@@ -74,6 +79,7 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
     channelRef.current = channel
 
     return () => {
+      shownRef.current = false
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current)
         channelRef.current = null

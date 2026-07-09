@@ -1,0 +1,28 @@
+diff --git a/node_modules/expo-keep-awake/src/index.ts b/node_modules/expo-keep-awake/src/index.ts
+index b7a856e..3a3908f 100644
+--- a/node_modules/expo-keep-awake/src/index.ts
++++ b/node_modules/expo-keep-awake/src/index.ts
+@@ -30,11 +30,18 @@ export function useKeepAwake(tag?: string, options?: KeepAwakeOptions): void {
+ 
+   useEffect(() => {
+     let isMounted = true;
+-    activateKeepAwakeAsync(tagOrDefault).then(() => {
+-      if (isMounted && ExpoKeepAwake.addListenerForTag && options?.listener) {
+-        addListener(tagOrDefault, options.listener);
+-      }
+-    });
++    activateKeepAwakeAsync(tagOrDefault)
++      .then(() => {
++        if (isMounted && ExpoKeepAwake.addListenerForTag && options?.listener) {
++          addListener(tagOrDefault, options.listener);
++        }
++      })
++      .catch(() => {
++        // Keep-awake activation can reject when the Android Activity is being
++        // destroyed/recreated (Fast Refresh, rotation, rapid route transitions).
++        // The hook is dev-only (gated in expo/src/launch/registerRootComponent.tsx),
++        // so the next mount re-attempts activation — safe to ignore.
++      });
+     return () => {
+       isMounted = false;
+       if (options?.suppressDeactivateWarnings) {

@@ -1,11 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '@/services/logger';
+import { useAuthStore } from '@/hooks/use-auth-store';
 
 const PENDING_QUEUE_KEY = 'pending_notifications_queue';
 const PROCESSED_KEYS_KEY = 'processed_notification_keys';
 const MAX_QUEUE_SIZE = 500;
 const BATCH_SIZE = 50;
 const MAX_PROCESSED_KEYS = 500;
+
+// Bump when the buffered payload shape or flush behavior changes.
+// Items with an older version are dropped on flush (one-time cleanup of stale data).
+export const QUEUE_SCHEMA_VERSION = 2;
 
 export interface NotificationPayload {
   child_device_id: string;
@@ -18,6 +23,7 @@ export interface NotificationPayload {
   notification_key: string | null;
   app_icon_base64: string | null;
   _retryCount?: number;
+  _schemaVersion?: number;
 }
 
 function dedupKey(p: NotificationPayload): string {
@@ -104,7 +110,7 @@ export async function bufferNotification(payload: NotificationPayload) {
   const key = dedupKey(payload);
   if (queue.some((q) => dedupKey(q) === key)) return;
 
-  queue.push(payload);
+  queue.push({ ...payload, _schemaVersion: QUEUE_SCHEMA_VERSION });
 
   while (queue.length > MAX_QUEUE_SIZE) {
     queue.shift();
@@ -134,54 +140,115 @@ async function replaceBufferedNotifications(queue: NotificationPayload[]) {
   await writeQueue(queue);
 }
 
+let isFlushing = false;
+
+/** Returns true for HTTP statuses that should be retried (transient), false to drop. */
+function isRetryableStatus(status: number | undefined): boolean {
+  if (status === undefined) return true; // network/unknown error -> retry
+  // 4xx (except 429) are permanent client errors; drop them.
+  if (status >= 400 && status < 500) return status === 429;
+  // 5xx are transient; retry.
+  if (status >= 500 && status < 600) return true;
+  return false;
+}
+
+/** Fill empty pair_id/child_device_id from current auth state at flush time. */
+function resolveIdsFromStore(item: NotificationPayload): NotificationPayload {
+  const state = useAuthStore.getState();
+  const pairId = item.pair_id || state.pairId || '';
+  const childDeviceId = item.child_device_id || state.deviceId || '';
+  return { ...item, pair_id: pairId, child_device_id: childDeviceId };
+}
+
 export const flushBuffer = async () => {
-  const queue = await readQueue();
-  if (queue.length === 0) return;
+  if (isFlushing) return;
+  isFlushing = true;
+  try {
+    const queue = await readQueue();
+    if (queue.length === 0) return;
 
-  const { supabase } = require('@/lib/supabase');
-  const processedKeys = getProcessedKeysSet();
-  const remaining: NotificationPayload[] = [];
-  const sentNotifications: NotificationPayload[] = [];
+    const { supabase } = require('@/lib/supabase');
+    const remaining: NotificationPayload[] = [];
 
-  for (let i = 0; i < queue.length; i += BATCH_SIZE) {
-    const batch = queue.slice(i, i + BATCH_SIZE);
-    try {
-      const { error } = await supabase.functions.invoke('ingest-child-notification', {
-        body: { notifications: batch },
-      });
-      if (error) {
+    // One-time cleanup: drop stale payloads from a previous queue schema.
+    let droppedStale = 0;
+
+    for (let i = 0; i < queue.length; i += BATCH_SIZE) {
+      let batch = queue.slice(i, i + BATCH_SIZE).map(resolveIdsFromStore);
+
+      // Filter out items that cannot be sent (old schema or missing ids after resolution).
+      const valid: NotificationPayload[] = [];
+      for (const n of batch) {
+        if ((n as any)._schemaVersion !== undefined && (n as any)._schemaVersion < QUEUE_SCHEMA_VERSION) {
+          droppedStale++;
+          continue;
+        }
+        if (!n.pair_id || !n.child_device_id) {
+          logger.warn('flushBuffer: dropping item with missing pair_id/child_device_id', { title: n.notification_title });
+          continue;
+        }
+        valid.push(n);
+      }
+      batch = valid;
+
+      if (batch.length === 0) continue;
+
+      try {
+        const { error, data } = await supabase.functions.invoke('ingest-child-notification', {
+          body: { notifications: batch },
+        });
+        if (error) {
+          let realMsg = error.message;
+          let status: number | undefined;
+          try {
+            const ctx = (error as any)?.context;
+            if (ctx?.status) status = ctx.status;
+            const body = ctx && (await ctx.json?.());
+            if (body?.error) realMsg = body.error;
+          } catch {}
+          logger.error('Flush batch failed', new Error(`status=${status ?? 'n/a'} ${realMsg}`));
+          if (isRetryableStatus(status)) {
+            for (const n of batch) {
+              const retry = (n._retryCount ?? 0) + 1;
+              if (retry <= 5) {
+                remaining.push({ ...n, _retryCount: retry });
+              }
+            }
+          }
+        } else if (data && (data as any).reason === 'pair_inactive') {
+          logger.info('Flush batch dropped: pair inactive');
+        } else {
+          // Track sent notification keys
+          for (const n of batch) {
+            if (n.notification_key) {
+              addToProcessedKeys(n.notification_key);
+            }
+          }
+        }
+      } catch (err) {
+        // Network/unknown error -> retry
         for (const n of batch) {
           const retry = (n._retryCount ?? 0) + 1;
           if (retry <= 5) {
             remaining.push({ ...n, _retryCount: retry });
           }
         }
-        logger.error('Flush batch failed, re-buffered', error);
-      } else {
-        // Track sent notification keys
-        for (const n of batch) {
-          if (n.notification_key) {
-            addToProcessedKeys(n.notification_key);
-          }
-          sentNotifications.push(n);
-        }
+        logger.error('Flush batch error, re-buffered', err);
       }
-    } catch (err) {
-      for (const n of batch) {
-        const retry = (n._retryCount ?? 0) + 1;
-        if (retry <= 5) {
-          remaining.push({ ...n, _retryCount: retry });
-        }
-      }
-      logger.error('Flush batch error, re-buffered', err);
     }
-  }
 
-  if (remaining.length === 0) {
-    await deleteQueue();
-    logger.info('Successfully flushed buffered notifications');
-  } else {
-    await replaceBufferedNotifications(remaining);
-    logger.info(`Flushed partially. ${remaining.length} items re-buffered for retry.`);
+    if (droppedStale > 0) {
+      logger.info(`flushBuffer: dropped ${droppedStale} stale buffered item(s).`);
+    }
+
+    if (remaining.length === 0) {
+      await deleteQueue();
+      logger.info('Successfully flushed buffered notifications');
+    } else {
+      await replaceBufferedNotifications(remaining);
+      logger.info(`Flushed partially. ${remaining.length} items re-buffered for retry.`);
+    }
+  } finally {
+    isFlushing = false;
   }
 };

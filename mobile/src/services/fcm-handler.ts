@@ -11,8 +11,8 @@ function handlePairRevoked(revokedBy: unknown) {
     useAuthStore.getState().clearPair()
     logger.info('Pair revoked by parent — cleared local pair state')
   } else if (revokedBy === 'child') {
-    // Parent device received notification that child self-disconnected
-    logger.info('Child self-disconnected — parent will refresh on next focus')
+    useAuthStore.getState().markPairRevoked()
+    logger.info('Child self-disconnected — pair revoke signal sent')
   }
 }
 

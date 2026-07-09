@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Modal, ScrollView } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -28,6 +28,9 @@ export default function PairingScreen() {
   const [parentMode, setParentMode] = useState<'options' | 'scan' | 'manual'>('options');
   const [torch, setTorch] = useState(false);
 
+  // Prevents the camera from firing multiple claims within 2 seconds of a scan
+  const lastScanRef = useRef(0);
+
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -52,7 +55,7 @@ export default function PairingScreen() {
     }
   }, [userRole]);
 
-  // Listen for the parent device claiming the token (realtime + polling fallback)
+  // Listen for the parent device claiming the token, and auto-regenerate on failure/expiry
   useEffect(() => {
     if (!pairingData?.token) return;
 
@@ -60,6 +63,8 @@ export default function PairingScreen() {
 
     const checkToken = async () => {
       if (cancelled) return;
+      // Avoid regenerating while a regeneration is already in flight
+      if (isRegenerating) return;
 
       const { data, error } = await supabase
         .from('pairing_tokens')
@@ -72,34 +77,33 @@ export default function PairingScreen() {
         return false;
       }
 
-      logger.debug('Pairing: polling result received');
+      // Token row is gone (rotated/deleted elsewhere) -> get a fresh one
+      if (!data) {
+        logger.warn('Pairing: token row missing, regenerating');
+        generatePairingToken(true);
+        return false;
+      }
 
-      if (data?.consumed_at) {
-        let newPairId = data.pair_id;
-
-        // If pair_id is null (edge case), fallback to querying pairs by child_device_id
-        if (!newPairId && pairingData.child_device_id) {
-          logger.debug('Pairing: pair_id null, looking up by child_device_id');
-          const { data: pairData } = await supabase
-            .from('pairs')
-            .select('id')
-            .eq('child_device_id', pairingData.child_device_id)
-            .in('status', ['active', 'pending'])
-            .limit(1);
-          if (pairData && pairData.length > 0) {
-            newPairId = pairData[0].id;
-            logger.debug('Pairing: found pair via fallback');
-          }
-        }
-
-        if (newPairId) {
-          setPairId(newPairId);
+      if (data.consumed_at) {
+        if (data.pair_id) {
+          setPairId(data.pair_id);
           router.replace('/onboarding');
           return true;
-        } else {
-          logger.warn('Pairing: token consumed but no pair_id found');
         }
+        // Consumed but no pair created -> failed/partial claim -> regenerate immediately
+        logger.warn('Pairing: token consumed without pair_id, regenerating');
+        generatePairingToken(true);
+        return false;
       }
+
+      // Not consumed but expired -> regenerate automatically so a fresh code is shown
+      const expiresAt = new Date(pairingData.expires_at).getTime();
+      if (expiresAt <= Date.now()) {
+        logger.warn('Pairing: token expired, regenerating');
+        generatePairingToken(true);
+        return false;
+      }
+
       return false;
     };
 
@@ -113,7 +117,7 @@ export default function PairingScreen() {
       cancelled = true;
       clearInterval(pollInterval);
     };
-  }, [pairingData]);
+  }, [pairingData, isRegenerating]);
 
   // Countdown timer for pairing code expiry
   useEffect(() => {
@@ -177,22 +181,38 @@ export default function PairingScreen() {
 
   const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
     if (scanned) return;
+    const now = Date.now();
+    if (now - lastScanRef.current < 2000) return;
+    lastScanRef.current = now;
     setScanned(true);
     verifyToken(data);
   };
 
-  const verifyToken = async (tokenOrCode: string) => {
+  const verifyToken = async (tokenOrCodeRaw: string) => {
     try {
       setIsVerifying(true);
+
+      // Sanitize scanned/typed input
+      const tokenOrCode = (tokenOrCodeRaw || '').trim();
+      if (!tokenOrCode) {
+        throw new Error('Scanned code is empty. Please try again.');
+      }
 
       const payload: Record<string, string> = {
         device_name: 'Parent Device'
       };
 
-      if (tokenOrCode.length === 6) {
-        payload.code = tokenOrCode;
-      } else if (tokenOrCode.includes('.')) {
+      if (tokenOrCode.includes('.')) {
+        // Looks like a JWT (QR code path)
+        const parts = tokenOrCode.split('.');
+        if (parts.length !== 3 || parts.some((p) => !p)) {
+          throw new Error(
+            'This QR code is not a Sync Guardian pairing code. Enter the 6-digit code manually instead.'
+          );
+        }
         payload.qr_jwt = tokenOrCode;
+      } else if (tokenOrCode.length === 6) {
+        payload.code = tokenOrCode;
       } else {
         payload.token = tokenOrCode;
       }
@@ -207,7 +227,8 @@ export default function PairingScreen() {
       setPairId(data.data.id);
       router.replace('/onboarding');
     } catch (err: unknown) {
-      let msg = 'Could not complete pairing. Please check the code and try again.';
+      let msg =
+        'Pairing failed. Ask the child to wait for a new code, then scan again.';
 
       if (err instanceof FunctionsHttpError) {
         try {
@@ -223,8 +244,12 @@ export default function PairingScreen() {
         msg = err.message;
       }
 
-      if (msg.includes('failed to send a request')) {
-        msg = 'Could not connect. Please check your internet.';
+      // Make expiry/usage errors actionable
+      if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expired')) {
+        msg =
+          'This pairing code has expired or already been used. Ask the child to tap Regenerate, then scan the new code.';
+      } else if (msg.includes('failed to send a request')) {
+        msg = 'Could not connect. Please check your internet and try again.';
       }
 
       setErrorMessage(msg);
@@ -264,14 +289,23 @@ export default function PairingScreen() {
           {pairingData ? (
             <>
               <View style={styles.qrContent}>
-                <View style={[styles.qrWrapper, isExpired && styles.expired]}>
-                  <QRCode
-                    value={pairingData.qr_jwt}
-                    size={200}
-                    color="#363228"
-                    backgroundColor="#ffffff"
-                  />
-                </View>
+                {pairingData.qr_jwt ? (
+                  <View style={[styles.qrWrapper, isExpired && styles.expired]}>
+                    <QRCode
+                      value={pairingData.qr_jwt}
+                      size={200}
+                      color="#363228"
+                      backgroundColor="#ffffff"
+                    />
+                  </View>
+                ) : (
+                  <View style={[styles.qrWrapper, styles.expired]}>
+                    <MaterialIcons name="qr-code-2" size={48} color="#ba1a1a" />
+                    <Text style={[styles.codeText, styles.expiredText]}>
+                      QR unavailable
+                    </Text>
+                  </View>
+                )}
                 <Text style={styles.orText}>OR ENTER CODE</Text>
                 <View style={[styles.codeWrapper, isExpired && styles.expired]}>
                   <Text style={[styles.codeText, isExpired && styles.expiredText]}>

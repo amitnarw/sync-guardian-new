@@ -71,8 +71,8 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
   const initIdRef = useRef(0);
   const cancelledRef = useRef(false);
 
-  const removeAllChannels = useCallback(() => {
-    channelsRef.current.forEach((ch) => supabase.removeChannel(ch));
+  const removeAllChannels = useCallback(async () => {
+    await Promise.all(channelsRef.current.map((ch) => supabase.removeChannel(ch)));
     channelsRef.current = [];
   }, []);
 
@@ -99,7 +99,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
     }));
 
     try {
-      removeAllChannels();
+      await removeAllChannels();
 
       const auth = useAuthStore.getState();
       const dId = auth.deviceId;
@@ -178,8 +178,8 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
 
       if (cancelledRef.current || initId !== initIdRef.current) return;
 
-      const deviceChannel = supabase.channel(`device_presence_${resolvedPair.child_device_id}`);
-      const notifChannel = supabase.channel(`notifications_${resolvedPair.id}`);
+      const deviceChannel = supabase.channel(`pairdata_device_${resolvedPair.child_device_id}`);
+      const notifChannel = supabase.channel(`pairdata_notifications_${resolvedPair.id}`);
 
       deviceChannel.on(
         'postgres_changes',
@@ -216,8 +216,14 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
         },
       );
 
-      deviceChannel.subscribe();
-      notifChannel.subscribe();
+      // Pair revocation is handled by usePairStatusGuard, so we deliberately do
+      // not subscribe to `pairs` here. This avoids channel-name collisions and
+      // re-subscribing callbacks after subscribe() (the source of the warning).
+
+      if (cancelledRef.current || initId !== initIdRef.current) return;
+
+      await deviceChannel.subscribe();
+      await notifChannel.subscribe();
 
       channelsRef.current = [deviceChannel, notifChannel];
     } catch (err) {
@@ -241,6 +247,15 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
       removeAllChannels();
     };
   }, [deviceId, storePairId, isParent, init, removeAllChannels]);
+
+  const pairRevokedAt = useAuthStore((s) => s.pairRevokedAt);
+  const prevPairRevokedAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (pairRevokedAt && pairRevokedAt !== prevPairRevokedAt.current) {
+      prevPairRevokedAt.current = pairRevokedAt;
+      init(true);
+    }
+  }, [pairRevokedAt, init]);
 
   const refresh = useCallback(async () => {
     await init(true);
