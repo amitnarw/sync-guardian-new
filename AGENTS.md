@@ -20,7 +20,8 @@
 
 - Never commit API keys, JWT secrets, or service account JSONs.
 - Use `logger` from `@/services/logger` instead of `console.*` in production code.
-- Never expose real UUIDs or tokens in log output.
+- Edge functions use `logger` from `supabase/functions/_shared/logger.ts` instead of `console.*`. Error responses are sanitized via `mapError` so internal details (env vars, SQL errors, FCM errors) are never returned to clients.
+- Never expose real UUIDs or tokens in log output. `logger` sanitizes UUID/token-like values from log metadata automatically.
 - Validate all inputs in Edge Functions (`_shared/validation.ts`).
 - Use `crypto.getRandomValues()` for cryptographic randomness.
 - HMAC-SHA256 for JWT signing (QR codes), not raw tokens in URLs.
@@ -48,3 +49,8 @@
 
 - Edge Functions: Deno test framework
 - Mobile: Jest + React Native Testing Library
+
+## Verification Commands
+
+- **Typecheck (mobile)**: `npx tsc --noEmit` (no dedicated script; `tsconfig.json` has strict mode + `@/*` path alias)
+- **Lint (mobile)**: `npm run lint` (runs `expo lint`)

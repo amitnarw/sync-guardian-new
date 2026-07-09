@@ -3,7 +3,8 @@ import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
 import { sendParentPush } from '../_shared/fcm.ts'
-import { isValidUUID, isValidString, sanitizeString, requireBody, ValidationError } from '../_shared/validation.ts'
+import { isValidUUID, isValidString, sanitizeString, requireBody } from '../_shared/validation.ts'
+import { logger, mapError } from '../_shared/logger.ts'
 
 function deterministicKey(n: Record<string, unknown>): string {
   const raw = `${n.source_package || ''}|${n.notification_posted_at || ''}|${n.notification_title || ''}|${n.notification_body || ''}`
@@ -91,8 +92,8 @@ serve(async (req) => {
 
     if (!pairData || pairData.status !== 'active') {
       return new Response(
-        JSON.stringify({ error: 'Invalid or inactive pair' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
+        JSON.stringify({ data: [], count: 0, dropped: rawNotifications.length, reason: 'pair_inactive' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
       )
     }
 
@@ -140,83 +141,87 @@ serve(async (req) => {
     const notificationIds = inserted.map((r: any) => r.id)
 
     if (parentDevice) {
-      const isForeground = parentDevice.is_foreground === true
+      try {
+        const isForeground = parentDevice.is_foreground === true
 
-      if (isForeground) {
-        await adminClient
-          .from('mirrored_notifications')
-          .update({ delivery_mode: 'realtime' })
-          .in('id', notificationIds)
-      }
+        if (isForeground) {
+          await adminClient
+            .from('mirrored_notifications')
+            .update({ delivery_mode: 'realtime' })
+            .in('id', notificationIds)
+        }
 
-      const pushToken = parentDevice.push_token
-      if (pushToken) {
-        const batchCount = inserted.length
-        if (batchCount >= 4) {
-          const firstApp = rows[0]?.source_app_name || 'apps'
-          const result = await sendParentPush(
-            pushToken,
-            `${batchCount} new notifications`,
-            `${batchCount} notification${batchCount > 1 ? 's' : ''} from ${firstApp}${batchCount > 1 ? ' and others' : ''}`,
-            batchCount,
-          )
-          if (result.success) {
-            await adminClient
-              .from('mirrored_notifications')
-              .update({ delivery_mode: 'push' })
-              .in('id', notificationIds)
-          }
-          if (result.unregisteredToken) {
-            await adminClient
-              .from('devices')
-              .update({ push_token: null })
-              .eq('id', parentDeviceId)
-          }
-        } else {
-          const results = await Promise.all(
-            rows.map(async (n, idx) => {
-              const sent = await sendParentPush(
-                pushToken,
-                n.source_app_name || 'Notification',
-                n.notification_title.slice(0, 120) || '',
-              )
-              return { id: (inserted[idx] as any).id, success: sent.success }
-            })
-          )
+        const pushToken = parentDevice.push_token
+        if (pushToken) {
+          const batchCount = inserted.length
+          if (batchCount >= 4) {
+            const firstApp = rows[0]?.source_app_name || 'apps'
+            const result = await sendParentPush(
+              pushToken,
+              `${batchCount} new notifications`,
+              `${batchCount} notification${batchCount > 1 ? 's' : ''} from ${firstApp}${batchCount > 1 ? ' and others' : ''}`,
+              batchCount,
+            )
+            if (result.success) {
+              await adminClient
+                .from('mirrored_notifications')
+                .update({ delivery_mode: 'push' })
+                .in('id', notificationIds)
+            }
+            if (result.unregisteredToken) {
+              await adminClient
+                .from('devices')
+                .update({ push_token: null })
+                .eq('id', parentDeviceId)
+            }
+          } else {
+            const results = await Promise.all(
+              rows.map(async (n, idx) => {
+                const sent = await sendParentPush(
+                  pushToken,
+                  n.source_app_name || 'Notification',
+                  n.notification_title.slice(0, 120) || '',
+                )
+                return { id: (inserted[idx] as any).id, success: sent.success }
+              })
+            )
 
-          const succeededIds = results.filter(r => r.success).map(r => r.id)
-          if (succeededIds.length > 0) {
-            await adminClient
-              .from('mirrored_notifications')
-              .update({ delivery_mode: 'push' })
-              .in('id', succeededIds)
-          }
+            const succeededIds = results.filter(r => r.success).map(r => r.id)
+            if (succeededIds.length > 0) {
+              await adminClient
+                .from('mirrored_notifications')
+                .update({ delivery_mode: 'push' })
+                .in('id', succeededIds)
+            }
 
-          const hasUnregistered = results.some(r => !r.success)
-          if (hasUnregistered) {
-            await adminClient
-              .from('devices')
-              .update({ push_token: null })
-              .eq('id', parentDeviceId)
+            const hasUnregistered = results.some(r => !r.success)
+            if (hasUnregistered) {
+              await adminClient
+                .from('devices')
+                .update({ push_token: null })
+                .eq('id', parentDeviceId)
+            }
           }
         }
-      }
-    }
 
-    // Log push delivery attempts to push_delivery_logs
-    if (parentDevice?.push_token) {
-      const logRows = inserted.map((n: any) => ({
-        notification_id: n.id,
-        pair_id: pairId,
-        device_id: parentDeviceId,
-        delivery_mode: 'parent_push' as const,
-        status: (n as any).delivery_mode === 'push' ? 'success' as const : 'pending' as const,
-        attempted_at: new Date().toISOString(),
-      }))
-      await adminClient.from('push_delivery_logs').insert(logRows).then(
-        () => {},
-        () => {},
-      )
+        // Log push delivery attempts to push_delivery_logs
+        if (pushToken) {
+          const logRows = inserted.map((n: any) => ({
+            notification_id: n.id,
+            pair_id: pairId,
+            device_id: parentDeviceId,
+            delivery_mode: 'parent_push' as const,
+            status: (n as any).delivery_mode === 'push' ? 'success' as const : 'pending' as const,
+            attempted_at: new Date().toISOString(),
+          }))
+          await adminClient.from('push_delivery_logs').insert(logRows).then(
+            () => {},
+            () => {},
+          )
+        }
+      } catch (pushErr) {
+        logger.warn('ingest-child-notification', 'push delivery error (non-fatal)', pushErr)
+      }
     }
 
     return new Response(
@@ -224,14 +229,24 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {
-    const msg = error.message || 'Unknown error'
-    const status = msg.includes('Unauthorized') ? 401
-      : msg.includes('Too many') ? 429
-      : msg.includes('Not authorized') ? 403
-      : msg.includes('ValidationError') || msg.includes('Invalid') ? 400
-      : 400
+    const msg = error instanceof Error ? error.message : ''
+    const code = (error as any)?.code as string | undefined
+    // Surface a clear, actionable log if the dedup constraint is missing
+    if (code === '42P10') {
+      logger.error(
+        'ingest-child-notification',
+        'ON CONFLICT target missing unique constraint (unique_notification_key). Run the latest DB migration.',
+        msg,
+      )
+      return new Response(
+        JSON.stringify({ error: 'Notification storage is misconfigured. Please contact support.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
+      )
+    }
+    const { status, error: safeMsg } = mapError(error)
+    logger.error('ingest-child-notification', safeMsg, msg)
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: safeMsg }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
     )
   }

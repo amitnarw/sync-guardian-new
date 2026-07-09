@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.192.0/http/server.ts"
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
-import { isValidUUID, requireBody, ValidationError } from '../_shared/validation.ts'
+import { isValidUUID, requireBody } from '../_shared/validation.ts'
+import { logger, mapError } from '../_shared/logger.ts'
 
 serve(async (req) => {
   const corsResponse = handleCors(req)
@@ -27,16 +28,46 @@ serve(async (req) => {
     // Verify the user owns this device
     const { data: device } = await adminClient
       .from('devices')
-      .select('id')
+      .select('id, user_id')
       .eq('id', deviceId)
-      .eq('user_id', user.id)
       .single()
 
     if (!device) {
       return new Response(
-        JSON.stringify({ error: 'Device not found or not owned by user' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 },
+        JSON.stringify({ error: 'Device not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 },
       )
+    }
+
+    // If the device exists but belongs to a different user, check if it's still
+    // actively paired. If so, the user must unpair first. If not, repair ownership
+    // to handle stale persisted deviceId from a previous auth session.
+    if (device.user_id !== user.id) {
+      const { data: activePair } = await adminClient
+        .from('pairs')
+        .select('id')
+        .or(`parent_device_id.eq.${deviceId},child_device_id.eq.${deviceId}`)
+        .in('status', ['active', 'pending'])
+        .maybeSingle()
+
+      if (activePair) {
+        return new Response(
+          JSON.stringify({ error: 'Device is currently paired. Please unpair first.' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 },
+        )
+      }
+
+      const { error: reassignError } = await adminClient
+        .from('devices')
+        .update({ user_id: user.id })
+        .eq('id', deviceId)
+
+      if (reassignError) {
+        return new Response(
+          JSON.stringify({ error: 'Device registered to another account. Please re-register this device.' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 },
+        )
+      }
     }
 
     const now = new Date().toISOString()
@@ -68,14 +99,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {
-    const msg = error.message || 'Unknown error'
-    const status = msg.includes('Unauthorized') ? 401
-      : msg.includes('Too many') ? 429
-      : msg.includes('Not authorized') ? 403
-      : msg.includes('ValidationError') ? 400
-      : 400
+    const { status, error: safeMsg } = mapError(error)
+    logger.error('sync-device', safeMsg, error instanceof Error ? error.message : error)
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: safeMsg }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
     )
   }

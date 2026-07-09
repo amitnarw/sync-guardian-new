@@ -1,5 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+export class AuthError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AuthError'
+  }
+}
+
 export interface AuthenticatedUser {
   id: string
   email?: string
@@ -13,7 +20,7 @@ export async function verifyAuth(
   authHeader: string | null,
 ): Promise<AuthenticatedUser> {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('Missing or invalid Authorization header')
+    throw new AuthError('Missing or invalid Authorization header')
   }
 
   const supabaseClient = createClient(
@@ -27,7 +34,7 @@ export async function verifyAuth(
   const { data, error } = await supabaseClient.auth.getUser()
 
   if (error || !data?.user) {
-    throw new Error('Unauthorized: ' + (error?.message ?? 'Invalid token'))
+    throw new AuthError('Unauthorized: ' + (error?.message ?? 'Invalid token'))
   }
 
   return {

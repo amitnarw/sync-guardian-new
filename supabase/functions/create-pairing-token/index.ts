@@ -3,7 +3,8 @@ import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
 import { signQrJwt } from '../_shared/qr-jwt.ts'
-import { isValidString, sanitizeString, ValidationError } from '../_shared/validation.ts'
+import { isValidString, sanitizeString } from '../_shared/validation.ts'
+import { logger, mapError } from '../_shared/logger.ts'
 
 serve(async (req) => {
   const corsResponse = handleCors(req)
@@ -74,13 +75,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {
-    const msg = error.message || 'Unknown error'
-    const status = msg.includes('Unauthorized') ? 401
-      : msg.includes('Too many') ? 429
-      : msg.includes('ValidationError') ? 400
-      : 400
+    const { status, error: safeMsg } = mapError(error)
+    logger.error('create-pairing-token', safeMsg, error instanceof Error ? error.message : error)
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: safeMsg }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
     )
   }

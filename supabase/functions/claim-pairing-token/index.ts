@@ -3,7 +3,8 @@ import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth, checkRateLimit } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
 import { verifyQrJwt } from '../_shared/qr-jwt.ts'
-import { isValidString, sanitizeString, ValidationError } from '../_shared/validation.ts'
+import { isValidString, sanitizeString } from '../_shared/validation.ts'
+import { logger, mapError } from '../_shared/logger.ts'
 
 serve(async (req) => {
   const corsResponse = handleCors(req)
@@ -24,15 +25,23 @@ serve(async (req) => {
 
     // If QR JWT provided, verify and extract token/code
     if (body.qr_jwt) {
-      const qrPayload = await verifyQrJwt(body.qr_jwt)
-      if (!qrPayload) {
+      const result = await verifyQrJwt(body.qr_jwt)
+      if (!result.ok) {
+        // Log the reason (sanitized) without exposing the secret or token
+        logger.warn('claim-pairing-token', 'QR JWT verification failed', { reason: result.reason })
+        const message =
+          result.reason === 'expired'
+            ? 'This QR code has expired. Ask the child to tap Regenerate and scan the new code.'
+            : result.reason === 'bad_signature'
+              ? 'QR code signature is invalid. The pairing secret may be misconfigured.'
+              : 'This QR code is not valid. Ask the child to tap Regenerate and scan the new code.'
         return new Response(
-          JSON.stringify({ error: 'Invalid or expired QR code' }),
+          JSON.stringify({ error: message }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
         )
       }
-      token = qrPayload.token
-      code = qrPayload.code
+      token = result.payload.token
+      code = result.payload.code
     }
 
     if (!token && !code) {
@@ -56,14 +65,18 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {
-    const msg = error.message || 'Unknown error'
-    const status = msg.includes('Unauthorized') ? 401
-      : msg.includes('Too many') ? 429
-      : msg.includes('Invalid or expired') ? 400
-      : msg.includes('ValidationError') ? 400
-      : 400
+    const msg = error instanceof Error ? error.message : ''
+    const lower = msg.toLowerCase()
+    if (lower.includes('expired') || (lower.includes('invalid') && lower.includes('pair'))) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired pairing code.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
+      )
+    }
+    const { status, error: safeMsg } = mapError(error)
+    logger.error('claim-pairing-token', safeMsg, msg)
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: safeMsg }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
     )
   }

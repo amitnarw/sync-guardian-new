@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.192.0/http/server.ts"
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
+import { logger, mapError } from '../_shared/logger.ts'
 
 serve(async (req) => {
   const corsResponse = handleCors(req)
@@ -13,9 +14,15 @@ serve(async (req) => {
     try {
       const adminClient = getAdminClient()
       const { data, error } = await adminClient.from('devices').select('id').limit(1)
-      checks.database = error ? `error: ${error.message}` : true
+      if (error) {
+        logger.error('health', 'database check failed', error.message)
+        checks.database = 'degraded'
+      } else {
+        checks.database = true
+      }
     } catch (e) {
-      checks.database = `error: ${e.message}`
+      logger.error('health', 'database check threw', e instanceof Error ? e.message : e)
+      checks.database = 'degraded'
     }
 
     // Check FIREBASE_SERVICE_ACCOUNT_JSON
@@ -51,9 +58,11 @@ serve(async (req) => {
       },
     )
   } catch (error) {
+    const { status, error: safeMsg } = mapError(error)
+    logger.error('health', safeMsg, error instanceof Error ? error.message : error)
     return new Response(
-      JSON.stringify({ status: 'unhealthy', error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
+      JSON.stringify({ status: 'unhealthy', error: safeMsg }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
     )
   }
 })

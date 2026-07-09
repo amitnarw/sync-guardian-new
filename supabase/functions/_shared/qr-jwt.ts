@@ -54,10 +54,16 @@ export async function signQrJwt(payload: QrJwtPayload): Promise<string> {
   return `${signatureInput}.${signatureB64}`
 }
 
-export async function verifyQrJwt(jwt: string): Promise<QrJwtPayload | null> {
+export type QrJwtVerifyResult =
+  | { ok: true; payload: QrJwtPayload }
+  | { ok: false; reason: 'malformed' | 'bad_signature' | 'expired' | 'decode_error' }
+
+export async function verifyQrJwt(jwt: string): Promise<QrJwtVerifyResult> {
   try {
     const parts = jwt.split('.')
-    if (parts.length !== 3) return null
+    if (parts.length !== 3 || parts.some((p) => !p)) {
+      return { ok: false, reason: 'malformed' }
+    }
 
     const secret = getSecret()
     const key = await getHmacKey(secret)
@@ -67,13 +73,15 @@ export async function verifyQrJwt(jwt: string): Promise<QrJwtPayload | null> {
     const signatureToVerify = base64urlDecode(parts[2])
 
     const valid = await crypto.subtle.verify('HMAC', key, signatureToVerify, encoder.encode(signatureInput))
-    if (!valid) return null
+    if (!valid) return { ok: false, reason: 'bad_signature' }
 
     const payload: QrJwtPayload = JSON.parse(new TextDecoder().decode(base64urlDecode(parts[1])))
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return { ok: false, reason: 'expired' }
+    }
 
-    return payload
+    return { ok: true, payload }
   } catch {
-    return null
+    return { ok: false, reason: 'decode_error' }
   }
 }
