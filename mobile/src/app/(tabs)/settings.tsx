@@ -350,7 +350,14 @@ export default function SettingsScreen() {
                     </View>
                     <Text style={s.childNameText}>{child.device_name}</Text>
                   </View>
-                  <View style={s.childActions}>
+                   <View style={s.childActions}>
+                    <TouchableOpacity
+                      style={s.manageAppsSmallBtn}
+                      onPress={() => router.push({ pathname: '/app-filters', params: { pairId: child.id } })}
+                    >
+                      <Ionicons name="apps-outline" size={16} color={C.primary} />
+                      <Text style={s.manageAppsSmallText}>Apps</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity 
                       style={s.pingSmallBtn}
                       onPress={() => handlePingChild(child.child_device_id, child.id)}
@@ -713,6 +720,20 @@ const s = StyleSheet.create({
     backgroundColor: C.primaryContainer,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  manageAppsSmallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.primaryContainer,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 18,
+    gap: 4,
+  },
+  manageAppsSmallText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    color: C.primary,
   },
   disconnectSmallBtn: {
     backgroundColor: C.secondaryContainer,

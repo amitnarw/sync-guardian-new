@@ -456,3 +456,13 @@ entrypoint = "./functions/revoke-pair/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/sync-device/index.ts"
+
+[functions.sync-installed-apps]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/sync-installed-apps/index.ts"
+
+[functions.update-app-filters]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/update-app-filters/index.ts"

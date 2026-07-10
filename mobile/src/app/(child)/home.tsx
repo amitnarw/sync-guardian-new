@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Dimensions, Text, BackHandler, RefreshControl } from 'react-native';
+import { StyleSheet, ScrollView, View, Dimensions, Text, BackHandler, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -43,10 +43,11 @@ const C = {
 } as const;
 
 export default function ChildHome() {
-  const { pairId } = useAuthStore();
+  const { pairId, deviceId } = useAuthStore();
   const { showModal } = useAppModal();
   const [parentName, setParentName] = useState('Parent Device');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
 
   const fetchParentName = useCallback(async () => {
     if (!pairId) return;
@@ -90,6 +91,65 @@ export default function ChildHome() {
   useEffect(() => {
     fetchParentName();
   }, [fetchParentName]);
+
+  // Best-effort: keep the parent's app filter list in sync with the apps
+  // currently installed on this child device (covers pairs created before
+  // the app-selection feature existed).
+  useEffect(() => {
+    if (!deviceId) return;
+    (async () => {
+      try {
+        const { syncInstalledApps } = await import('@/services/installed-apps-sync');
+        await syncInstalledApps(deviceId);
+      } catch {
+        // Non-fatal: ingestion already drops notifications for unknown apps.
+      }
+    })();
+  }, [deviceId]);
+
+  // While the parent hasn't finished choosing apps, keep the child on a
+  // "waiting for parent" screen instead of the dashboard.
+  useEffect(() => {
+    if (!pairId) return;
+    let cancelled = false;
+
+    const checkSetup = async () => {
+      const { data, error } = await supabase
+        .from('pairs')
+        .select('parent_setup_completed')
+        .eq('id', pairId)
+        .single();
+      if (cancelled) return;
+      if (error || !data) {
+        setSetupCompleted(null);
+        return;
+      }
+      setSetupCompleted(!!data.parent_setup_completed);
+    };
+    checkSetup();
+
+    const channel = supabase
+      .channel(`child_setup_${pairId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pairs',
+          filter: `id=eq.${pairId}`,
+        },
+        (payload) => {
+          const completed = (payload.new as any)?.parent_setup_completed;
+          if (typeof completed === 'boolean') setSetupCompleted(completed);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [pairId]);
 
   const blurTargetRef = React.useRef<View>(null);
   
@@ -189,6 +249,29 @@ export default function ChildHome() {
       ],
     };
   });
+
+  if (setupCompleted === false) {
+    return (
+      <ThemedView style={s.container}>
+        <SafeAreaView style={s.waitingSafeArea} edges={['top']}>
+          <View style={s.waitingHeader}>
+            <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
+            <Text style={s.headerTitle}>Sync Guardian</Text>
+          </View>
+          <View style={s.waitingBody}>
+            <View style={s.waitingIconWrap}>
+              <MaterialCommunityIcons name="account-clock-outline" size={48} color={C.primary} />
+            </View>
+            <Text style={s.waitingTitle}>Almost there</Text>
+            <Text style={s.waitingText}>
+              Your parent is choosing which apps to monitor. Your dashboard will appear as soon as they finish setup.
+            </Text>
+            <ActivityIndicator style={s.waitingSpinner} color={C.primary} size="large" />
+          </View>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={s.container}>
@@ -554,5 +637,50 @@ const s = StyleSheet.create({
 
   bottomSpacer: {
     height: 130,
+  },
+
+  /* ---------- Parent setup waiting screen ---------- */
+  waitingSafeArea: {
+    flex: 1,
+  },
+  waitingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(255,248,240,0.80)',
+  },
+  waitingBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  waitingIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: C.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  waitingTitle: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 28,
+    color: C.onSurface,
+    marginBottom: 12,
+  },
+  waitingText: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 16,
+    lineHeight: 24,
+    color: C.onSurfaceVariant,
+    textAlign: 'center',
+    maxWidth: 320,
+  },
+  waitingSpinner: {
+    marginTop: 32,
   },
 });

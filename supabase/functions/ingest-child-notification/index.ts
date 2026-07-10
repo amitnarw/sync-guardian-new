@@ -97,8 +97,39 @@ serve(async (req) => {
       )
     }
 
+    // Load app filters so we only ingest notifications for enabled apps.
+    // Apps are disabled by default; notifications for unlisted/disabled apps are dropped.
+    const { data: filterRows } = await adminClient
+      .from('child_app_filters')
+      .select('package_name, is_enabled')
+      .eq('child_device_id', childDeviceId)
+
+    const allowedPackages = new Set<string>(
+      (filterRows ?? [])
+        .filter((f: { package_name: string; is_enabled: boolean }) => f.is_enabled === true)
+        .map((f) => f.package_name),
+    )
+
+    const kept: Record<string, unknown>[] = []
+    let droppedCount = 0
+    for (const n of rawNotifications) {
+      const pkg = sanitizeString(n.source_package, 200)
+      if (!pkg || !allowedPackages.has(pkg)) {
+        droppedCount++
+        continue
+      }
+      kept.push(n)
+    }
+
+    if (kept.length === 0) {
+      return new Response(
+        JSON.stringify({ data: [], count: 0, dropped: droppedCount, reason: 'app_filtered' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+      )
+    }
+
     const rows: NotificationRow[] = await Promise.all(
-      rawNotifications.map(async (n) => {
+      kept.map(async (n) => {
         const rawKey = n.notification_key as string | null
         return {
           pair_id: pairId,
@@ -225,7 +256,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ data: inserted, count: inserted.length }),
+      JSON.stringify({ data: inserted, count: inserted.length, dropped: droppedCount }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {

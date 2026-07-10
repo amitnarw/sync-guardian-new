@@ -32,4 +32,14 @@ export function resolveAppLabel(packageName: string): string {
   return NotificationAccessModule.resolveAppLabel(packageName)
 }
 
+export interface InstalledApp {
+  packageName: string
+  appName: string
+  appIconBase64: string | null
+}
+
+export function getInstalledApps(): InstalledApp[] {
+  return NotificationAccessModule.getInstalledApps() ?? []
+}
+
 export { NotificationAccessModule }

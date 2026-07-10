@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, ScrollView, View, TouchableOpacity, Text, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 
 import { ThemedView } from '@/components/themed-view';
 import { UserAvatar } from '@/components/user-avatar';
@@ -43,70 +44,7 @@ const C = {
 // ============================================================
 interface Bucket { label: string; count: number; }
 
-function getTrendBuckets(notifications: InsightsNotification[], window: TimeWindow): Bucket[] {
-  if (notifications.length === 0) return [];
-  switch (window) {
-    case 'today': {
-      const b = [
-        { label: '12\u20136AM', count: 0 },
-        { label: '6AM\u201312PM', count: 0 },
-        { label: '12\u20136PM', count: 0 },
-        { label: '6PM\u201312AM', count: 0 },
-      ];
-      for (const n of notifications) {
-        const h = new Date(n.notification_posted_at).getHours();
-        if (h < 6) b[0].count++;
-        else if (h < 12) b[1].count++;
-        else if (h < 18) b[2].count++;
-        else b[3].count++;
-      }
-      return b;
-    }
-    case 'week': {
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const now = new Date();
-      const b: Bucket[] = [];
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - (6 - i));
-        b.push({ label: days[d.getDay()], count: 0 });
-      }
-      const nowMidnight = new Date(now);
-      nowMidnight.setHours(0, 0, 0, 0);
-      for (const n of notifications) {
-        const postDate = new Date(n.notification_posted_at);
-        const postMidnight = new Date(postDate);
-        postMidnight.setHours(0, 0, 0, 0);
-        const diffDays = Math.floor((nowMidnight.getTime() - postMidnight.getTime()) / (24 * 60 * 60 * 1000));
-        if (diffDays >= 0 && diffDays < 7) b[6 - diffDays].count++;
-      }
-      return b;
-    }
-    case 'month': {
-      const now = new Date();
-      const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      const b = [
-        { label: 'Wk 1', count: 0 },
-        { label: 'Wk 2', count: 0 },
-        { label: 'Wk 3', count: 0 },
-        { label: 'Wk 4', count: 0 },
-      ];
-      for (const n of notifications) {
-        const daysSinceStart = Math.floor((new Date(n.notification_posted_at).getTime() - startMs) / (24 * 60 * 60 * 1000));
-        b[Math.min(3, Math.floor(daysSinceStart / 7))].count++;
-      }
-      return b;
-    }
-    case 'year': {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const b = months.map(label => ({ label, count: 0 }));
-      for (const n of notifications) {
-        b[new Date(n.notification_posted_at).getMonth()].count++;
-      }
-      return b;
-    }
-  }
-}
+
 
 function getPeakWindows(notifications: InsightsNotification[]): Bucket[] {
   const b = [
@@ -172,14 +110,123 @@ function formatLatestSignal(notifications: InsightsNotification[]): string {
   return 'Unknown signal';
 }
 
+// ============================================================
+// TOTAL USAGE GRAPH HELPERS
+// ============================================================
+function getUsageData(window: TimeWindow) {
+  switch (window) {
+    case 'today':
+      return {
+        time: '4h 12m',
+        trend: '+18% from yesterday',
+        trendColor: '#a0412d', // C.secondary
+        subtitle: 'Active device time today',
+        barWidth: 42,
+        bars: [
+          { label: '08', height: '25%', color: '#44674d' },
+          { label: '12', height: '60%', color: '#44674d' },
+          { label: '16', height: '90%', color: '#44674d' },
+          { label: '20', height: '45%', color: '#44674d' },
+          { label: '24', height: '20%', color: '#a0412d' },
+        ]
+      };
+    case 'week':
+      return {
+        time: '24h 45m',
+        trend: '+5% from last week',
+        trendColor: '#a0412d', // C.secondary
+        subtitle: 'Active device time this week',
+        barWidth: 32,
+        bars: [
+          { label: 'M', height: '55%', color: '#44674d' },
+          { label: 'T', height: '75%', color: '#44674d' },
+          { label: 'W', height: '95%', color: '#44674d' },
+          { label: 'T', height: '55%', color: '#44674d' },
+          { label: 'F', height: '30%', color: '#a0412d' },
+          { label: 'S', height: '70%', color: '#44674d' },
+          { label: 'S', height: '40%', color: '#44674d' },
+        ]
+      };
+    case 'month':
+      return {
+        time: '98h 15m',
+        trend: '-2% from last month',
+        trendColor: '#645e53', // C.onSurfaceVariant
+        subtitle: 'Active device time this month',
+        barWidth: 52,
+        bars: [
+          { label: 'W1', height: '50%', color: '#44674d' },
+          { label: 'W2', height: '75%', color: '#44674d' },
+          { label: 'W3', height: '90%', color: '#44674d' },
+          { label: 'W4', height: '35%', color: '#a0412d' },
+        ]
+      };
+    case 'year':
+      return {
+        time: '1120h 30m',
+        trend: '+12% from last year',
+        trendColor: '#a0412d', // C.secondary
+        subtitle: 'Active device time this year',
+        barWidth: 18,
+        bars: [
+          { label: 'J', height: '45%', color: '#44674d' },
+          { label: 'F', height: '35%', color: '#44674d' },
+          { label: 'M', height: '60%', color: '#44674d' },
+          { label: 'A', height: '70%', color: '#44674d' },
+          { label: 'M', height: '85%', color: '#44674d' },
+          { label: 'J', height: '90%', color: '#44674d' },
+          { label: 'J', height: '80%', color: '#44674d' },
+          { label: 'A', height: '70%', color: '#44674d' },
+          { label: 'S', height: '60%', color: '#44674d' },
+          { label: 'O', height: '75%', color: '#44674d' },
+          { label: 'N', height: '80%', color: '#44674d' },
+          { label: 'D', height: '95%', color: '#a0412d' },
+        ]
+      };
+  }
+}
+function getBezierPath(points: { x: number; y: number }[]): { strokePath: string; fillPath: string } {
+  if (points.length === 0) return { strokePath: '', fillPath: '' };
+  
+  let strokePath = `M ${points[0].x},${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const cpX1 = p0.x + 31;
+    const cpY1 = p0.y;
+    const cpX2 = p1.x - 31;
+    const cpY2 = p1.y;
+    strokePath += ` C ${cpX1},${cpY1} ${cpX2},${cpY2} ${p1.x},${p1.y}`;
+  }
+  
+  const first = points[0];
+  const last = points[points.length - 1];
+  const fillPath = `${strokePath} L ${last.x},120 L ${first.x},120 Z`;
+  
+  return { strokePath, fillPath };
+}
+
 export default function InsightsScreen() {
   const { notifications, isLoading, isRefreshing, error, window, setWindow, refresh } = useInsightsData();
   const { pairId } = useAuthStore();
 
-  const trendBuckets = React.useMemo(() => getTrendBuckets(notifications, window), [notifications, window]);
-  const peakWindowsData = React.useMemo(() => getPeakWindows(notifications), [notifications]);
   const topApps = React.useMemo(() => getTopApps(notifications), [notifications]);
   const narrative = React.useMemo(() => generateNarrative(notifications, window), [notifications, window]);
+  const usageData = React.useMemo(() => getUsageData(window), [window]);
+
+  const peakPoints = React.useMemo(() => {
+    const data = getPeakWindows(notifications);
+    const maxVal = Math.max(...data.map(b => b.count), 1);
+    const W = 388;
+    
+    return data.map((bucket, i) => {
+      const x = (i * W) / 5;
+      const y = 105 - (bucket.count / maxVal) * 90;
+      return { x, y, label: bucket.label };
+    });
+  }, [notifications]);
+
+  const paths = React.useMemo(() => getBezierPath(peakPoints), [peakPoints]);
 
   return (
     <ThemedView style={s.container}>
@@ -245,40 +292,107 @@ export default function InsightsScreen() {
                 <Text style={s.pulseText}>{narrative}</Text>
               </View>
 
-              {/* Activity Trend */}
-              <View style={s.trendCard}>
-                <Text style={s.trendTitle}>Activity Trend</Text>
-                <View style={s.trendBarsRow}>
-                  {trendBuckets.map((bucket, i) => {
-                    const maxVal = Math.max(...trendBuckets.map(b => b.count), 1);
-                    const barHeight = Math.max((bucket.count / maxVal) * 100, 4);
-                    return (
-                      <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                        <Text style={s.trendBarCount}>{bucket.count}</Text>
-                        <View style={[s.trendBar, { height: barHeight }]} />
-                        <Text style={s.trendBarLabel}>{bucket.label}</Text>
+              {/* Total Usage Card */}
+              <View style={s.usageCard}>
+                <View style={s.usageHeader}>
+                  <View style={s.usageHeaderLeft}>
+                    <View>
+                      <Text style={s.usageTitle}>Total Usage</Text>
+                      <Text style={s.usageSubtitle}>{usageData.subtitle}</Text>
+                    </View>
+                  </View>
+                  <View style={s.usageHeaderRight}>
+                    <Text style={s.usageTimeText}>{usageData.time}</Text>
+                    <Text style={[s.usageTrendText, { color: usageData.trendColor }]}>{usageData.trend}</Text>
+                  </View>
+                </View>
+
+                {/* Usage Graph */}
+                <View style={s.graphContainer}>
+                  <View style={s.barsContainer}>
+                    {usageData.bars.map((bar, i) => (
+                      <View key={i} style={s.pillColumn}>
+                        {/* Pill Background */}
+                        <View style={[s.pillBg, { width: usageData.barWidth }]}>
+                          {/* Pill Fill */}
+                          <View
+                            style={[
+                              s.pillFill,
+                              {
+                                height: bar.height as any,
+                                backgroundColor: bar.color,
+                              }
+                            ]}
+                          />
+                        </View>
+                        {/* Matching Color Label */}
+                        <Text style={[s.barLabel, { color: bar.color }]}>
+                          {bar.label}
+                        </Text>
                       </View>
-                    );
-                  })}
+                    ))}
+                  </View>
                 </View>
               </View>
 
               {/* Peak Activity Windows */}
               <View style={s.peakCard}>
                 <Text style={s.peakTitle}>Peak Hours</Text>
-                {peakWindowsData.map((bucket, i) => {
-                  const maxVal = Math.max(...peakWindowsData.map(b => b.count), 1);
-                  const barWidth = Math.max((bucket.count / maxVal) * 100, 2);
-                  return (
-                    <View key={i} style={s.peakRow}>
-                      <Text style={s.peakLabel}>{bucket.label}</Text>
-                      <View style={s.peakBarBg}>
-                        <View style={[s.peakBarFill, { width: `${barWidth}%` }]} />
-                      </View>
-                      <Text style={s.peakBarCount}>{bucket.count}</Text>
-                    </View>
-                  );
-                })}
+
+                {/* Graph Legends (Positioned above graph) */}
+                <View style={s.peakXAxisRow}>
+                  {peakPoints.map((p, i) => {
+                    const shortLabel = p.label
+                      .replace('12\u20134AM', '12a')
+                      .replace('4\u20138AM', '4a')
+                      .replace('8AM\u201312PM', '8a')
+                      .replace('12\u20134PM', '12p')
+                      .replace('4\u20138PM', '4p')
+                      .replace('8PM\u201312AM', '8p');
+                    return (
+                      <Text key={i} style={s.peakXAxisLabel}>
+                        {shortLabel}
+                      </Text>
+                    );
+                  })}
+                </View>
+
+                <View style={s.chartWrapper}>
+                  {/* Y-Axis Legend overlay */}
+                  <View style={s.peakYAxis}>
+                    <Text style={s.peakYLabel}>High</Text>
+                    <Text style={s.peakYLabel}>Med</Text>
+                    <Text style={s.peakYLabel}>Low</Text>
+                  </View>
+
+                  <Svg width="100%" height={120} viewBox="0 0 388 120">
+                    <Defs>
+                      <LinearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0%" stopColor={C.primary} stopOpacity={0.15} />
+                        <Stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                      </LinearGradient>
+                      <LinearGradient id="strokeGrad" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0%" stopColor={C.primary} stopOpacity={1.0} />
+                        <Stop offset="70%" stopColor={C.primary} stopOpacity={0.5} />
+                        <Stop offset="100%" stopColor={C.primary} stopOpacity={0.1} />
+                      </LinearGradient>
+                    </Defs>
+
+                    {/* Area path */}
+                    <Path
+                      d={paths.fillPath}
+                      fill="url(#fillGrad)"
+                    />
+
+                    {/* Stroke path */}
+                    <Path
+                      d={paths.strokePath}
+                      fill="none"
+                      stroke="url(#strokeGrad)"
+                      strokeWidth={3}
+                    />
+                  </Svg>
+                </View>
               </View>
 
               {/* App Insights */}
@@ -415,53 +529,15 @@ const s = StyleSheet.create({
     color: C.onSurface,
   },
 
-  /* ---------- Activity Trend Card ---------- */
-  trendCard: {
-    backgroundColor: C.surfaceContainerLowest,
-    borderRadius: 32,
-    padding: 24,
-    marginBottom: 16,
-  },
-  trendTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 18,
-    color: C.onSurface,
-    marginBottom: 16,
-  },
-  trendBarsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 120,
-    gap: 4,
-  },
-  trendBar: {
-    flex: 1,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    backgroundColor: C.primary,
-    minHeight: 2,
-  },
-  trendBarLabel: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 10,
-    color: C.onSurfaceVariant,
-    textAlign: 'center',
-    marginTop: 6,
-  },
-  trendBarCount: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 10,
-    color: C.onSurface,
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-
   /* ---------- Peak Hours Card ---------- */
   peakCard: {
     backgroundColor: C.surfaceContainerLowest,
     borderRadius: 32,
-    padding: 24,
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 0,
     marginBottom: 16,
+    overflow: 'hidden',
   },
   peakTitle: {
     fontFamily: 'PlusJakartaSans-Bold',
@@ -469,36 +545,40 @@ const s = StyleSheet.create({
     color: C.onSurface,
     marginBottom: 16,
   },
-  peakRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 12,
-  },
-  peakLabel: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 13,
-    color: C.onSurfaceVariant,
-    width: 105,
-  },
-  peakBarBg: {
-    flex: 1,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: C.surfaceContainer,
+  chartWrapper: {
+    width: 'auto',
+    height: 120,
+    marginHorizontal: -24,
+    marginTop: 16,
     overflow: 'hidden',
+    position: 'relative',
   },
-  peakBarFill: {
-    height: '100%',
-    borderRadius: 6,
-    backgroundColor: C.secondary,
+  peakYAxis: {
+    position: 'absolute',
+    left: 24,
+    bottom: 12,
+    height: 50,
+    justifyContent: 'space-between',
+    zIndex: 10,
   },
-  peakBarCount: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 12,
-    color: C.onSurface,
+  peakYLabel: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 10,
+    color: C.onSurfaceVariant,
+    opacity: 0.5,
+  },
+  peakXAxisRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  peakXAxisLabel: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 11,
+    color: C.onSurfaceVariant,
     width: 32,
-    textAlign: 'right',
+    textAlign: 'center',
   },
 
   /* ---------- App Insights Card ---------- */
@@ -592,6 +672,83 @@ const s = StyleSheet.create({
     fontFamily: 'Manrope-Medium',
     fontSize: 12,
     color: C.onSurfaceVariant,
+  },
+
+  /* ---------- Total Usage Card ---------- */
+  usageCard: {
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 32,
+    padding: 24,
+    marginBottom: 16,
+  },
+  usageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  usageHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  usageTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 20,
+    color: C.onSurface,
+  },
+  usageSubtitle: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 13,
+    color: C.onSurfaceVariant,
+    marginTop: 2,
+  },
+  usageHeaderRight: {
+    alignItems: 'flex-end',
+  },
+  usageTimeText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 22,
+    color: C.primary,
+    lineHeight: 28,
+  },
+  usageTrendText: {
+    fontFamily: 'Manrope-Medium',
+    fontSize: 11,
+    color: C.secondary,
+    marginTop: 2,
+  },
+  graphContainer: {
+    minHeight: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 16,
+  },
+  barsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 8,
+  },
+  pillColumn: {
+    alignItems: 'center',
+  },
+  pillBg: {
+    height: 120,
+    backgroundColor: C.surfaceContainer,
+    borderRadius: 9999,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  pillFill: {
+    width: '100%',
+    borderRadius: 9999,
+  },
+  barLabel: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    textAlign: 'center',
   },
 
   /* ---------- Loading / Empty / Error ---------- */

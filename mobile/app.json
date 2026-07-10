@@ -38,6 +38,21 @@
             "backgroundColor": "#1b1d0e"
           }
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "manifestQueries": {
+              "intent": [
+                {
+                  "action": "MAIN",
+                  "category": ["LAUNCHER"]
+                }
+              ]
+            }
+          }
+        }
       ]
     ],
     "experiments": {
