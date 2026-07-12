@@ -7,6 +7,7 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAuth } from '@/hooks/use-auth';
 import { logger } from '@/services/logger';
 import { useAppModal } from '@/hooks/use-app-modal';
+import { getOnboardingState } from '@/services/onboarding-api';
 import Svg, { Path } from 'react-native-svg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +17,6 @@ import { Input } from '@/components/ui/input';
 const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
 
 export default function LoginScreen() {
-  const { userRole } = useAuthStore();
   const { signInWithEmail, signInWithGoogle } = useAuth();
   const { showModal } = useAppModal();
   const [email, setEmail] = useState('');
@@ -41,11 +41,7 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       await signInWithEmail(email.trim(), password);
-      if (!userRole) {
-        router.replace('/role-selection');
-      } else {
-        router.replace('/pairing');
-      }
+      await routeAfterLogin();
     } catch (err: any) {
       showModal({
         title: 'Login Failed',
@@ -61,12 +57,7 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       await signInWithGoogle();
-      const currentRole = useAuthStore.getState().userRole;
-      if (!currentRole) {
-        router.replace('/role-selection');
-      } else {
-        router.replace('/pairing');
-      }
+      await routeAfterLogin();
     } catch (err: any) {
       logger.error('Google sign-in error:', err?.message);
       if (!err.message?.includes('cancelled')) {
@@ -79,6 +70,27 @@ export default function LoginScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Decide where to send the user based on their DB-backed onboarding state.
+  const routeAfterLogin = async () => {
+    const state = await getOnboardingState();
+    if (state.selected_role) {
+      useAuthStore.getState().setUserRole(state.selected_role);
+    }
+    if (state.selected_role === 'admin') {
+      router.replace('/(admin)/dashboard');
+      return;
+    }
+    if (state.onboarding_completed) {
+      if (state.selected_role === 'child') {
+        router.replace('/(child)/home');
+      } else {
+        router.replace('/(tabs)/home');
+      }
+      return;
+    }
+    router.replace('/onboarding');
   };
 
   const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
@@ -112,14 +124,14 @@ export default function LoginScreen() {
               <MaterialIcons name="spa" size={32} color="#e8ffea" />
             </View>
             <Text style={styles.welcomeText}>Welcome Back</Text>
-            <Text style={styles.subWelcomeText}>Enter your sanctuary</Text>
+            <Text style={styles.subWelcomeText}>Sign in to continue</Text>
           </View>
 
           {/* Form Module */}
           <View style={styles.formArea}>
             <Input
               label="Email Address"
-              placeholder="hello@sanctuary.com"
+              placeholder="you@email.com"
               icon="mail"
               value={email}
               onChangeText={setEmail}
@@ -150,7 +162,7 @@ export default function LoginScreen() {
               />
 
               <View style={styles.createAccountBox}>
-                <Text style={styles.newToText}>New to Nurturing Atelier?</Text>
+                <Text style={styles.newToText}>New to Sync Guardian?</Text>
                 <Pressable onPress={() => router.push('/register')}>
                   <Text style={styles.createAccountLink}>Create an Account</Text>
                 </Pressable>
@@ -162,7 +174,7 @@ export default function LoginScreen() {
           <View style={styles.footerArea}>
             <View style={styles.dividerBox}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Or Sanctuary Access</Text>
+              <Text style={styles.dividerText}>Or use email</Text>
               <View style={styles.dividerLine} />
             </View>
             <View style={styles.socialGrid}>

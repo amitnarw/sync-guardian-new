@@ -13,7 +13,7 @@ interface AppIconProps {
   fallbackSize?: number;
 }
 
-export function AppIcon({ iconBase64, size = 40, fallbackSize = 20 }: AppIconProps) {
+export const AppIcon = React.memo(function AppIcon({ iconBase64, size = 40, fallbackSize = 20 }: AppIconProps) {
   if (iconBase64) {
     return (
       <View style={[s.iconBox, { width: size, height: size, borderRadius: size / 2 }]}>
@@ -31,7 +31,7 @@ export function AppIcon({ iconBase64, size = 40, fallbackSize = 20 }: AppIconPro
       <Ionicons name="apps-outline" size={fallbackSize} color={C.primary} />
     </View>
   );
-}
+});
 
 const s = StyleSheet.create({
   iconBox: {

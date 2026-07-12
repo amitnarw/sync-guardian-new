@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { AppState, Platform } from 'react-native'
-import { useAuthStore } from '@/hooks/use-auth-store'
+import { AppState, Linking, Platform } from 'react-native'
 import { logger } from '@/services/logger'
 
 interface PermissionItem {
@@ -21,7 +20,6 @@ if (Platform.OS === 'android') {
 }
 
 export function usePermissionStatus(role: 'parent' | 'child') {
-  const { fcmToken } = useAuthStore()
   const [notifListenerEnabled, setNotifListenerEnabled] = useState(false)
   const [fcmPermissionGranted, setFcmPermissionGranted] = useState(false)
   const [batteryOptDisabled, setBatteryOptDisabled] = useState(true)
@@ -66,8 +64,9 @@ export function usePermissionStatus(role: 'parent' | 'child') {
   }, [])
 
   const openBatteryOptSettings = useCallback(() => {
-    if (!NotificationAccess) return
-    NotificationAccess.openBatteryOptimizationSettings()
+    Linking.openSettings().catch((e) =>
+      logger.warn('openBatteryOptSettings: Linking.openSettings failed', e)
+    )
   }, [])
 
   const items: PermissionItem[] = []
@@ -89,9 +88,9 @@ export function usePermissionStatus(role: 'parent' | 'child') {
   }
 
   items.push({
-    key: 'fcm',
-    label: 'Push Notifications',
-    granted: !!fcmToken && fcmPermissionGranted,
+      key: 'fcm',
+      label: 'Push Notifications',
+      granted: fcmPermissionGranted,
     guideTitle: 'Allow Push Notifications',
     guideMessage: 'Push notifications let your device receive alerts and pings from the parent app.',
     guideSteps: [
@@ -108,11 +107,11 @@ export function usePermissionStatus(role: 'parent' | 'child') {
       label: 'Battery Optimization',
       granted: !batteryOptDisabled,
       guideTitle: 'Turn Off Battery Optimization',
-      guideMessage: 'Battery optimization may prevent Sync Guardian from running in the background. Tap "Allow" to let it stay active in the background.',
+      guideMessage: 'Battery optimization may prevent Sync Guardian from running in the background. Open App Info and set Battery to "Unrestricted" or "Don\'t optimize".',
       guideSteps: [
-        'Tap "Allow" on the system dialog that appears',
-        'If the dialog doesn\'t appear, find "Sync Guardian" in the list and choose "Don\'t optimize"',
-        'Tap "Done" to confirm',
+        'Tap "Battery" on the App Info screen',
+        'Tap "Unrestricted" or select "Don\'t optimize"',
+        'Tap "Done" or "Apply" to confirm',
       ],
       openSettings: openBatteryOptSettings,
     })

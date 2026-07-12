@@ -30,7 +30,7 @@ export default function SplashScreen() {
 
   const navigateAway = () => {
     ExpoSplashScreen.hideAsync().catch(() => {});
-    router.replace('/role-selection');
+    router.replace('/login');
   };
 
   useEffect(() => {
@@ -112,8 +112,8 @@ export default function SplashScreen() {
       </View>
 
       <Animated.View style={[styles.footer, animatedContentStyle]}>
-        <Text style={styles.title}>Nurturing Atelier</Text>
-        <Text style={styles.subtitle}>Cultivate your digital sanctuary.</Text>
+        <Text style={styles.title}>Sync Guardian</Text>
+        <Text style={styles.subtitle}>Keep your family&apos;s devices safe.</Text>
       </Animated.View>
 
     </Animated.View>

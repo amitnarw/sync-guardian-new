@@ -3,7 +3,7 @@ import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth, checkRateLimit } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
 import { verifyQrJwt } from '../_shared/qr-jwt.ts'
-import { isValidString, sanitizeString } from '../_shared/validation.ts'
+import { upsertOnboardingState } from '../_shared/onboarding-state.ts'
 import { logger, mapError } from '../_shared/logger.ts'
 
 serve(async (req) => {
@@ -16,18 +16,15 @@ serve(async (req) => {
 
     const adminClient = getAdminClient()
     const body = await req.json()
-    const device_name = sanitizeString(body.device_name, 100) || 'Parent Device'
 
     checkRateLimit(req.headers.get('x-forwarded-for') ?? user.id)
 
     let token: string | null = body.token || null
     let code: string | null = body.code || null
 
-    // If QR JWT provided, verify and extract token/code
     if (body.qr_jwt) {
       const result = await verifyQrJwt(body.qr_jwt)
       if (!result.ok) {
-        // Log the reason (sanitized) without exposing the secret or token
         logger.warn('claim-pairing-token', 'QR JWT verification failed', { reason: result.reason })
         const message =
           result.reason === 'expired'
@@ -55,29 +52,87 @@ serve(async (req) => {
       p_token: token || null,
       p_code: code || null,
       p_parent_user_id: user.id,
-      p_parent_device_name: device_name,
     })
 
     if (error) throw new Error(error.message)
+
+    try {
+      const pair = data as any
+      await upsertOnboardingState(user.id, {
+        selected_role: 'parent',
+        onboarding_step: 'app_selection',
+      })
+      if (pair?.child_user_id) {
+        await upsertOnboardingState(pair.child_user_id, {
+          onboarding_step: 'app_selection',
+        })
+      }
+    } catch (obErr) {
+      logger.warn('claim-pairing-token', 'onboarding upsert failed', { error: String(obErr) })
+    }
+
+    try {
+      const pair = data as any
+      if (pair?.id) {
+        const { data: pairRow, error: pairErr } = await adminClient
+          .from('pairs')
+          .select('child_device_id, parent_setup_completed')
+          .eq('id', pair.id)
+          .single()
+        if (!pairErr && pairRow && !pairRow.parent_setup_completed) {
+          const { data: parentDev } = await adminClient
+            .from('devices')
+            .select('push_token')
+            .eq('id', pair.parent_device_id)
+            .single()
+          const { data: childProfile } = await adminClient
+            .from('profiles')
+            .select('display_name')
+            .eq('id', pairRow.child_user_id)
+            .single()
+          const childName = (childProfile as any)?.display_name || 'Your child'
+          const parentToken = (parentDev as any)?.push_token
+          if (parentToken) {
+            const { sendParentPush } = await import('../_shared/fcm.ts')
+            await sendParentPush(
+              parentToken,
+              `${childName}'s device is ready`,
+              'Open Sync Guardian to choose which apps to monitor.',
+            )
+          }
+        }
+      }
+    } catch (pushErr) {
+      logger.warn('claim-pairing-token', 'setup reminder push failed', { error: String(pushErr) })
+    }
 
     return new Response(
       JSON.stringify({ data: { ...data, parent_device_id: data?.parent_device_id || 'unknown' } }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {
-    const msg = error instanceof Error ? error.message : ''
-    const lower = msg.toLowerCase()
-    if (lower.includes('expired') || (lower.includes('invalid') && lower.includes('pair'))) {
+    try {
+      const msg = error instanceof Error ? error.message : ''
+      const lower = msg.toLowerCase()
+      if (lower.includes('expired') || (lower.includes('invalid') && lower.includes('pair'))) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid or expired pairing code.' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
+        )
+      }
+      const { status, error: safeMsg } = mapError(error)
+      logger.error('claim-pairing-token', safeMsg, msg)
       return new Response(
-        JSON.stringify({ error: 'Invalid or expired pairing code.' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
+        JSON.stringify({ error: safeMsg }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
+      )
+    } catch (secondary) {
+      const fallbackMsg = secondary instanceof Error ? secondary.message : 'Unknown error in error handler'
+      logger.error('claim-pairing-token', 'exception in error handler', fallbackMsg)
+      return new Response(
+        JSON.stringify({ error: 'An unexpected error occurred.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
       )
     }
-    const { status, error: safeMsg } = mapError(error)
-    logger.error('claim-pairing-token', safeMsg, msg)
-    return new Response(
-      JSON.stringify({ error: safeMsg }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },
-    )
   }
 })

@@ -25,3 +25,24 @@ export function useProtectedRoute(allowedRoles: 'parent' | 'child' | ('parent' |
     }
   }, [_hasHydrated, isAuthenticated, userRole]);
 }
+
+/**
+ * Guard for the admin section. Redirects to /login when not authenticated,
+ * and to /onboarding when the user is not an admin.
+ */
+export function useProtectedRouteAdmin() {
+  const { _hasHydrated, isAuthenticated, userRole } = useAuthStore();
+
+  useEffect(() => {
+    if (!_hasHydrated) return;
+
+    if (!isAuthenticated) {
+      router.replace('/login');
+      return;
+    }
+
+    if (userRole !== 'admin') {
+      router.replace('/onboarding');
+    }
+  }, [_hasHydrated, isAuthenticated, userRole]);
+}

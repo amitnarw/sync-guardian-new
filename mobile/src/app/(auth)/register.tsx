@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 const hearthShapeBlock = "M153.6 0 C 210.16 0 256 57.3 256 128 C 256 212.8 175.7 256 76.8 256 C 34.39 256 0 175.73 0 102.4 C 0 34.39 68.76 0 153.6 0 Z";
 
 export default function RegisterScreen() {
-  const { userRole, setHasCompletedOnboarding } = useAuthStore();
+  const { setHasCompletedOnboarding } = useAuthStore();
   const { signUpWithEmail, signInWithGoogle } = useAuth();
   const { showModal } = useAppModal();
   const [name, setName] = useState('');
@@ -61,11 +61,7 @@ export default function RegisterScreen() {
       setHasCompletedOnboarding(false);
 
       if (data.session) {
-        if (!userRole) {
-          router.replace('/role-selection');
-        } else {
-          router.replace('/onboarding');
-        }
+        router.replace('/onboarding');
       } else {
         showModal({
           title: 'Verify your email',
@@ -90,12 +86,7 @@ export default function RegisterScreen() {
       setLoading(true);
       await signInWithGoogle();
       setHasCompletedOnboarding(false);
-      const currentRole = useAuthStore.getState().userRole;
-      if (!currentRole) {
-        router.replace('/role-selection');
-      } else {
-        router.replace('/onboarding');
-      }
+      router.replace('/onboarding');
     } catch (err: any) {
       logger.error('Google sign-in error:', err?.message);
       if (!err.message?.includes('cancelled')) {
@@ -137,8 +128,8 @@ export default function RegisterScreen() {
           <View style={styles.headerLogoCircle}>
             <MaterialIcons name="spa" size={32} color="#e8ffea" />
           </View>
-          <Text style={styles.welcomeText}>Join the Sanctuary</Text>
-          <Text style={styles.subWelcomeText}>Create your family account</Text>
+          <Text style={styles.welcomeText}>Create your account</Text>
+          <Text style={styles.subWelcomeText}>Join your family to Sync Guardian.</Text>
         </View>
 
         {/* Form Module */}
@@ -152,7 +143,7 @@ export default function RegisterScreen() {
           />
           <Input
             label="Email Address"
-            placeholder="hello@sanctuary.com"
+            placeholder="you@email.com"
             icon="mail"
             value={email}
             onChangeText={setEmail}
@@ -178,7 +169,7 @@ export default function RegisterScreen() {
             <View style={styles.createAccountBox}>
               <Text style={styles.newToText}>Already have an account?</Text>
               <Pressable onPress={() => router.push('/login')}>
-                <Text style={styles.createAccountLink}>Login to Sanctuary</Text>
+                <Text style={styles.createAccountLink}>Log in to Sync Guardian</Text>
               </Pressable>
             </View>
           </View>

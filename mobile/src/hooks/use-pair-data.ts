@@ -17,11 +17,11 @@ export type UsePairDataResult = {
   pair: { id: string; child_device_id: string } | null;
   childDevice: {
     id: string;
-    device_name: string | null;
     is_foreground: boolean;
     last_seen_at: string | null;
     push_token: string | null;
   } | null;
+  childName: string | null;
   notifications: MirroredNotification[];
   latestNotification: MirroredNotification | null;
   isOnline: boolean;

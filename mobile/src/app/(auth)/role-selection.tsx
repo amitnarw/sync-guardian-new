@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, ScrollView, Dimensions, Platform } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Dimensions, Platform } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { setOnboardingRole } from '@/services/onboarding-api';
+import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -65,7 +67,7 @@ function ParentRoleNode({ onPress }: { onPress: () => void }) {
         </View>
         <Text style={[styles.roleTitle, { color: '#375941' }]}>Parent</Text>
       </View>
-      <Animated.Text style={[styles.roleSubtitle, animatedText]}>Guiding the journey</Animated.Text>
+      <Animated.Text style={[styles.roleSubtitle, animatedText]}>I want to monitor a child device</Animated.Text>
     </AnimatedPressable>
   );
 }
@@ -116,7 +118,7 @@ function ChildRoleNode({ onPress }: { onPress: () => void }) {
         </View>
         <Text style={[styles.roleTitle, { color: '#8e3421' }]}>Child</Text>
       </View>
-      <Animated.Text style={[styles.roleSubtitle, animatedText]}>Exploring with wonder</Animated.Text>
+      <Animated.Text style={[styles.roleSubtitle, animatedText]}>This is the child’s device</Animated.Text>
     </AnimatedPressable>
   );
 }
@@ -131,27 +133,32 @@ export default function RoleSelectionScreen() {
     screenOpacity.value = withTiming(1, { duration: 600 });
   }, []);
 
-  const handleRoleSelect = (role: 'parent' | 'child') => {
+  const handleRoleSelect = async (role: 'parent' | 'child') => {
     setUserRole(role);
-    router.push('/login');
+    try {
+      await setOnboardingRole(role, 'permissions');
+    } catch {
+      // Non-fatal: the permissions step will also record the role server-side.
+    }
+    router.replace('/onboarding');
   };
 
   const animatedScreenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
 
   return (
     <Animated.View style={[styles.container, animatedScreenStyle]}>
-      <ScrollView contentContainerStyle={[styles.scrollCanvas, { paddingTop: Math.max(insets.top, 24) }]} showsVerticalScrollIndicator={false}>
+      <EdgeFadeScrollView contentContainerStyle={[styles.scrollCanvas, { paddingTop: Math.max(insets.top, 24) }]} showsVerticalScrollIndicator={false}>
         {/* Top Header */}
         <View style={styles.header}>
           <View style={styles.headerLogo}>
             <MaterialIcons name="spa" size={24} color="#44674d" />
-            <Text style={styles.headerText}>Nurturing Atelier</Text>
+            <Text style={styles.headerText}>Sync Guardian</Text>
           </View>
         </View>
 
         <View style={styles.titleContainer}>
-          <Text style={styles.titleText}>Who is joining the{"\n"}<Text style={styles.titleItalic}>sanctuary</Text> today?</Text>
-          <Text style={styles.titleSubtitle}>A Shared Digital Experience</Text>
+          <Text style={styles.titleText}>Who is setting up{'\n'}today?</Text>
+          <Text style={styles.titleSubtitle}>Pick the role for this phone</Text>
         </View>
 
         <View style={styles.roleGrid}>
@@ -160,7 +167,7 @@ export default function RoleSelectionScreen() {
         </View>
 
         {/* Removed indicator container (vertical line) as requested */}
-      </ScrollView>
+      </EdgeFadeScrollView>
     </Animated.View>
   );
 }

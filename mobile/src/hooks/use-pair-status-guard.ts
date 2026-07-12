@@ -58,7 +58,7 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
     validate()
 
     const channel = supabase
-      .channel(`pair_status_${pairId}`)
+      .channel(`pair_status_${pairId}_${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         {

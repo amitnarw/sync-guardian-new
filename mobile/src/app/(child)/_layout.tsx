@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router';
 import { Dimensions, View } from 'react-native';
 import { useEffect, useRef } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurTargetView } from 'expo-blur';
 import CustomTabBar from '@/components/custom-tab-bar';
+import AppHeader from '@/components/app-header';
 import { AuthColors } from '@/constants/auth-theme';
 import { useProtectedRoute } from '@/hooks/use-protected-route';
 import { usePairStatusGuard } from '@/hooks/use-pair-status-guard';
@@ -36,30 +38,33 @@ export default function ChildLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: AuthColors.background }}>
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-        <Tabs
-          screenOptions={{
-            headerShown: false,
-            tabBarStyle: { display: 'none' },
-            animation: 'shift',
-            sceneStyle: { backgroundColor: AuthColors.background },
-            sceneStyleInterpolator: ({ current }) => ({
-              sceneStyle: {
-                transform: [
-                  {
-                    translateX: current.progress.interpolate({
-                      inputRange: [-1, 0, 1],
-                      outputRange: [-SCREEN_W, 0, SCREEN_W],
-                    }),
-                  },
-                ],
-              },
-            }),
-          }}
-          detachInactiveScreens={false}
-        >
-          <Tabs.Screen name="home" />
-          <Tabs.Screen name="settings" />
-        </Tabs>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <AppHeader role="child" />
+          <Tabs
+            screenOptions={{
+              headerShown: false,
+              tabBarStyle: { display: 'none' },
+              animation: 'shift',
+              sceneStyle: { backgroundColor: AuthColors.background },
+              sceneStyleInterpolator: ({ current }) => ({
+                sceneStyle: {
+                  transform: [
+                    {
+                      translateX: current.progress.interpolate({
+                        inputRange: [-1, 0, 1],
+                        outputRange: [-SCREEN_W, 0, SCREEN_W],
+                      }),
+                    },
+                  ],
+                },
+              }),
+            }}
+            detachInactiveScreens={false}
+          >
+            <Tabs.Screen name="home" />
+            <Tabs.Screen name="settings" />
+          </Tabs>
+        </SafeAreaView>
       </BlurTargetView>
       <CustomTabBar 
         blurTargetRef={blurTargetRef} 

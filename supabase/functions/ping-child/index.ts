@@ -35,6 +35,7 @@ serve(async (req) => {
       .maybeSingle()
 
     if (pairError || !pairData) {
+      logger.warn('ping-child', 'no active pair', { childDeviceId })
       return new Response(
         JSON.stringify({ error: 'No active pair found with this child device' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 },
@@ -50,6 +51,7 @@ serve(async (req) => {
       .single()
 
     if (!parentDevice) {
+      logger.warn('ping-child', 'not authorized', { userId: user.id, parentDeviceId: pairData.parent_device_id })
       return new Response(
         JSON.stringify({ error: 'Not authorized to ping this child device' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 },
@@ -59,11 +61,17 @@ serve(async (req) => {
     // Look up the child's push token
     const { data: childDevice } = await adminClient
       .from('devices')
-      .select('push_token')
+      .select('push_token, is_foreground, last_seen_at')
       .eq('id', childDeviceId)
       .single()
 
     const pushToken = childDevice?.push_token
+    logger.info('ping-child', 'child device lookup', {
+      hasToken: !!pushToken,
+      isForeground: childDevice?.is_foreground,
+      lastSeenAt: childDevice?.last_seen_at,
+    })
+
     if (!pushToken) {
       return new Response(
         JSON.stringify({ error: 'Child device does not have a push token registered' }),
@@ -72,9 +80,10 @@ serve(async (req) => {
     }
 
     const result = await sendChildRecoveryPush(pushToken)
+    logger.info('ping-child', 'FCM send result', { success: result.success, hasMessageId: !!result.messageId })
 
     if (!result.success && result.unregisteredToken) {
-      // Clear the stale token
+      logger.warn('ping-child', 'clearing stale push token', { childDeviceId })
       await adminClient
         .from('devices')
         .update({ push_token: null })

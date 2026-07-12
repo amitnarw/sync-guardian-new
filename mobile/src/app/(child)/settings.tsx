@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Dimensions, Text, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { StyleSheet, View, TouchableOpacity, Dimensions, Text, ActivityIndicator, RefreshControl } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedView } from '@/components/themed-view';
+import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
-import { UserAvatar } from '@/components/user-avatar';
 import { supabase } from '@/lib/supabase';
 import { clearBufferedNotifications } from '@/services/mmkv-buffer';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
@@ -155,13 +154,14 @@ export default function ChildSettingsScreen() {
           <PermissionStatusRow
             key={p.key}
             label={p.label}
+            description={p.guideMessage}
             granted={p.granted}
             onRequest={() =>
               showPermModal({
                 title: p.guideTitle,
                 message: p.guideMessage,
                 steps: p.guideSteps,
-                icon: 'info',
+                icon: 'warning',
                 primaryButton: 'Open Settings',
                 onPrimaryPress: p.openSettings,
                 secondaryButton: 'Cancel',
@@ -186,22 +186,7 @@ export default function ChildSettingsScreen() {
           />
         </View>
 
-        <SafeAreaView style={s.safeArea} edges={['top']}>
-          {/* Floating Glass Header */}
-          <View style={s.header}>
-            <View style={s.headerLeft}>
-              <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-              <Text style={s.headerTitle}>Sync Guardian</Text>
-            </View>
-            <View style={s.headerRight}>
-              <UserAvatar
-                fallbackSource={require('@/assets/images/leo_avatar.jpg')}
-                role="child"
-              />
-            </View>
-          </View>
-
-          <ScrollView
+          <EdgeFadeScrollView
             contentContainerStyle={s.scrollContent}
             showsVerticalScrollIndicator={false}
             refreshControl={
@@ -316,8 +301,7 @@ export default function ChildSettingsScreen() {
 
             {/* Bottom spacing */}
             <View style={s.bottomSpacer} />
-          </ScrollView>
-        </SafeAreaView>
+          </EdgeFadeScrollView>
       </Animated.View>
     </ThemedView>
   );
@@ -346,53 +330,18 @@ const s = StyleSheet.create({
     height: 320,
     borderRadius: 160,
   },
-  safeArea: {
-    flex: 1,
-    zIndex: 1,
-  },
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 8,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(255,248,240,0.80)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerIcon: {
-    marginRight: 2,
-  },
-  headerTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-    color: C.primary,
-    letterSpacing: -0.5,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
   heroSection: {
-    marginTop: 24,
     marginBottom: 32,
     gap: 12,
   },
   heroTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
     fontSize: 48,
-    lineHeight: 54,
     color: C.onSurface,
-    letterSpacing: -1.2,
   },
   heroSubtitle: {
     fontFamily: 'PlusJakartaSans-Regular',

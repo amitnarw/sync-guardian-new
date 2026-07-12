@@ -14,9 +14,10 @@ interface ButtonProps {
   style?: ViewStyle | ViewStyle[];
   loading?: boolean;
   disabled?: boolean;
+  stacked?: boolean;
 }
 
-export const Button = ({ title, onPress, variant = 'primary', icon, imageSource, style, loading, disabled }: ButtonProps) => {
+export const Button = ({ title, onPress, variant = 'primary', icon, imageSource, style, loading, disabled, stacked = false }: ButtonProps) => {
   const scale = useSharedValue(1);
 
   const handlePressIn = () => {
@@ -34,14 +35,53 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
   const isPrimary = variant === 'primary';
   const isDisabled = loading || disabled;
 
+  const content = stacked ? (
+    <>
+      {icon && (
+        <MaterialIcons
+          name={icon}
+          size={isPrimary ? 22 : 20}
+          color={isPrimary ? '#e8ffea' : '#363228'}
+        />
+      )}
+      {title && (
+        <Text style={[styles.buttonText, isPrimary ? styles.primaryText : styles.secondaryText, styles.stackedText]}>
+          {title}
+        </Text>
+      )}
+    </>
+  ) : (
+    <>
+      {imageSource && (
+        <Image
+          source={imageSource}
+          style={styles.imageIcon}
+        />
+      )}
+      {title && (
+        <Text style={[styles.buttonText, isPrimary ? styles.primaryText : styles.secondaryText]}>
+          {title}
+        </Text>
+      )}
+      {icon && (
+        <MaterialIcons
+          name={icon}
+          size={isPrimary ? 20 : 18}
+          color={isPrimary ? '#e8ffea' : '#363228'}
+        />
+      )}
+    </>
+  );
+
   return (
-    <AnimatedPressable 
+    <AnimatedPressable
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onPress={isDisabled ? undefined : onPress}
       style={[
-        styles.button, 
+        styles.button,
         isPrimary ? styles.primaryButton : styles.secondaryButton,
+        stacked && styles.stackedButton,
         animatedStyle,
         style,
         isDisabled && { opacity: 0.7 }
@@ -50,26 +90,7 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
       {loading ? (
         <ActivityIndicator color={isPrimary ? '#e8ffea' : '#363228'} />
       ) : (
-        <>
-          {imageSource && (
-            <Image 
-              source={imageSource} 
-              style={styles.imageIcon} 
-            />
-          )}
-          {title && (
-            <Text style={[styles.buttonText, isPrimary ? styles.primaryText : styles.secondaryText]}>
-              {title}
-            </Text>
-          )}
-          {icon && (
-            <MaterialIcons 
-              name={icon} 
-              size={isPrimary ? 20 : 18} 
-              color={isPrimary ? '#e8ffea' : '#363228'} 
-            />
-          )}
-        </>
+        content
       )}
     </AnimatedPressable>
   );
@@ -84,6 +105,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+  },
+  stackedButton: {
+    flexDirection: 'column',
+    gap: 2,
+  },
+  stackedText: {
+    fontSize: 12,
   },
   primaryButton: {
     backgroundColor: '#44674d',

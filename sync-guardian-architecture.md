@@ -188,7 +188,7 @@ Use a layered recovery strategy:
 - request notification-access permission properly,
 - educate the user to disable battery optimization for the app,
 - keep local buffering with MMKV,
-- optionally send a high-priority FCM data message to the Child device to wake or re-engage the app when service recovery is needed.[cite:31][cite:40][cite:121]
+- send a high-priority FCM data message (`type: wake_child_notification_listener`) to the Child device; on receipt the Child updates its presence (`last_seen_at`) and flushes its MMKV notification buffer so items captured while the app was inactive are uploaded.[cite:31][cite:40][cite:121]
 
 ### UX for failure state
 
@@ -199,7 +199,7 @@ The Parent dashboard should show status such as:
 - waiting for reconnect,
 - battery optimization may be blocking sync.[cite:121][cite:124]
 
-The Parent may also have a “wake child device” or “send recovery signal” action that triggers an FCM data message to the Child when appropriate.[cite:40][cite:57]
+The Parent has a **Ping** action (Settings → Connected Devices) that calls the `ping-child` Edge Function, which sends the wake FCM (`wake_child_notification_listener`) to the Child device.[cite:40][cite:57]
 
 ## Push notification strategy
 
@@ -215,7 +215,7 @@ Firebase states that there is **no cost to using Cloud Messaging**.[cite:94] Cur
 
 Use FCM for two distinct purposes:
 1. **Parent alert push** — visible system notification when the Parent app is not active.[cite:75][cite:82]
-2. **Child recovery/wake signal** — optional high-priority data message when the Child-side process needs recovery support.[cite:40][cite:57]
+2. **Child recovery/wake signal** — high-priority FCM data message (`wake_child_notification_listener`) that on the Child updates presence (`last_seen_at`) and flushes the local MMKV notification buffer.[cite:40][cite:57]
 
 ### Firebase setup requirement
 

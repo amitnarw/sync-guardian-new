@@ -42,7 +42,7 @@ function getStartDate(window: TimeWindow): string {
 
 export function useInsightsData(): UseInsightsDataResult {
   const { deviceId, pairId: storePairId, userRole } = useAuthStore();
-  const [window, setWindow] = useState<TimeWindow>('week');
+  const [window, setWindow] = useState<TimeWindow>('today');
   const [notifications, setNotifications] = useState<InsightsNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,13 +102,10 @@ export function useInsightsData(): UseInsightsDataResult {
 
         const startDate = getStartDate(window);
 
-        const { data, error: fetchError } = await supabase
-          .from('mirrored_notifications')
-          .select('id, source_package, source_app_name, notification_title, notification_posted_at, app_icon_base64')
-          .eq('pair_id', pairId)
-          .gte('notification_posted_at', startDate)
-          .order('notification_posted_at', { ascending: false })
-          .limit(2000);
+        const { data, error: fetchError } = await supabase.functions.invoke(
+          'get-notifications',
+          { body: { pair_id: pairId, since: startDate, limit: 2000 } },
+        )
 
         if (cancelled) return;
 
@@ -117,7 +114,7 @@ export function useInsightsData(): UseInsightsDataResult {
           return;
         }
 
-        setNotifications(data as InsightsNotification[] ?? []);
+        setNotifications(data?.data as InsightsNotification[] ?? []);
 
         if (channelRef.current) {
           supabase.removeChannel(channelRef.current);
@@ -125,21 +122,31 @@ export function useInsightsData(): UseInsightsDataResult {
         }
 
         const channel = supabase
-          .channel(`insights_${pairId}`)
+          .channel(`insights_${pairId}_${Math.random().toString(36).slice(2)}`)
           .on('postgres_changes', {
             event: 'INSERT',
             schema: 'public',
             table: 'mirrored_notifications',
             filter: `pair_id=eq.${pairId}`,
-          }, (payload) => {
-            const newN = payload.new as InsightsNotification;
-            const currentStart = getStartDate(window);
-            if (newN.notification_posted_at >= currentStart) {
-              setNotifications(prev => {
-                const exists = prev.some(n => n.id === newN.id);
-                if (exists) return prev;
-                return [newN, ...prev];
-              });
+          }, async (payload) => {
+            const notifId = (payload.new as any).id;
+            if (!notifId) return;
+
+            const { data: fetched } = await supabase.functions.invoke(
+              'get-notifications',
+              { body: { ids: [notifId] } },
+            )
+
+            if (fetched?.data?.length > 0) {
+              const newN = fetched.data[0] as InsightsNotification;
+              const currentStart = getStartDate(window);
+              if (newN.notification_posted_at >= currentStart) {
+                setNotifications(prev => {
+                  const exists = prev.some(n => n.id === newN.id);
+                  if (exists) return prev;
+                  return [newN, ...prev];
+                });
+              }
             }
           })
           .subscribe();

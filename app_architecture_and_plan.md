@@ -16,7 +16,7 @@ The stack has been strictly defined to ensure reliability, offline support, and 
 - **Notification Capture:** `react-native-android-notification-listener` (Native Android module wrapper).
 - **Local Buffer:** **MMKV** for ultra-fast local persistence of unsent notifications when the Child device loses internet.
 - **State Management:** Zustand.
-- **Push Delivery:** FCM (Firebase Cloud Messaging) for background wake-ups.
+- **Push Delivery:** FCM (Firebase Cloud Messaging) for background wake-ups and parent→child ping/wake signal (presence sync + buffer flush).
 
 ### Backend Infrastructure
 We are **not** using a custom Node.js/Express backend.

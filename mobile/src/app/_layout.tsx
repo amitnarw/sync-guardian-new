@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { getApp } from '@react-native-firebase/app';
 import { getMessaging, requestPermission, getToken, AuthorizationStatus } from '@react-native-firebase/messaging';
 import '@/services/fcm-handler';
+import '@/services/notification-listener';
 import { flushBuffer } from '@/services/mmkv-buffer';
 import { logger } from '@/services/logger';
 import * as SplashScreen from 'expo-splash-screen';
@@ -171,11 +172,13 @@ export default function RootLayout() {
     const { incrementSyncDeviceError, clearSyncDeviceError } = useAuthStore.getState();
 
     const updatePresence = async (foreground: boolean) => {
+      const fcmToken = useAuthStore.getState().fcmToken;
       try {
         await supabase.functions.invoke('sync-device', {
           body: {
             device_id: deviceId,
             is_foreground: foreground,
+            push_token: fcmToken,
           },
         });
         clearSyncDeviceError();

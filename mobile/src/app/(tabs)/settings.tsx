@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Dimensions, Text, ActivityIndicator, Modal, TouchableWithoutFeedback, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { StyleSheet, View, TouchableOpacity, Dimensions, Text, ActivityIndicator, RefreshControl } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { ThemedView } from '@/components/themed-view';
+import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
+import { ChildAppsModal } from '@/components/ui/child-apps-modal';
 import { supabase } from '@/lib/supabase';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
-import { UserAvatar } from '@/components/user-avatar';
+import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import { logger } from '@/services/logger';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -40,29 +42,71 @@ const C = {
   outline: '#807a6d',
   outlineVariant: '#b9b1a3',
   error: '#a83836',
+  errorLight: '#ffadac',
   white: '#ffffff',
 } as const;
 
+function formatTimeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 export default function SettingsScreen() {
-  const [children, setChildren] = useState<{ id: string; child_device_id: string; device_name: string }[]>([]);
+  const [children, setChildren] = useState<{
+    id: string;
+    child_device_id: string;
+    child_user_id: string;
+    display_name: string | null;
+    is_foreground: boolean;
+    last_seen_at: string | null;
+  }[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { deviceId } = useAuthStore();
-  const { showModal } = useAppModal();
+  const { showModal, updateModal } = useAppModal();
 
   const fetchChildren = useCallback(async () => {
     if (!deviceId) return;
     const { data } = await supabase
       .from('pairs')
-      .select('id, child_device_id, child_device:devices!child_device_id(device_name)')
+      .select('id, child_device_id, child_user_id, child_device:devices!child_device_id(is_foreground, last_seen_at)')
       .eq('parent_device_id', deviceId)
       .in('status', ['active', 'pending']);
-    
+
     if (data) {
-      setChildren(data.map((d: any) => ({
+      const mapped = data.map((d: any) => ({
         id: d.id,
         child_device_id: d.child_device_id,
-        device_name: d.child_device?.device_name || 'Child Device'
-      })));
+        child_user_id: d.child_user_id,
+        display_name: null as string | null,
+        is_foreground: d.child_device?.is_foreground || false,
+        last_seen_at: d.child_device?.last_seen_at || null,
+      }));
+
+      setChildren(mapped);
+
+      // Resolve each child's display name from their profile (auth.users sourced).
+      await Promise.all(
+        mapped.map(async (child) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', child.child_user_id)
+            .maybeSingle();
+          setChildren((prev) =>
+            prev.map((c) =>
+              c.id === child.id
+                ? { ...c, display_name: (profile as any)?.display_name ?? null }
+                : c,
+            ),
+          );
+        }),
+      );
     }
   }, [deviceId]);
 
@@ -84,20 +128,26 @@ export default function SettingsScreen() {
   const handlePingChild = async (childDeviceId: string, pairId: string) => {
     setPingingId(pairId);
     try {
-      const { error } = await supabase.functions.invoke('ping-child', {
+      const { data, error } = await supabase.functions.invoke('ping-child', {
         body: { child_device_id: childDeviceId },
       });
       if (error) {
+        let status = 0;
         let realMsg = error.message;
         try {
-          const body = error.context && await error.context.json();
-          if (body?.error) realMsg = body.error;
-        } catch {}
+          const ctx = (error as any)?.context;
+          if (ctx) {
+            status = ctx.status;
+            const body = await ctx.clone().json();
+            if (body?.error) realMsg = body.error;
+          }
+        } catch { }
+        logger.warn('ping-child failed', { status, message: realMsg });
         throw new Error(realMsg);
       }
       showModal({
         title: 'Ping Sent',
-        message: 'Wake-up signal sent to child device.',
+        message: 'Wake-up ping sent to child device.',
         icon: 'success',
       });
     } catch (e: any) {
@@ -111,10 +161,11 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleDisconnectChild = (pairId: string, name: string) => {
+  const handleDisconnectChild = (pairId: string, name: string | null) => {
+    const childName = name || 'this child';
     showModal({
       title: 'Disconnect',
-      message: `Are you sure you want to unpair ${name}?`,
+      message: `Are you sure you want to unpair ${childName}?`,
       icon: 'warning',
       primaryButton: 'Unpair',
       primaryVariant: 'destructive',
@@ -126,7 +177,7 @@ export default function SettingsScreen() {
             try {
               const body = error.context && await error.context.json();
               if (body?.error) realMsg = body.error;
-            } catch {}
+            } catch { }
             throw new Error(realMsg);
           }
           setChildren(children.filter(c => c.id !== pairId));
@@ -143,35 +194,11 @@ export default function SettingsScreen() {
   };
 
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [appsModalChild, setAppsModalChild] = useState<{ childDeviceId: string; name: string | null } | null>(null);
   const screenOpacity = useSharedValue(1);
   const containerAnimatedStyle = useAnimatedStyle(() => ({
     opacity: screenOpacity.value,
   }));
-
-  const [showDialog, setShowDialog] = useState(false);
-  const dialogOpacity = useSharedValue(0);
-  const dialogCardScale = useSharedValue(0.88);
-  const dialogCardTranslateY = useSharedValue(24);
-
-  const dialogOverlayStyle = useAnimatedStyle(() => ({
-    opacity: dialogOpacity.value,
-  }));
-
-  const cardAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: dialogOpacity.value,
-    transform: [
-      { scale: dialogCardScale.value },
-      { translateY: dialogCardTranslateY.value },
-    ],
-  }));
-
-  useEffect(() => {
-    if (showDialog) {
-      dialogOpacity.value = withTiming(1, { duration: 300 });
-      dialogCardScale.value = withSpring(1, { stiffness: 300, damping: 24 });
-      dialogCardTranslateY.value = withSpring(0, { stiffness: 300, damping: 24 });
-    }
-  }, [showDialog]);
 
   const { showModal: showPermModal } = useAppModal();
   const permissions = usePermissionStatus('parent');
@@ -185,13 +212,14 @@ export default function SettingsScreen() {
           <PermissionStatusRow
             key={p.key}
             label={p.label}
+            description={p.guideMessage}
             granted={p.granted}
             onRequest={() =>
               showPermModal({
                 title: p.guideTitle,
                 message: p.guideMessage,
                 steps: p.guideSteps,
-                icon: 'info',
+                icon: 'warning',
                 primaryButton: 'Open Settings',
                 onPrimaryPress: p.openSettings,
                 secondaryButton: 'Cancel',
@@ -203,245 +231,220 @@ export default function SettingsScreen() {
     );
   }
 
-  const handleOpenDialog = () => setShowDialog(true);
-
-  const handleStay = () => {
-    dialogOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
-      if (finished) {
-        runOnJS(setShowDialog)(false);
-        dialogCardScale.value = 0.88;
-        dialogCardTranslateY.value = 24;
-      }
+  const handleOpenDialog = () => {
+    showModal({
+      title: 'Leaving so soon?',
+      message: 'Your account is safe. You can sign back in anytime.',
+      icon: 'warning',
+      primaryButton: 'Sign Out',
+      primaryVariant: 'destructive',
+      secondaryButton: 'Stay',
+      preventAutoHide: true,
+      onPrimaryPress: handleConfirmSignOut,
+      onSecondaryPress: () => { },
     });
   };
 
-  const performSignOut = async () => {
-    try {
-      // Import at top, but just use inline require or add import if needed.
-      const { supabase } = require('@/lib/supabase');
-      await supabase.auth.signOut();
-    } catch(e) {}
-    useAuthStore.getState().resetAuth();
-    router.replace('/login');
-  };
-
-  const handleConfirmSignOut = () => {
+  const handleConfirmSignOut = async () => {
     setIsSigningOut(true);
-    dialogOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
-      if (finished) {
-        runOnJS(setShowDialog)(false);
-        screenOpacity.value = withTiming(0, { duration: 400 }, (finished2) => {
-          if (finished2) {
-            runOnJS(performSignOut)();
-          }
-        });
-      }
-    });
+    updateModal({ primaryLoading: true });
+    try {
+      await supabase.auth.signOut();
+      useAuthStore.getState().resetAuth();
+      router.replace('/login');
+    } catch {
+      setIsSigningOut(false);
+      updateModal({ primaryLoading: false, primaryButton: 'Got it' });
+    }
   };
 
   return (
     <ThemedView style={s.container}>
       <Animated.View style={[{ flex: 1 }, containerAnimatedStyle]}>
-      {/* Ambient background glowing circle layer */}
-      <View style={s.ambientBgWrapper}>
-        <LinearGradient
-          colors={['rgba(211, 251, 218, 0.4)', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={s.ambientShape}
-        />
-      </View>
-
-      <SafeAreaView style={s.safeArea} edges={['top']}>
-        {/* Floating Glass Header */}
-        <View style={s.header}>
-          <View style={s.headerLeft}>
-            <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-            <Text style={s.headerTitle}>Sync Guardian</Text>
-          </View>
-          <View style={s.headerRight}>
-            <UserAvatar
-              fallbackSource={require('@/assets/images/mother_avatar.jpg')}
-              role="parent"
-            />
-          </View>
+        {/* Ambient background glowing circle layer */}
+        <View style={s.ambientBgWrapper}>
+          <LinearGradient
+            colors={['rgba(211, 251, 218, 0.4)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={s.ambientShape}
+          />
         </View>
 
-        <ScrollView
-          contentContainerStyle={s.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[C.primary]} tintColor={C.primary} />
-          }
-        >
-          {/* ========== HERO SECTION: EDITORIAL ========== */}
-          <View style={s.heroSection}>
-            <Text style={s.heroTitle}>Sanctuary{'\n'}Spaces</Text>
-            <Text style={s.heroSubtitle}>
-              Shape the rhythm and boundaries of your digital home. Gentle adjustments for a balanced life.
-            </Text>
-          </View>
+          <EdgeFadeScrollView
+            contentContainerStyle={s.scrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[C.primary]} tintColor={C.primary} />
+            }
+          >
+            {/* ========== HERO SECTION: EDITORIAL ========== */}
+            <View style={s.heroSection}>
+              <Text style={s.heroTitle}>Settings</Text>
+              <Text style={s.heroSubtitle}>
+                Manage your family, devices, and notification preferences.
+              </Text>
+            </View>
 
-          {/* ========== BENTO GRID SECTION ========== */}
-          <View style={s.bentoGrid}>
-            {/* Card 1: Profile & Family (Sage Theme) */}
-            <TouchableOpacity style={[s.bentoCard, s.cardProfile]}>
-              <View style={[s.iconWrapper, { backgroundColor: C.primaryContainer }]}>
-                <Ionicons name="people" size={26} color={C.primary} />
-              </View>
-              <Text style={s.cardTitle}>Profile & Family</Text>
-              <Text style={s.cardDesc}>Manage members, update avatars, and nurture your core circle.</Text>
-              
-              {/* Backing blurry green radial blob */}
-              <View style={s.cardBlobProfile} />
-            </TouchableOpacity>
-
-            {/* Card 2: Notifications Rhythm (Terracotta Theme) - Custom top-right corner */}
-            <TouchableOpacity style={[s.bentoCard, s.cardNotifications]}>
-              <View style={[s.iconWrapper, { backgroundColor: C.secondaryContainer }]}>
-                <Ionicons name="notifications-circle" size={26} color={C.secondary} />
-              </View>
-              <Text style={s.cardTitle}>Notifications Rhythm</Text>
-              <Text style={s.cardDesc}>Tune alerts to respect your time. Silence the noise, keep the signals.</Text>
-            </TouchableOpacity>
-
-            {/* Card 3: Device Sanctuary (Umber Theme) - Custom bottom-left corner */}
-            <TouchableOpacity style={[s.bentoCard, s.cardDevices]}>
-              <View style={[s.iconWrapper, { backgroundColor: C.surfaceVariant }]}>
-                <Ionicons name="laptop" size={26} color={C.onSurfaceVariant} />
-              </View>
-              <Text style={s.cardTitle}>Device Sanctuary</Text>
-              <Text style={s.cardDesc}>Overview connected devices, battery health, and sync status.</Text>
-            </TouchableOpacity>
-
-            {/* Card 4: Privacy & Soul (Sage/Cream Blend) */}
-            <TouchableOpacity style={[s.bentoCard, s.cardPrivacy]}>
-              <View style={[s.iconWrapper, { backgroundColor: C.tertiaryContainer }]}>
-                <Ionicons name="key" size={26} color={C.tertiary} />
-              </View>
-              <Text style={s.cardTitle}>Privacy & Soul</Text>
-              <Text style={s.cardDesc}>Data controls, keyword safety, and deep settings for peace of mind.</Text>
-
-              {/* Backing blurry tertiary blob */}
-              <View style={s.cardBlobPrivacy} />
-            </TouchableOpacity>
-          </View>
-
-          {/* ========== CONNECTED CHILDREN ========== */}
-          <View style={s.childrenSection}>
-            <Text style={s.childrenSectionTitle}>Connected Devices ({children.length})</Text>
-            {children.length === 0 ? (
-              <View style={s.emptyStateCard}>
-                <Text style={s.emptyStateText}>No children connected yet.</Text>
-                <TouchableOpacity
-                  style={s.pairNewDeviceBtn}
-                  onPress={() => router.push('/pairing')}
-                >
-                  <Ionicons name="add-circle-outline" size={18} color={C.onPrimary} />
-                  <Text style={s.pairNewDeviceBtnText}>Pair New Device</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              children.map(child => (
-                <View key={child.id} style={s.childRowCard}>
-                  <View style={s.childInfo}>
-                    <View style={s.childAvatarBox}>
-                      <Ionicons name="phone-portrait" size={20} color={C.primary} />
-                    </View>
-                    <Text style={s.childNameText}>{child.device_name}</Text>
-                  </View>
-                   <View style={s.childActions}>
-                    <TouchableOpacity
-                      style={s.manageAppsSmallBtn}
-                      onPress={() => router.push({ pathname: '/app-filters', params: { pairId: child.id } })}
-                    >
-                      <Ionicons name="apps-outline" size={16} color={C.primary} />
-                      <Text style={s.manageAppsSmallText}>Apps</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={s.pingSmallBtn}
-                      onPress={() => handlePingChild(child.child_device_id, child.id)}
-                      disabled={pingingId === child.id}
-                    >
-                      {pingingId === child.id ? (
-                        <ActivityIndicator size="small" color={C.primary} />
-                      ) : (
-                        <Ionicons name="pulse-outline" size={16} color={C.primary} />
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={s.disconnectSmallBtn}
-                      onPress={() => handleDisconnectChild(child.id, child.device_name)}
-                    >
-                      <Text style={s.disconnectSmallText}>Disconnect</Text>
-                    </TouchableOpacity>
-                  </View>
+            {/* ========== BENTO GRID SECTION ========== */}
+            <View style={s.bentoGrid}>
+              {/* Card 1: Profile & Family (Sage Theme) */}
+              <TouchableOpacity style={[s.bentoCard, s.cardProfile]}>
+                <View style={[s.iconWrapper, { backgroundColor: C.primaryContainer }]}>
+                  <Ionicons name="people" size={26} color={C.primary} />
                 </View>
-              ))
-            )}
-          </View>
+                <Text style={s.cardTitle}>Profile & Family</Text>
+                <Text style={s.cardDesc}>Manage members, update avatars, and organise your family.</Text>
 
-          {/* ========== PERMISSIONS SECTION ========== */}
-          <PermissionsSection />
-
-          {/* ========== ACTION AREA: SIGN OUT GENTLY ========== */}
-          <View style={s.actionSection}>
-            <TouchableOpacity
-              style={[s.signOutButton, isSigningOut && s.signOutButtonDisabled]}
-              onPress={handleOpenDialog}
-              disabled={isSigningOut}
-            >
-              {isSigningOut ? (
-                <ActivityIndicator size="small" color={C.onSurface} style={s.signOutIcon} />
-              ) : (
-                <Ionicons name="log-out-outline" size={20} color={C.onSurface} style={s.signOutIcon} />
-              )}
-              <Text style={s.signOutText}>Sign Out Gently</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Bottom spacing */}
-          <View style={s.bottomSpacer} />
-        </ScrollView>
-      </SafeAreaView>
-
-      <Modal
-        visible={showDialog}
-        transparent={true}
-        animationType="none"
-        onRequestClose={handleStay}
-      >
-        <Animated.View style={[s.dialogOverlay, dialogOverlayStyle]}>
-          <TouchableWithoutFeedback onPress={handleStay}>
-            <View style={StyleSheet.absoluteFill} />
-          </TouchableWithoutFeedback>
-          <Animated.View style={[s.dialogCard, cardAnimatedStyle]}>
-            <Text style={s.dialogTitle}>Leaving so soon?</Text>
-            <Text style={s.dialogBody}>
-              Your digital sanctuary will be here when you return.
-            </Text>
-            <View style={s.dialogActions}>
-              <TouchableOpacity style={s.dialogButtonStay} onPress={handleStay}>
-                <Text style={s.dialogButtonStayText}>Stay</Text>
+                {/* Backing blurry green radial blob */}
+                <View style={s.cardBlobProfile} />
               </TouchableOpacity>
-              <TouchableOpacity style={s.dialogButtonSignOut} onPress={handleConfirmSignOut}>
-                {isSigningOut ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={s.dialogButtonSignOutText}>Sign Out</Text>
-                )}
+
+              {/* Card 2: Notification Preferences (Terracotta Theme) - Custom top-right corner */}
+              <TouchableOpacity style={[s.bentoCard, s.cardNotifications]}>
+                <View style={[s.iconWrapper, { backgroundColor: C.secondaryContainer }]}>
+                  <Ionicons name="notifications-circle" size={26} color={C.secondary} />
+                </View>
+                <Text style={s.cardTitle}>Notification Preferences</Text>
+                <Text style={s.cardDesc}>Choose what alerts you get and when.</Text>
+              </TouchableOpacity>
+
+              {/* Card 3: Connected Devices (Umber Theme) - Custom bottom-left corner */}
+              <TouchableOpacity style={[s.bentoCard, s.cardDevices]}>
+                <View style={[s.iconWrapper, { backgroundColor: C.surfaceVariant }]}>
+                  <Ionicons name="laptop" size={26} color={C.onSurfaceVariant} />
+                </View>
+                <Text style={s.cardTitle}>Connected Devices</Text>
+                <Text style={s.cardDesc}>Overview of connected devices, battery health, and sync status.</Text>
+              </TouchableOpacity>
+
+              {/* Card 4: Privacy & Security (Sage/Cream Blend) */}
+              <TouchableOpacity style={[s.bentoCard, s.cardPrivacy]}>
+                <View style={[s.iconWrapper, { backgroundColor: C.tertiaryContainer }]}>
+                  <Ionicons name="key" size={26} color={C.tertiary} />
+                </View>
+                <Text style={s.cardTitle}>Privacy & Security</Text>
+                <Text style={s.cardDesc}>Data controls, keyword safety, and account settings.</Text>
+
+                {/* Backing blurry tertiary blob */}
+                <View style={s.cardBlobPrivacy} />
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </Animated.View>
-      </Modal>
+
+            {/* ========== CONNECTED CHILDREN ========== */}
+            <View style={s.childrenSection}>
+              <View style={s.childrenSectionHeader}>
+                <Text style={s.childrenSectionTitle}>Connected Devices</Text>
+                <View style={s.countBadge}>
+                  <Text style={s.countBadgeText}>{children.length}</Text>
+                </View>
+              </View>
+              {children.length === 0 ? (
+                <View style={s.emptyStateCard}>
+                  <Text style={s.emptyStateText}>No children connected yet.</Text>
+                  <TouchableOpacity
+                    style={s.pairNewDeviceBtn}
+                    onPress={() => router.push('/pairing')}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color={C.onPrimary} />
+                    <Text style={s.pairNewDeviceBtnText}>Pair New Device</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                children.map(child => {
+                  const isOnline = child.is_foreground || (child.last_seen_at && (Date.now() - new Date(child.last_seen_at).getTime() < 120000));
+                  const lastSeenText = isOnline ? 'Online' : child.last_seen_at ? `Last seen ${formatTimeAgo(new Date(child.last_seen_at).getTime())}` : 'Offline';
+
+                  return (
+                    <View key={child.id} style={s.childRowCard}>
+                      {/* Left: Child avatar */}
+                      <Image
+                        source={require('@/assets/images/leo_avatar.jpg')}
+                        style={s.childAvatar}
+                      />
+
+                      {/* Middle: Child details */}
+                      <View style={s.childDetails}>
+                        <Text style={s.childNameText}>{child.display_name || 'Child Device'}</Text>
+                        <View style={s.statusRow}>
+                          <View style={[s.statusDot, { backgroundColor: isOnline ? C.primary : C.outline }]} />
+                          <Text style={s.statusText}>{lastSeenText}</Text>
+                        </View>
+                      </View>
+
+                      {/* Right: Available options */}
+                      <View style={s.childActions}>
+                        <TouchableOpacity
+                          style={[s.actionButton, { backgroundColor: C.primaryContainer }]}
+                          onPress={() => setAppsModalChild({ childDeviceId: child.child_device_id, name: child.display_name })}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="apps-outline" size={20} color={C.primary} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[s.actionButton, { backgroundColor: C.surfaceContainerHighest }]}
+                          onPress={() => handlePingChild(child.child_device_id, child.id)}
+                          disabled={pingingId === child.id}
+                          activeOpacity={0.7}
+                        >
+                          {pingingId === child.id ? (
+                            <ActivityIndicator size="small" color={C.primary} />
+                          ) : (
+                            <Ionicons name="pulse-outline" size={20} color={C.primary} />
+                          )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[s.actionButton, { backgroundColor: C.secondaryContainer }]}
+                          onPress={() => handleDisconnectChild(child.id, child.display_name)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="trash-outline" size={20} color={C.secondary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            {/* ========== PERMISSIONS SECTION ========== */}
+            <PermissionsSection />
+
+            {/* ========== ACTION AREA: SIGN OUT GENTLY ========== */}
+            <View style={s.actionSection}>
+              <TouchableOpacity
+                style={[s.signOutButton, isSigningOut && s.signOutButtonDisabled]}
+                onPress={handleOpenDialog}
+                disabled={isSigningOut}
+              >
+                {isSigningOut ? (
+                  <ActivityIndicator size="small" color={C.onSurface} style={s.signOutIcon} />
+                ) : (
+                  <Ionicons name="log-out-outline" size={20} color={C.onSurface} style={s.signOutIcon} />
+                )}
+                <Text style={s.signOutText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Bottom spacing */}
+            <View style={s.bottomSpacer} />
+          </EdgeFadeScrollView>
+
+        <ChildAppsModal
+          visible={!!appsModalChild}
+          childDeviceId={appsModalChild?.childDeviceId ?? ''}
+          childName={appsModalChild?.name}
+          onClose={() => setAppsModalChild(null)}
+        />
       </Animated.View>
     </ThemedView>
   );
 }
 
 // ============================================================
-// STYLES — mapped precisely from Stitch settings.html
+// STYLES - mapped precisely from Stitch settings.html
 // ============================================================
 const s = StyleSheet.create({
   container: {
@@ -466,55 +469,19 @@ const s = StyleSheet.create({
     height: 320,
     borderRadius: 160,
   },
-  safeArea: {
-    flex: 1,
-    zIndex: 1,
-  },
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 8,
   },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(255,248,240,0.80)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerIcon: {
-    marginRight: 2,
-  },
-  headerTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-    color: C.primary,
-    letterSpacing: -0.5,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-
-
   /* ---------- Hero Section ---------- */
   heroSection: {
-    marginTop: 24,
     marginBottom: 32,
     gap: 12,
   },
   heroTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
     fontSize: 48,
-    lineHeight: 54,
     color: C.onSurface,
     letterSpacing: -1.2,
   },
@@ -608,12 +575,13 @@ const s = StyleSheet.create({
   /* ---------- Action Section ---------- */
   actionSection: {
     alignItems: 'center',
-    marginTop: 8,
+    marginBottom: 50,
   },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.surfaceContainerHighest,
+    backgroundColor: C.errorLight,
+    color: C.error,
     paddingHorizontal: 28,
     paddingVertical: 16,
     borderRadius: 9999,
@@ -635,15 +603,32 @@ const s = StyleSheet.create({
   /* Children Section */
   childrenSection: {
     marginBottom: 32,
-    gap: 12,
+  },
+  childrenSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 8,
+    marginBottom: 12,
   },
   childrenSectionTitle: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 14,
     color: C.onSurfaceVariant,
     letterSpacing: 0.5,
-    marginLeft: 8,
-    marginBottom: 4,
+  },
+  countBadge: {
+    backgroundColor: C.surfaceContainerHighest,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  countBadgeText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    color: C.onSurfaceVariant,
   },
   emptyStateCard: {
     backgroundColor: C.surfaceContainerLowest,
@@ -680,71 +665,60 @@ const s = StyleSheet.create({
   childRowCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: C.surfaceContainerLowest,
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     shadowColor: '#363228',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.02,
     shadowRadius: 12,
     elevation: 1,
+    marginBottom: 12,
   },
-  childInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  childAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.surfaceContainerHigh,
   },
-  childAvatarBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: C.primaryContainer,
+  childDetails: {
+    flex: 1,
+    marginLeft: 12,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   childNameText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 15,
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 16,
     color: C.onSurface,
+    marginBottom: 2,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    color: C.onSurfaceVariant,
   },
   childActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  pingSmallBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: C.primaryContainer,
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  manageAppsSmallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.primaryContainer,
-    paddingHorizontal: 12,
-    height: 36,
-    borderRadius: 18,
-    gap: 4,
-  },
-  manageAppsSmallText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 12,
-    color: C.primary,
-  },
-  disconnectSmallBtn: {
-    backgroundColor: C.secondaryContainer,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  disconnectSmallText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 12,
-    color: C.secondary,
   },
 
   /* Bottom Spacer */
@@ -764,67 +738,4 @@ const s = StyleSheet.create({
     marginBottom: 4,
   },
 
-  /* ---------- Sign Out Dialog ---------- */
-  dialogOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(27,29,14,0.35)',
-  },
-  dialogCard: {
-    width: SCREEN_W - 64,
-    backgroundColor: C.surface,
-    borderRadius: 32,
-    padding: 32,
-    shadowColor: C.onSurface,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-    elevation: 8,
-  },
-  dialogTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 20,
-    lineHeight: 26,
-    color: C.onSurface,
-    letterSpacing: -0.3,
-  },
-  dialogBody: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.onSurfaceVariant,
-    marginTop: 8,
-    marginBottom: 28,
-  },
-  dialogActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  dialogButtonStay: {
-    flex: 1,
-    backgroundColor: C.surfaceContainer,
-    borderRadius: 9999,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  dialogButtonStayText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.onSurface,
-  },
-  dialogButtonSignOut: {
-    flex: 1,
-    backgroundColor: C.primary,
-    borderRadius: 9999,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  dialogButtonSignOutText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#ffffff',
-  },
 });

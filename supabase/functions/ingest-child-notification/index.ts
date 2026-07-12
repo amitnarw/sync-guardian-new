@@ -5,6 +5,7 @@ import { getAdminClient } from '../_shared/supabase-admin.ts'
 import { sendParentPush } from '../_shared/fcm.ts'
 import { isValidUUID, isValidString, sanitizeString, requireBody } from '../_shared/validation.ts'
 import { logger, mapError } from '../_shared/logger.ts'
+import { encryptNotification } from '../_shared/notification-crypto.ts'
 
 function deterministicKey(n: Record<string, unknown>): string {
   const raw = `${n.source_package || ''}|${n.notification_posted_at || ''}|${n.notification_title || ''}|${n.notification_body || ''}`
@@ -26,7 +27,6 @@ interface NotificationRow {
   notification_body: string
   notification_posted_at: string
   notification_key: string
-  metadata_json: unknown
   delivery_mode: 'pending'
 }
 
@@ -143,15 +143,18 @@ serve(async (req) => {
           notification_key: rawKey && rawKey.length > 0
             ? rawKey.slice(0, 256)
             : await deterministicKey(n),
-          metadata_json: n.metadata_json || null,
           delivery_mode: 'pending' as const,
         }
       })
     )
 
+    const encryptedRows = await Promise.all(
+      rows.map((r) => encryptNotification(r as unknown as Record<string, unknown>, pairId)),
+    )
+
     const { data: inserted, error } = await adminClient
       .from('mirrored_notifications')
-      .upsert(rows, { onConflict: 'pair_id, child_device_id, notification_key' })
+      .upsert(encryptedRows, { onConflict: 'pair_id, child_device_id, notification_key' })
       .select()
 
     if (error) throw error

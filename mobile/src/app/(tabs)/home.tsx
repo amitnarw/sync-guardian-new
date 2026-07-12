@@ -1,17 +1,19 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Image, Text, BackHandler, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View, TouchableOpacity, Image, Text, BackHandler, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
+import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { SymbolView } from 'expo-symbols';
 import { BlurView, BlurTargetView } from 'expo-blur';
 import { usePairData } from '@/hooks/use-pair-data';
 import { useAppModal } from '@/hooks/use-app-modal';
-import { UserAvatar } from '@/components/user-avatar';
+import { useSetupStatus } from '@/hooks/use-setup-status';
 import { AppIcon } from '@/components/app-icon';
+import { AuthRadius } from '@/constants/auth-theme';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ============================================================
 // EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
@@ -53,6 +55,23 @@ function groupNotificationsByApp(notifs: { source_package: string | null; source
   return sorted.map((g) => ({ ...g, percentage: Math.round((g.count / max) * 100) }));
 }
 
+function HomeScreenBanner({ onPress, title, subtitle, cta }: { onPress: () => void; title: string; subtitle: string; cta: string }) {
+  return (
+    <View style={s.setupBanner}>
+      <View style={s.setupBannerIconWrap}>
+        <Ionicons name="sparkles" size={20} color={C.onPrimary} />
+      </View>
+      <View style={s.setupBannerText}>
+        <Text style={s.setupBannerTitle}>{title}</Text>
+        <Text style={s.setupBannerSubtitle}>{subtitle}</Text>
+      </View>
+      <TouchableOpacity style={s.setupBannerCta} onPress={onPress} activeOpacity={0.7}>
+        <Text style={s.setupBannerCtaText}>{cta}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function formatTimeAgo(timestamp: number): string {
   if (isNaN(timestamp) || timestamp <= 0) return 'Unknown';
   const diff = Date.now() - timestamp;
@@ -65,13 +84,19 @@ function formatTimeAgo(timestamp: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export default function HomeScreen() {
-  const { childDevice, latestNotification, notifications, isOnline, isLoading, isRefreshing, error, refresh } = usePairData();
-  const { showModal } = useAppModal();
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
-  const childName = childDevice?.device_name || 'Child';
-  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const weekday = weekdays[new Date().getDay()];
+export default function HomeScreen() {
+  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isOnline, isLoading, isRefreshing, error, refresh } = usePairData();
+  const { showModal } = useAppModal();
+  const { loading: setupLoading, hasPair, setupComplete, incompletePairId } = useSetupStatus();
+
+  const childName = childNameFromPair || 'Child';
   const groupedApps = groupNotificationsByApp(notifications);
   const uniqueAppCount = groupedApps.length;
   const lastSeenTime = childDevice?.last_seen_at ? new Date(childDevice.last_seen_at).getTime() : null;
@@ -246,114 +271,137 @@ export default function HomeScreen() {
     };
   });
 
+  const renderSetupBanner = () => {
+    if (setupLoading || setupComplete) return null;
+
+    if (!hasPair) {
+      return (
+        <HomeScreenBanner
+          onPress={() => router.push('/parent-setup')}
+          title="Let's connect a child device"
+          subtitle="To start monitoring, link your child's phone in a few taps."
+          cta="Add Child"
+        />
+      );
+    }
+
+    if (incompletePairId) {
+      return (
+        <HomeScreenBanner
+          onPress={() => router.push(`/app-filters?pairId=${incompletePairId}`)}
+          title={`${childNameFromPair || 'Your child'}'s device is waiting`}
+          subtitle="Choose which apps to monitor so monitoring can start."
+          cta="Choose Apps"
+        />
+      );
+    }
+
+    return null;
+  };
+
   return (
     <ThemedView style={s.container}>
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-        <SafeAreaView style={s.safeArea} edges={['top']}>
-          {/* Floating Glass Header */}
-          <View style={s.header}>
-            <View style={s.headerLeft}>
-              <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-              <Text style={s.headerTitle}>Sync Guardian</Text>
+        {renderSetupBanner()}
+
+        <EdgeFadeScrollView
+          contentContainerStyle={s.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
+          }
+        >
+          {/* ========== HERO SECTION (v2) ========== */}
+          <View style={s.heroSection}>
+            {/* Text block */}
+            <View style={s.heroTextBlock}>
+              <Text style={s.flowLabel}>{getGreeting()}</Text>
+              <Text style={s.heroTitle}>
+                Welcome back
+              </Text>
+              <Text style={s.heroDescription}>
+                You&apos;re keeping an eye on {childName}. They&apos;re {isOnline ? 'online' : 'away'} right now.
+              </Text>
+              <View style={s.heroButtons}>
+                <TouchableOpacity style={s.primaryBtn} onPress={() => router.push('/(tabs)/activity')}>
+                  <Text style={s.primaryBtnText}>View Activity</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.secondaryBtn} onPress={() => router.push('/(tabs)/insights')}>
+                  <Text style={s.secondaryBtnText}>View Insights</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={s.headerRight}>
-              <UserAvatar
-                fallbackSource={require('@/assets/images/mother_avatar.jpg')}
-                role="parent"
-              />
+
+            {/* Visual block */}
+            <View style={s.visualBlock}>
+              {/* Decorative blurred blob behind hearth */}
+              <View style={s.decoBlobBehind} />
+
+              {/* Hearth Blob Container (clipping wrapper) */}
+              <Animated.View
+                style={[s.hearthBlob, animatedBlobStyle]}
+              >
+                <LinearGradient
+                  colors={[C.primary, C.primaryContainer]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Animated.View style={[s.hearthInner, animatedInnerStyle]}>
+                  <SymbolView
+                    name={"shield_with_heart" as any}
+                    size={64}
+                    type="monochrome"
+                    tintColor="#ffffff"
+                  />
+                </Animated.View>
+              </Animated.View>
+
+              {/* Floating Presence Card */}
+              <View style={s.timerCardContainer}>
+                <BlurView
+                  intensity={80}
+                  tint="light"
+                  style={s.timerCard}
+                >
+                  <View style={s.timerHeader}>
+                    <View style={[s.presenceDot, { backgroundColor: isOnline ? C.primary : C.outline }]} />
+                    <Text style={s.timerText}>
+                      {isOnline
+                        ? 'Online now'
+                        : lastSeenTime
+                          ? `Last seen ${formatTimeAgo(lastSeenTime)}`
+                          : 'No activity yet'}
+                    </Text>
+                  </View>
+                </BlurView>
+              </View>
             </View>
           </View>
 
-          <ScrollView
-            contentContainerStyle={s.scrollContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
-            }
-          >
-            {/* ========== HERO SECTION (v2) ========== */}
-            <View style={s.heroSection}>
-              {/* Text block */}
-              <View style={s.heroTextBlock}>
-                <Text style={s.flowLabel}>MORNING FLOW</Text>
-                <Text style={s.heroTitle}>
-                  Gentle rhythm for{'\n'}
-                  <Text style={s.heroTitleAccent}>{childName}&apos;s {weekday}</Text>
-                </Text>
-                <Text style={s.heroDescription}>
-                  {childName} is {isOnline ? 'online' : 'away'} at the moment.
-                </Text>
-                <View style={s.heroButtons}>
-                  <TouchableOpacity style={s.primaryBtn} onPress={() => router.push('/(tabs)/activity')}>
-                    <Text style={s.primaryBtnText}>View Activity</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.secondaryBtn} onPress={() => router.push('/(tabs)/insights')}>
-                    <Text style={s.secondaryBtnText}>View Insights</Text>
-                  </TouchableOpacity>
+          <View style={s.leoCard}>
+            {isLoading ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 12 }}>
+                <Skeleton width={52} height={52} borderRadius={26} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <Skeleton width={140} height={16} borderRadius={8} />
+                  <Skeleton width={200} height={12} borderRadius={6} />
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                  <Skeleton width={12} height={12} borderRadius={6} style={{ alignSelf: 'center' }} />
+                  <Skeleton width={40} height={12} borderRadius={6} />
                 </View>
               </View>
-
-              {/* Visual block */}
-              <View style={s.visualBlock}>
-                {/* Decorative blurred blob behind hearth */}
-                <View style={s.decoBlobBehind} />
-
-                {/* Hearth Blob Container (clipping wrapper) */}
-                <Animated.View
-                  style={[s.hearthBlob, animatedBlobStyle]}
-                >
-                  <LinearGradient
-                    colors={[C.primary, C.primaryContainer]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <Animated.View style={[s.hearthInner, animatedInnerStyle]}>
-                    <SymbolView
-                      name={"shield_with_heart" as any}
-                      size={64}
-                      type="monochrome"
-                      tintColor="#ffffff"
-                    />
-                  </Animated.View>
-                </Animated.View>
-
-                {/* Floating Presence Card */}
-                <View style={s.timerCardContainer}>
-                  <BlurView
-                    intensity={80}
-                    tint="light"
-                    style={s.timerCard}
-                  >
-                    <View style={s.timerHeader}>
-                      <View style={[s.presenceDot, { backgroundColor: isOnline ? C.primary : C.outline }]} />
-                      <Text style={s.timerText}>
-                        {isOnline
-                          ? 'Online now'
-                          : lastSeenTime
-                            ? `Last seen ${formatTimeAgo(lastSeenTime)}`
-                            : 'No activity yet'}
-                      </Text>
-                    </View>
-                  </BlurView>
-                </View>
+            ) : error && !childDevice ? (
+              <View style={{ padding: 32, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
               </View>
-            </View>
-
-            {/* ========== CHILD STATUS CARD (live) ========== */}
-            <View style={s.leoCard}>
-              {isLoading ? (
-                <ActivityIndicator size="large" color={C.primary} style={{ padding: 32 }} />
-              ) : error && !childDevice ? (
-                <View style={{ padding: 32, alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
-                </View>
-              ) : !childDevice ? (
-                <View style={{ padding: 32, alignItems: 'center' }}>
-                  <Ionicons name="phone-portrait-outline" size={40} color={C.outline} />
-                  <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>No child connected yet</Text>
-                </View>
-              ) : (
+            ) : !childDevice ? (
+              <View style={{ padding: 32, alignItems: 'center' }}>
+                <Ionicons name="phone-portrait-outline" size={40} color={C.outline} />
+                <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>No child connected yet</Text>
+              </View>
+            ) : (
               <View style={s.leoRow}>
                 <View style={s.leoAvatarWrap}>
                   <Image
@@ -368,7 +416,7 @@ export default function HomeScreen() {
                 </View>
                 <View style={s.leoInfo}>
                   <Text style={s.leoName}>
-                    {childDevice.device_name || 'Child'} is {isOnline ? 'Online' : 'Away'}
+                    {childNameFromPair || 'Child'} is {isOnline ? 'Online' : 'Away'}
                   </Text>
                   <Text style={s.leoActivity}>
                     {latestNotification ? (
@@ -393,87 +441,88 @@ export default function HomeScreen() {
                   <Text style={s.harmonyLabel}>{isOnline ? 'Online' : 'Away'}</Text>
                 </View>
               </View>
+            )}
+          </View>
+
+          {/* ========== LATEST ACTIVITY CARD ========== */}
+          <View style={s.bedtimeCard}>
+            <Ionicons name="sparkles" size={28} color={C.onPrimary} />
+            <View style={s.bedtimeTextBlock}>
+              <Text style={s.bedtimeTitle}>
+                {latestNotification
+                  ? `${latestNotification.source_app_name || 'App'} activity`
+                  : 'No recent activity'}
+              </Text>
+              <Text style={s.bedtimeSub}>
+                {latestNotification
+                  ? (latestNotification.notification_title || latestNotification.notification_body || `via ${latestNotification.source_app_name || 'app'}`)
+                  : 'Waiting for child device activity...'}
+              </Text>
+            </View>
+          </View>
+
+          {/* ========== MOST ACTIVE APPS (live) ========== */}
+          <View style={s.appsSection}>
+            <View style={s.appsHeader}>
+              <Text style={s.appsTitle}>Most active apps</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/activity')}>
+                <Text style={s.viewAll}>View all</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.appsList}>
+              {groupNotificationsByApp(notifications).slice(0, 3).map((app, i) => (
+                <View key={app.name} style={s.appItem}>
+                  <View style={s.appIconBox}>
+                    <AppIcon iconBase64={app.icon} size={28} fallbackSize={16} />
+                  </View>
+                  <View style={s.appDetails}>
+                    <View style={s.appMeta}>
+                      <Text style={s.appName} numberOfLines={1} ellipsizeMode="tail">{app.name}</Text>
+                      <Text style={s.appDuration}>{app.count} notification{app.count !== 1 ? 's' : ''}</Text>
+                    </View>
+                    <Text style={s.appSubtitle} numberOfLines={1}>
+                      {app.percentage === 100 ? 'Most active app today' : `${app.percentage}% relative activity`}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+              {!isLoading && notifications.length === 0 && (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline }}>No notifications yet</Text>
+                </View>
               )}
             </View>
+          </View>
 
-            {/* ========== LATEST ACTIVITY CARD ========== */}
-            <View style={s.bedtimeCard}>
-              <Ionicons name="sparkles" size={28} color={C.onPrimary} />
-              <View style={s.bedtimeTextBlock}>
-                <Text style={s.bedtimeTitle}>
-                  {latestNotification
-                    ? `${latestNotification.source_app_name || 'App'} activity`
-                    : 'No recent activity'}
-                </Text>
-                <Text style={s.bedtimeSub}>
-                  {latestNotification
-                    ? (latestNotification.notification_title || latestNotification.notification_body || `via ${latestNotification.source_app_name || 'app'}`)
-                    : 'Waiting for child device activity...'}
-                </Text>
+          {/* ========== APP VARIETY CARD ========== */}
+          <View style={s.insightsCard}>
+            <View style={s.insightsLabelRow}>
+              <View style={s.insightsLabelPill}>
+                <Text style={s.insightsLabelText}>App Variety</Text>
               </View>
             </View>
+            <Text style={s.insightsTitle}>
+              {uniqueAppCount > 0 ? `${uniqueAppCount} app${uniqueAppCount !== 1 ? 's' : ''}` : 'No activity yet'}
+            </Text>
+            <Text style={s.insightsDesc}>
+              {uniqueAppCount > 0
+                ? `${childName} used ${uniqueAppCount} different app${uniqueAppCount !== 1 ? 's' : ''} today`
+                : 'App diversity will appear here once the child device is active.'}
+            </Text>
+            <TouchableOpacity style={s.insightsCta} onPress={() => router.push('/(tabs)/insights')}>
+              <Text style={s.insightsCtaText}>Explore Insights</Text>
+            </TouchableOpacity>
 
-            {/* ========== MOST ACTIVE APPS (live) ========== */}
-            <View style={s.appsSection}>
-              <View style={s.appsHeader}>
-                <Text style={s.appsTitle}>Most active apps</Text>
-                <TouchableOpacity onPress={() => router.push('/(tabs)/activity')}>
-                  <Text style={s.viewAll}>View all</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={s.appsList}>
-                {groupNotificationsByApp(notifications).slice(0, 3).map((app, i) => (
-                  <View key={app.name} style={s.appItem}>
-                    <AppIcon iconBase64={app.icon} size={40} fallbackSize={20} />
-                    <View style={s.appDetails}>
-                      <View style={s.appMeta}>
-                        <Text style={s.appName} numberOfLines={1} ellipsizeMode="tail">{app.name}</Text>
-                        <Text style={s.appDuration}>{app.count} notification{app.count !== 1 ? 's' : ''}</Text>
-                      </View>
-                      <View style={s.appTrack}>
-                        <View style={[s.appFill, { width: `${Math.max(app.percentage, 10)}%` as any, backgroundColor: [C.primary, C.secondary, '#87a96b'][i % 3] }]} />
-                      </View>
-                    </View>
-                  </View>
-                ))}
-                {!isLoading && notifications.length === 0 && (
-                  <View style={{ padding: 24, alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline }}>No notifications yet</Text>
-                  </View>
-                )}
-              </View>
+            {/* Decorative blurred blob */}
+            <Animated.View style={[s.insightsBlob, animatedInsightsBlobStyle]} />
+            {/* Icon watermark */}
+            <View style={s.insightsWatermark}>
+              <MaterialCommunityIcons name="chart-bell-curve" size={96} color={C.primary} />
             </View>
+          </View>
 
-            {/* ========== APP VARIETY CARD ========== */}
-            <View style={s.insightsCard}>
-              <View style={s.insightsLabelRow}>
-                <View style={s.insightsLabelPill}>
-                  <Text style={s.insightsLabelText}>App Variety</Text>
-                </View>
-              </View>
-              <Text style={s.insightsTitle}>
-                {uniqueAppCount > 0 ? `${uniqueAppCount} app${uniqueAppCount !== 1 ? 's' : ''}` : 'No activity yet'}
-              </Text>
-              <Text style={s.insightsDesc}>
-                {uniqueAppCount > 0
-                  ? `${childName} used ${uniqueAppCount} different app${uniqueAppCount !== 1 ? 's' : ''} today`
-                  : 'App diversity will appear here once the child device is active.'}
-              </Text>
-              <TouchableOpacity style={s.insightsCta} onPress={() => router.push('/(tabs)/insights')}>
-                <Text style={s.insightsCtaText}>Explore Insights</Text>
-              </TouchableOpacity>
-
-              {/* Decorative blurred blob */}
-              <Animated.View style={[s.insightsBlob, animatedInsightsBlobStyle]} />
-              {/* Icon watermark */}
-              <View style={s.insightsWatermark}>
-                <MaterialCommunityIcons name="chart-bell-curve" size={96} color={C.primary} />
-              </View>
-            </View>
-
-            <View style={s.bottomSpacer} />
-          </ScrollView>
-        </SafeAreaView>
+          <View style={s.bottomSpacer} />
+        </EdgeFadeScrollView>
       </BlurTargetView>
 
     </ThemedView>
@@ -481,50 +530,18 @@ export default function HomeScreen() {
 }
 
 // ============================================================
-// STYLES — mapped precisely from Stitch Tailwind
+// STYLES - mapped precisely from Stitch Tailwind
 // ============================================================
 const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.surface,
   },
-  safeArea: {
-    flex: 1,
-  },
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 8,
   },
 
-  /* ---------- Header ---------- */
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(255,248,240,0.80)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerIcon: {
-    marginRight: 2,
-  },
-  headerTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-    color: C.primary,
-    letterSpacing: -0.5,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
   iconButton: {
     width: 40,
     height: 40,
@@ -869,27 +886,33 @@ const s = StyleSheet.create({
     color: C.primary,
   },
   appsList: {
-    gap: 10,
+    gap: 12,
   },
   appItem: {
-    backgroundColor: C.surfaceContainerLow,
-    padding: 20,
-    borderRadius: 24,
+    backgroundColor: C.surfaceContainerLowest,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
+    shadowColor: '#36322832',
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 4,
+    elevation: 2,
   },
   appIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: C.surfaceContainerHighest,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: C.surfaceContainerHigh,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   appDetails: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   appMeta: {
     flexDirection: 'row',
@@ -898,26 +921,22 @@ const s = StyleSheet.create({
   },
   appName: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
+    fontSize: 15,
     color: C.onSurface,
     flexShrink: 1,
     marginRight: 8,
   },
   appDuration: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'PlusJakartaSans-Medium',
     fontSize: 12,
-    color: 'rgba(54,50,40,0.5)',
+    color: C.onSurfaceVariant,
     flexShrink: 0,
   },
-  appTrack: {
-    height: 6,
-    backgroundColor: C.surfaceContainerHigh,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  appFill: {
-    height: '100%',
-    borderRadius: 3,
+  appSubtitle: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 13,
+    color: C.primary,
+    lineHeight: 18,
   },
 
   /* ---------- Insights Card ---------- */
@@ -1004,6 +1023,60 @@ const s = StyleSheet.create({
   /* ---------- Bottom Spacer ---------- */
   bottomSpacer: {
     height: 130,
+  },
+
+  /* ---------- Setup Banner ---------- */
+  setupBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 24,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: C.tertiaryContainer,
+    borderRadius: AuthRadius.xl,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  setupBannerIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setupBannerText: {
+    flex: 1,
+  },
+  setupBannerTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: C.onSurface,
+  },
+  setupBannerSubtitle: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: C.onSurfaceVariant,
+    marginTop: 2,
+  },
+  setupBannerCta: {
+    backgroundColor: C.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: AuthRadius.full,
+  },
+  setupBannerCtaText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 13,
+    color: C.onPrimary,
   },
 
   /* ---------- Bottom Nav ---------- */

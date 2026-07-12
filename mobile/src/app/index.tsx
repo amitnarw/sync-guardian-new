@@ -1,16 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/hooks/use-auth-store';
-import { supabase } from '@/lib/supabase';
+import { getOnboardingState } from '@/services/onboarding-api';
 
 export default function Index() {
   const _hasHydrated = useAuthStore((state) => state._hasHydrated);
   const sessionChecked = useAuthStore((state) => state.sessionChecked);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const userRole = useAuthStore((state) => state.userRole);
-  const pairId = useAuthStore((state) => state.pairId);
-  const clearPair = useAuthStore((state) => state.clearPair);
-  const validatingRef = useRef(false);
 
   useEffect(() => {
     if (!_hasHydrated || !sessionChecked) return;
@@ -20,45 +16,42 @@ export default function Index() {
       return;
     }
 
-    if (!userRole) {
-      router.replace('/role-selection');
-      return;
-    }
+    let cancelled = false;
 
-    if (userRole !== 'child') {
-      router.replace('/(tabs)/home');
-      return;
-    }
-
-    if (!pairId) {
-      router.replace('/pairing');
-      return;
-    }
-
-    // Child has a stored pairId — validate it's still active on boot
-    if (validatingRef.current) return;
-
-    validatingRef.current = true;
     (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('pairs')
-          .select('status')
-          .eq('id', pairId)
-          .single();
-        if (error || !data || data.status !== 'active') {
-          clearPair();
-          router.replace('/pairing');
-        } else {
-          router.replace('/(child)/home');
-        }
-      } catch {
-        router.replace('/(child)/home');
-      } finally {
-        validatingRef.current = false;
+      const state = await getOnboardingState();
+      if (cancelled) return;
+
+      // Keep local role cache in sync with the DB source of truth.
+      if (state.selected_role) {
+        useAuthStore.getState().setUserRole(state.selected_role);
       }
-    })();
-  }, [_hasHydrated, sessionChecked, isAuthenticated, userRole, pairId, clearPair]);
+
+      if (state.onboarding_completed) {
+        if (state.selected_role === 'child') {
+          router.replace('/(child)/home');
+        } else {
+          router.replace('/(tabs)/home');
+        }
+        return;
+      }
+
+      if (state.selected_role === 'admin') {
+        router.replace('/(admin)/dashboard');
+        return;
+      }
+
+      router.replace('/onboarding');
+    })()
+      .catch(() => {
+        if (!cancelled) router.replace('/onboarding');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [_hasHydrated, sessionChecked, isAuthenticated]);
 
   return null;
 }
+

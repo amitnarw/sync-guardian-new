@@ -466,3 +466,18 @@ entrypoint = "./functions/sync-installed-apps/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/update-app-filters/index.ts"
+
+[functions.get-onboarding-state]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-onboarding-state/index.ts"
+
+[functions.set-onboarding-role]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/set-onboarding-role/index.ts"
+
+[functions.get-notifications]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/get-notifications/index.ts"

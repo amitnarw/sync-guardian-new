@@ -31,7 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_pairs_child_device_id ON pairs (child_device_id);
 CREATE INDEX IF NOT EXISTS idx_mirrored_notifications_pair_id ON mirrored_notifications (pair_id);
 CREATE INDEX IF NOT EXISTS idx_pairing_tokens_expires ON pairing_tokens (expires_at) WHERE consumed_at IS NULL;
 
--- Remove pairing_tokens from Realtime (insecure — codes exposed to anon)
+-- Remove pairing_tokens from Realtime (insecure - codes exposed to anon)
 ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pairing_tokens;
 
 -- Drop the insecure "anyone can read unconsumed token" policy

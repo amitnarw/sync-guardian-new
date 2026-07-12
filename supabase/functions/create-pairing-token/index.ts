@@ -3,7 +3,7 @@ import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
 import { signQrJwt } from '../_shared/qr-jwt.ts'
-import { isValidString, sanitizeString } from '../_shared/validation.ts'
+import { upsertOnboardingState } from '../_shared/onboarding-state.ts'
 import { logger, mapError } from '../_shared/logger.ts'
 
 serve(async (req) => {
@@ -16,7 +16,6 @@ serve(async (req) => {
 
     const adminClient = getAdminClient()
     const body = await req.json()
-    const device_name = sanitizeString(body.device_name, 100) || 'Child Device'
 
     const { data: existingDevice } = await adminClient
       .from('devices')
@@ -34,10 +33,22 @@ serve(async (req) => {
           id: child_device_id,
           user_id: user.id,
           role: 'child',
-          device_name,
           platform: 'android',
         })
       if (deviceError) throw deviceError
+
+      // Record that this user has started onboarding as a child.
+      await upsertOnboardingState(user.id, {
+        selected_role: 'child',
+        onboarding_step: 'pairing',
+      }).catch((e) => logger.warn('create-pairing-token', 'onboarding upsert failed', { error: String(e) }))
+    } else {
+      // Existing device: if still in onboarding, keep them at the pairing step
+      // so they resume from where they left off.
+      await upsertOnboardingState(user.id, {
+        selected_role: 'child',
+        onboarding_step: 'pairing',
+      }).catch((e) => logger.warn('create-pairing-token', 'onboarding upsert failed', { error: String(e) }))
     }
 
     // Expire any existing unconsumed tokens for this child device

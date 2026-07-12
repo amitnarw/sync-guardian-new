@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Modal, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { AuthColors, AuthFonts, AuthRadius } from '@/constants/auth-theme';
+import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/hooks/use-auth-store';
@@ -12,8 +14,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/button';
 import { OtpInput } from '@/components/ui/otp-input';
-import { SyncAnimation } from '@/components/ui/sync-animation';
-import { ErrorModal } from '@/components/ui/error-modal';
+import { useAppModal } from '@/hooks/use-app-modal';
 
 const { width } = Dimensions.get('window');
 
@@ -25,14 +26,18 @@ export default function PairingScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [parentMode, setParentMode] = useState<'options' | 'scan' | 'manual'>('options');
+  const [parentMode, setParentMode] = useState<'scan' | 'manual'>('scan');
   const [torch, setTorch] = useState(false);
 
   // Prevents the camera from firing multiple claims within 2 seconds of a scan
   const lastScanRef = useRef(0);
 
-  const [errorModalVisible, setErrorModalVisible] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const { showModal } = useAppModal();
+
+  const handleBack = () => {
+    setUserRole(null);
+    router.replace('/role-selection');
+  };
 
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600);
@@ -43,8 +48,7 @@ export default function PairingScreen() {
         // Ensure session is ready before calling the edge function
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          setErrorMessage('Session not ready. Please try signing in again.');
-          setErrorModalVisible(true);
+          showModal({ title: 'Pairing Failed', message: 'Session not ready. Please try signing in again.', icon: 'error', primaryButton: 'Got it' });
           setLoading(false);
           return;
         }
@@ -147,7 +151,7 @@ export default function PairingScreen() {
         setLoading(true);
       }
       const { data, error } = await supabase.functions.invoke('create-pairing-token', {
-        body: { device_name: 'Child Device' },
+        body: {},
       });
 
       if (error) throw error;
@@ -156,28 +160,27 @@ export default function PairingScreen() {
       setDeviceId(data.data.child_device_id);
       setPairingData(data.data);
     } catch (err: unknown) {
-      let msg = 'Could not create pairing code. Please check your internet and try again.';
+      let msg = 'Could not create pairing code.';
+      let statusInfo = '';
 
       if (err instanceof FunctionsHttpError) {
+        statusInfo = ` (status ${err.context.status})`;
         try {
           const body = await err.context.text();
-          logger.error('create-pairing-token failed, status:', err.context.status);
           const parsed = JSON.parse(body);
           msg = parsed.error || msg;
         } catch {
-          logger.error('create-pairing-token response:', err.context.status, err.context.statusText);
+          msg = `Server returned an error${statusInfo}. Please try again.`;
         }
       } else if (err instanceof Error && err.message !== 'Failed to create session') {
-        logger.error('create-pairing-token error:', err.message);
         msg = err.message;
+        if (err.message.includes('failed to send a request') || err.message.includes('Network request failed')) {
+          msg = 'Could not connect. Please check your internet and try again.';
+        }
       }
 
-      if (msg.includes('failed to send a request')) {
-        msg = 'Could not connect. Please check your internet.';
-      }
-
-      setErrorMessage(msg);
-      setErrorModalVisible(true);
+      logger.error('create-pairing-token error:', msg);
+      showModal({ title: 'Pairing Failed', message: msg + statusInfo, icon: 'error', primaryButton: 'Got it' });
     } finally {
       if (isRegen) {
         setIsRegenerating(false);
@@ -206,9 +209,7 @@ export default function PairingScreen() {
         throw new Error('Scanned code is empty. Please try again.');
       }
 
-      const payload: Record<string, string> = {
-        device_name: 'Parent Device'
-      };
+      const payload: Record<string, string> = {};
 
       if (tokenOrCode.includes('.')) {
         // Looks like a JWT (QR code path)
@@ -233,36 +234,36 @@ export default function PairingScreen() {
 
       setDeviceId(data.data.parent_device_id);
       setPairId(data.data.id);
-      // Parent chooses which child apps may send notifications before onboarding.
-      router.replace('/app-filters');
+      // Edge function already advanced onboarding to the next step.
+      // Return to the onboarding hub, which routes to permissions/app-selection.
+      router.replace('/onboarding');
     } catch (err: unknown) {
-      let msg =
-        'Pairing failed. Ask the child to wait for a new code, then scan again.';
+      let msg = 'Pairing failed.';
+      let statusInfo = '';
 
       if (err instanceof FunctionsHttpError) {
+        statusInfo = ` (status ${err.context.status})`;
         try {
           const body = await err.context.text();
           const parsed = JSON.parse(body);
-          logger.error('claim-pairing-token failed, status:', err.context.status, 'error:', parsed.error);
           msg = parsed.error || msg;
         } catch {
-          logger.error('claim-pairing-token response:', err.context.status, err.context.statusText);
+          msg = `Server returned an error${statusInfo}. Please try again.`;
         }
       } else if (err instanceof Error) {
-        logger.error('claim-pairing-token error:', err.message);
         msg = err.message;
+        if (err.message.includes('failed to send a request') || err.message.includes('Network request failed')) {
+          msg = 'Could not connect. Please check your internet and try again.';
+        }
       }
 
       // Make expiry/usage errors actionable
       if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expired')) {
-        msg =
-          'This pairing code has expired or already been used. Ask the child to tap Regenerate, then scan the new code.';
-      } else if (msg.includes('failed to send a request')) {
-        msg = 'Could not connect. Please check your internet and try again.';
+        msg = 'This pairing code has expired or already been used. Ask the child to tap Regenerate, then scan the new code.';
       }
 
-      setErrorMessage(msg);
-      setErrorModalVisible(true);
+      logger.error('claim-pairing-token error:', msg);
+      showModal({ title: 'Pairing Failed', message: msg + statusInfo, icon: 'error', primaryButton: 'Got it' });
       setScanned(false);
     } finally {
       setIsVerifying(false);
@@ -278,7 +279,7 @@ export default function PairingScreen() {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#44674d" />
-        <Text style={styles.loadingText}>Preparing Sanctuary...</Text>
+        <Text style={styles.loadingText}>Preparing your connection...</Text>
       </View>
     );
   }
@@ -287,12 +288,12 @@ export default function PairingScreen() {
     const isExpired = timeLeft <= 0 && !!pairingData;
 
     return (
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false} style={styles.container}>
-        <View style={styles.header}>
-          <MaterialIcons name="spa" size={32} color="#44674d" />
-          <Text style={styles.title}>Child Mode Setup</Text>
-          <Text style={styles.subtitle}>Scan this code on the Parent device</Text>
-        </View>
+      <EdgeFadeScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false} style={styles.container}>
+          <View style={styles.header}>
+            <MaterialIcons name="spa" size={32} color="#44674d" />
+            <Text style={styles.title}>Child Mode Setup</Text>
+            <Text style={styles.subtitle}>Show this screen to the person with the Parent phone</Text>
+          </View>
 
         <View style={styles.qrContainer}>
           {pairingData ? (
@@ -318,7 +319,7 @@ export default function PairingScreen() {
                 <Text style={styles.orText}>OR ENTER CODE</Text>
                 <View style={[styles.codeWrapper, isExpired && styles.expired]}>
                   <Text style={[styles.codeText, isExpired && styles.expiredText]}>
-                    {isExpired ? '— EXPIRED —' : pairingData.code}
+                    {isExpired ? 'EXPIRED' : pairingData.code}
                   </Text>
                 </View>
 
@@ -335,6 +336,10 @@ export default function PairingScreen() {
                     </Text>
                   )}
                 </View>
+
+                <Text style={styles.childHint}>
+                  Once they scan or enter this code, they’ll choose which apps to monitor and your dashboard will appear.
+                </Text>
               </View>
 
               <View style={styles.bottomRow}>
@@ -366,134 +371,153 @@ export default function PairingScreen() {
           )}
         </View>
 
-        <ErrorModal
-          visible={errorModalVisible}
-          message={errorMessage}
-          onClose={() => setErrorModalVisible(false)}
-        />
-
-      </ScrollView>
+      </EdgeFadeScrollView>
     );
   }
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" bounces={false}>
+      <EdgeFadeScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" bounces={false}>
         <View style={styles.innerContainer}>
-          <View style={styles.header}>
-            <MaterialIcons name="family-restroom" size={32} color="#44674d" />
-            <Text style={styles.title}>Parent Mode Setup</Text>
-            <Text style={styles.subtitle}>Secure your family&apos;s digital environment</Text>
+          
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={handleBack} style={styles.backArrowButton} accessibilityLabel="Go back">
+              <MaterialIcons name="arrow-back" size={24} color={AuthColors.onSurface} />
+            </TouchableOpacity>
           </View>
 
-          {parentMode === 'options' && (
-            <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.optionsContainer}>
-              <View style={styles.animationWrapper}>
-                <SyncAnimation />
-              </View>
+          <Text style={styles.parentTitle}>
+            Scan the QR code on the child&apos;s phone, or enter the 6-digit code.
+          </Text>
 
-              <View style={styles.bottomBlock}>
-                <View style={styles.explainerWrapper}>
-                  <Text style={styles.explainerTitle}>Link a Child Device</Text>
-                  <Text style={styles.explainerText}>
-                    Sync Guardian creates a secure, real-time connection to your child&apos;s phone. Once paired, you can monitor their notifications seamlessly.
-                  </Text>
-                </View>
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              onPress={() => {
+                setParentMode('scan');
+                if (permission && !permission.granted) {
+                  requestPermission();
+                }
+              }}
+              style={[styles.tabButton, parentMode === 'scan' && styles.tabButtonActive]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.tabButtonText, parentMode === 'scan' && styles.tabButtonTextActive]}>
+                Scan QR
+              </Text>
+            </TouchableOpacity>
 
-                <Text style={styles.optionsPrompt}>Choose a pairing method:</Text>
-                <View style={{ flexDirection: 'row', width: '100%', gap: 16 }}>
-                  <Button
-                    title="Scan QR"
-                    icon="qr-code-scanner"
-                    onPress={() => {
-                      setParentMode('scan');
-                      if (!permission?.granted) requestPermission();
-                    }}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    title="Enter Code"
-                    icon="keyboard"
-                    variant="secondary"
-                    onPress={() => setParentMode('manual')}
-                    style={{ flex: 1 }}
-                  />
-                </View>
-              </View>
-            </Animated.View>
-          )}
+            <TouchableOpacity
+              onPress={() => setParentMode('manual')}
+              style={[styles.tabButton, parentMode === 'manual' && styles.tabButtonActive]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.tabButtonText, parentMode === 'manual' && styles.tabButtonTextActive]}>
+                Enter Code
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-          {parentMode === 'scan' && (
-            <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.scanModeContainer}>
-              {!permission ? (
-                <View style={styles.cameraPlaceholder}><ActivityIndicator /></View>
-              ) : !permission.granted ? (
-                <View style={styles.cameraPlaceholder}>
-                  <Text style={styles.cameraSubtitle}>We need camera permission to scan QR</Text>
-                  <Button title="Grant Permission" onPress={requestPermission} />
-                </View>
-              ) : (
-                <View style={styles.scannerWrapper}>
-                  <CameraView
-                    style={StyleSheet.absoluteFillObject}
-                    facing="back"
-                    enableTorch={torch}
-                    onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-                    barcodeScannerSettings={{
-                      barcodeTypes: ["qr"],
-                    }}
-                  />
-                  <View style={styles.scannerOverlay}>
-                    <View style={styles.scannerTarget} />
+          {parentMode === 'scan' ? (
+            <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.cardWrapper}>
+              <View style={styles.viewfinderCard}>
+                {!permission ? (
+                  <View style={styles.cameraPlaceholder}>
+                    <ActivityIndicator size="large" color={AuthColors.primary} />
                   </View>
-                </View>
-              )}
-              <Button
-                title={torch ? "Turn Flashlight Off" : "Turn Flashlight On"}
-                icon={torch ? "flashlight-off" : "flashlight-on"}
-                variant="secondary"
-                onPress={() => setTorch(!torch)}
-                style={styles.torchButton}
-              />
-              <Button
-                title="Back to Options"
-                variant="secondary"
-                onPress={() => setParentMode('options')}
-                style={styles.backButton}
-              />
-            </Animated.View>
-          )}
+                ) : !permission.granted ? (
+                  <View style={styles.cameraPlaceholder}>
+                    <MaterialIcons name="videocam-off" size={48} color={AuthColors.onSurfaceVariant} style={{ marginBottom: 12 }} />
+                    <Text style={styles.cameraSubtitle}>Camera permission is needed to scan the QR code.</Text>
+                    <Button 
+                      title="Grant Permission" 
+                      onPress={requestPermission} 
+                      style={styles.grantButton}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.scannerWrapper}>
+                    <CameraView
+                      style={StyleSheet.absoluteFillObject}
+                      facing="back"
+                      enableTorch={torch}
+                      onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+                      barcodeScannerSettings={{
+                        barcodeTypes: ["qr"],
+                      }}
+                    />
+                    
+                    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                      {/* Viewfinder brackets */}
+                      <View style={[styles.cornerBracket, { top: 24, left: 24, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 24 }]} />
+                      <View style={[styles.cornerBracket, { top: 24, right: 24, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 24 }]} />
+                      <View style={[styles.cornerBracket, { bottom: 24, left: 24, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 24 }]} />
+                      <View style={[styles.cornerBracket, { bottom: 24, right: 24, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 24 }]} />
 
-          {parentMode === 'manual' && (
+                      {/* Center Circular Badge */}
+                      <View style={styles.centerCircularBadge}>
+                        <View style={styles.centerCircularBadgeInner}>
+                          <MaterialIcons name="qr-code" size={24} color={AuthColors.primary} />
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Floating Torch Button */}
+                    <TouchableOpacity 
+                      style={styles.torchFloatingButton} 
+                      onPress={() => setTorch(!torch)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons 
+                        name={torch ? "flashlight-off" : "flashlight-on"} 
+                        size={20} 
+                        color={AuthColors.primary} 
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+          ) : (
             <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.manualEntryContainer}>
-              <Text style={styles.orText}>ENTER 6-DIGIT CODE</Text>
-              <OtpInput
-                length={6}
-                value={manualCode}
-                onChange={setManualCode}
-              />
+              <View style={styles.otpWrapper}>
+                <OtpInput
+                  length={6}
+                  value={manualCode}
+                  onChange={(val) => {
+                    setManualCode(val);
+                    if (val.length === 6) {
+                      verifyToken(val);
+                    }
+                  }}
+                />
+              </View>
               <Button
                 title="Verify Code"
                 onPress={handleManualSubmit}
                 loading={isVerifying}
-                style={{ marginTop: 16 }}
-              />
-              <Button
-                title="Back to Options"
-                variant="secondary"
-                onPress={() => setParentMode('options')}
-                style={styles.backButton}
+                disabled={manualCode.length !== 6}
+                style={styles.verifyButton}
               />
             </Animated.View>
           )}
-        </View>
-      </ScrollView>
 
-      <ErrorModal
-        visible={errorModalVisible}
-        message={errorMessage}
-        onClose={() => setErrorModalVisible(false)}
-      />
+          <TouchableOpacity 
+            style={styles.helpLink} 
+            onPress={() => {
+              showModal({
+                title: 'Where to find the code?',
+                message: '1. Open Sync Guardian on your child\'s phone.\n2. Choose "Child" role.\n3. The 6-digit code and QR code will be displayed on their screen.',
+                icon: 'info',
+                primaryButton: 'Got it'
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.helpLinkText}>Where to find the code?</Text>
+          </TouchableOpacity>
+
+        </View>
+      </EdgeFadeScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -503,17 +527,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff8f0',
+    backgroundColor: AuthColors.background,
   },
   loadingText: {
     marginTop: 16,
-    fontFamily: 'PlusJakartaSans-Medium',
-    color: '#44674d',
-    fontSize: 16,
+    ...AuthFonts.titleMedium,
+    color: AuthColors.primary,
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff8f0',
+    backgroundColor: AuthColors.background,
   },
   innerContainer: {
     flexGrow: 1,
@@ -526,17 +549,16 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   title: {
+    ...AuthFonts.headlineMedium,
     fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 28,
-    color: '#363228',
+    color: AuthColors.onSurface,
     marginTop: 16,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 16,
-    color: '#645e53',
+    ...AuthFonts.titleMedium,
+    color: AuthColors.onSurfaceVariant,
     textAlign: 'center',
   },
   qrContainer: {
@@ -557,9 +579,9 @@ const styles = StyleSheet.create({
   },
   qrWrapper: {
     padding: 24,
-    backgroundColor: '#ffffff',
+    backgroundColor: AuthColors.surfaceContainerLowest,
     borderRadius: 24,
-    shadowColor: '#363228',
+    shadowColor: AuthColors.onSurface,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
     shadowRadius: 16,
@@ -567,139 +589,255 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   orText: {
+    ...AuthFonts.labelLarge,
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 12,
-    color: '#807a6d',
+    color: AuthColors.outline,
     letterSpacing: 2,
     marginBottom: 16,
   },
   codeWrapper: {
     paddingVertical: 16,
     paddingHorizontal: 32,
-    backgroundColor: '#486730',
+    backgroundColor: AuthColors.primary,
     borderRadius: 16,
   },
   codeText: {
+    ...AuthFonts.displaySmall,
     fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 32,
-    color: '#f8f8f8',
+    color: AuthColors.onPrimary,
     letterSpacing: 4,
+  },
+  
+  // Parent layout header row
+  headerRow: {
+    width: '100%',
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 24 : 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  backArrowButton: {
+    padding: 8,
+    marginLeft: -8,
+  },
+  parentTitle: {
+    ...AuthFonts.titleMedium,
+    color: AuthColors.onSurfaceVariant,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    marginTop: 16,
+  },
+  
+  // Segmented control
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: AuthColors.surfaceContainer,
+    borderRadius: AuthRadius.full,
+    padding: 4,
+    alignSelf: 'center',
+    marginTop: 24,
+    marginBottom: 32,
+    width: 260,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: AuthRadius.full,
+  },
+  tabButtonActive: {
+    backgroundColor: AuthColors.primary,
+    ...Platform.select({
+      ios: {
+        shadowColor: AuthColors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  tabButtonText: {
+    ...AuthFonts.labelLarge,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: AuthColors.onSurfaceVariant,
+  },
+  tabButtonTextActive: {
+    color: AuthColors.onPrimary,
+  },
+
+  // Viewfinder scan card container
+  cardWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingHorizontal: 24,
+  },
+  viewfinderCard: {
+    width: width - 80,
+    height: width - 80,
+    maxWidth: 320,
+    maxHeight: 320,
+    backgroundColor: AuthColors.surfaceContainer,
+    borderRadius: AuthRadius.xl,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3e2723',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.08,
+        shadowRadius: 24,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   cameraPlaceholder: {
     flex: 1,
-    maxHeight: width - 48,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000',
-    borderRadius: 24,
-    overflow: 'hidden',
+    padding: 24,
+    backgroundColor: AuthColors.surfaceContainer,
+  },
+  cameraSubtitle: {
+    ...AuthFonts.bodyMedium,
+    color: AuthColors.onSurfaceVariant,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  grantButton: {
+    height: 48,
+    borderRadius: AuthRadius.lg,
+    width: '80%',
   },
   scannerWrapper: {
     flex: 1,
-    maxHeight: width - 48,
-    borderRadius: 24,
+    borderRadius: AuthRadius.xl,
     overflow: 'hidden',
   },
-  scannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  
+  // Custom camera overlay elements
+  cornerBracket: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderColor: AuthColors.primary,
+  },
+  centerCircularBadge: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginLeft: -28,
+    marginTop: -28,
+    backgroundColor: 'rgba(239, 239, 215, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  scannerTarget: {
-    width: 200,
-    height: 200,
-    borderWidth: 2,
-    borderColor: '#c5eccc',
-    borderRadius: 24,
-    backgroundColor: 'transparent',
-  },
-  optionsContainer: {
-    flex: 1,
-    paddingHorizontal: 24,
-    marginTop: 8,
-    paddingBottom: 48,
-  },
-  animationWrapper: {
-    flex: 1,
+  centerCircularBadgeInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239, 239, 215, 0.7)',
     justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(72, 103, 48, 0.2)',
   },
-  bottomBlock: {
-    justifyContent: 'flex-end',
+  torchFloatingButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
-  explainerTitle: {
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 20,
-    color: '#363228',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  explainerText: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 14,
-    color: '#645e53',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  optionsPrompt: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
-    color: '#807a6d',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  explainerWrapper: {
-    marginBottom: 32,
-  },
-  scanModeContainer: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 48,
-  },
-  cameraSubtitle: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 14,
-    color: '#fff8f0',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  torchButton: {
-    marginTop: 24,
-  },
-  backButton: {
-    marginTop: 16,
-  },
+
+  // Manual entry layout
   manualEntryContainer: {
-    padding: 24,
-    paddingBottom: 48,
+    width: '100%',
+    paddingHorizontal: 32,
+    alignItems: 'center',
   },
+  otpWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  verifyButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: AuthRadius.lg,
+  },
+
+  // Help info link
+  helpLink: {
+    marginTop: 40,
+    paddingVertical: 12,
+    alignSelf: 'center',
+  },
+  helpLinkText: {
+    ...AuthFonts.labelLarge,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: AuthColors.primary,
+    textDecorationLine: 'underline',
+  },
+
   expired: {
     opacity: 0.5,
   },
   expiredText: {
-    color: '#ba1a1a',
+    color: AuthColors.error,
+  },
+  childHint: {
+    ...AuthFonts.bodyMedium,
+    color: AuthColors.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: 0,
+    marginBottom: 15,
+    marginHorizontal: 8,
   },
   countdownContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 20,
-    marginBottom: 50,
+    marginBottom: 30,
   },
   countdownText: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 14,
-    color: '#807a6d',
+    ...AuthFonts.bodyMedium,
+    color: AuthColors.outline,
     letterSpacing: 0.5,
   },
   countdownExpired: {
-    color: '#ba1a1a',
+    color: AuthColors.error,
+    ...AuthFonts.labelLarge,
     fontFamily: 'PlusJakartaSans-Bold',
   },
   countdownDigits: {
-    color: '#486730',
+    color: AuthColors.primary,
+    ...AuthFonts.labelLarge,
     fontFamily: 'PlusJakartaSans-Bold',
   },
 });

@@ -98,18 +98,23 @@ class NotificationAccessModule : Module() {
     }
 
     Function("openBatteryOptimizationSettings") {
-      val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-        data = android.net.Uri.parse("package:${pkg()}")
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      }
+      val pkgName = pkg()
+
       try {
-        ctx().startActivity(intent)
-      } catch (_: Exception) {
         ctx().startActivity(
           Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
           }
         )
+      } catch (_: Exception) {
+        try {
+          ctx().startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+              data = android.net.Uri.parse("package:$pkgName")
+              addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+          )
+        } catch (_: Exception) {}
       }
     }
 

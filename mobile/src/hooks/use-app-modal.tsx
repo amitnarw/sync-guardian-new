@@ -13,11 +13,14 @@ interface ShowModalOptions {
   steps?: string[];
   primaryVariant?: ButtonVariant;
   autoDismissMs?: number;
+  primaryLoading?: boolean;
+  preventAutoHide?: boolean;
 }
 
 interface ModalContextValue {
   showModal: (opts: ShowModalOptions) => void;
   hideModal: () => void;
+  updateModal: (opts: Partial<ShowModalOptions>) => void;
 }
 
 const ModalContext = createContext<ModalContextValue | null>(null);
@@ -36,6 +39,7 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
     title: '',
     message: '',
     steps: [],
+    primaryLoading: false,
   });
 
   const hideModal = useCallback(() => {
@@ -56,6 +60,8 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         steps = [],
         primaryVariant = 'default',
         autoDismissMs,
+        primaryLoading = false,
+        preventAutoHide = false,
       } = opts;
 
       setModalProps({
@@ -69,9 +75,10 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         steps,
         primaryVariant,
         autoDismissMs,
+        primaryLoading,
         onPrimaryPress: () => {
           onPrimaryPress?.();
-          hideModal();
+          if (!preventAutoHide) hideModal();
         },
         onSecondaryPress: () => {
           onSecondaryPress?.();
@@ -85,8 +92,15 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
     [hideModal],
   );
 
+  const updateModal = useCallback((opts: Partial<ShowModalOptions>) => {
+    setModalProps((prev) => ({
+      ...prev,
+      ...opts,
+    }));
+  }, []);
+
   return (
-    <ModalContext.Provider value={{ showModal, hideModal }}>
+    <ModalContext.Provider value={{ showModal, hideModal, updateModal }}>
       {children}
       <AppModal
         visible={modalProps.visible}
@@ -99,6 +113,7 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         steps={modalProps.steps}
         primaryVariant={modalProps.primaryVariant}
         autoDismissMs={modalProps.autoDismissMs}
+        primaryLoading={modalProps.primaryLoading}
         onPrimaryPress={modalProps.onPrimaryPress}
         onSecondaryPress={modalProps.onSecondaryPress}
         onDismiss={modalProps.onDismiss}

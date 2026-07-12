@@ -56,13 +56,13 @@ export function InsightsEmptyState({ hasPair = true }: { hasPair?: boolean }) {
         </Animated.View>
       </View>
 
-      <Text style={styles.title}>No signals yet</Text>
+      <Text style={styles.title}>No notifications yet</Text>
       <Text style={styles.subtitle}>
-        Once activity begins on the child device, your signal insights will appear here.
+        Once activity begins on the child device, your notification insights will appear here.
       </Text>
       {!hasPair && (
         <Text style={styles.hint}>
-          Pair a child device to start receiving signals.
+          Pair a child device to start receiving notifications.
         </Text>
       )}
     </View>

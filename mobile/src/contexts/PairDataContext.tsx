@@ -20,11 +20,11 @@ interface PairDataState {
   pair: { id: string; child_device_id: string } | null;
   childDevice: {
     id: string;
-    device_name: string | null;
     is_foreground: boolean;
     last_seen_at: string | null;
     push_token: string | null;
   } | null;
+  childName: string | null;
   notifications: MirroredNotification[];
   isLoading: boolean;
   isRefreshing: boolean;
@@ -61,6 +61,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<PairDataState>({
     pair: null,
     childDevice: null,
+    childName: null,
     notifications: [],
     isLoading: true,
     isRefreshing: false,
@@ -83,6 +84,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
       setState({
         pair: null,
         childDevice: null,
+        childName: null,
         notifications: [],
         isLoading: false,
         isRefreshing: false,
@@ -105,12 +107,12 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
       const dId = auth.deviceId;
       const sPId = auth.pairId;
 
-      let resolvedPair: { id: string; child_device_id: string } | null = null;
+      let resolvedPair: { id: string; child_device_id: string; child_user_id: string } | null = null;
 
       if (sPId && dId) {
         const { data, error: pairError } = await supabase
           .from('pairs')
-          .select('id, child_device_id')
+          .select('id, child_device_id, child_user_id')
           .eq('id', sPId)
           .in('status', ['active', 'pending'])
           .single();
@@ -122,7 +124,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
       if (!resolvedPair && dId) {
         const { data, error: pairError } = await supabase
           .from('pairs')
-          .select('id, child_device_id')
+          .select('id, child_device_id, child_user_id')
           .eq('parent_device_id', dId)
           .in('status', ['active', 'pending'])
           .limit(1);
@@ -137,6 +139,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
         setState({
           pair: null,
           childDevice: null,
+          childName: null,
           notifications: [],
           isLoading: false,
           isRefreshing: false,
@@ -149,7 +152,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
 
       const { data: devData, error: devError } = await supabase
         .from('devices')
-        .select('id, device_name, is_foreground, last_seen_at, push_token')
+        .select('id, is_foreground, last_seen_at, push_token')
         .eq('id', resolvedPair.child_device_id)
         .single();
 
@@ -161,25 +164,38 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
         logger.warn('PairDataProvider: child device query error:', devError);
       }
 
-      const { data: notifData, error: notifError } = await supabase
-        .from('mirrored_notifications')
-        .select('*')
-        .eq('pair_id', resolvedPair.id)
-        .order('notification_posted_at', { ascending: false })
-        .limit(50);
+      // Child's display name comes from their profile (sourced from auth.users),
+      // not from a device column. The parent is permitted to read it via RLS.
+      const { data: childProfile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', resolvedPair.child_user_id)
+        .maybeSingle();
 
       if (cancelledRef.current || initId !== initIdRef.current) return;
 
-      if (notifData) {
-        setState((prev) => ({ ...prev, notifications: notifData as MirroredNotification[] }));
+      if (childProfile) {
+        setState((prev) => ({ ...prev, childName: (childProfile as any).display_name ?? null }));
+      }
+
+      const { data: notifData, error: notifError } = await supabase.functions.invoke(
+        'get-notifications',
+        { body: { pair_id: resolvedPair.id, limit: 50 } },
+      )
+
+      if (cancelledRef.current || initId !== initIdRef.current) return;
+
+      if (notifData?.data) {
+        setState((prev) => ({ ...prev, notifications: notifData.data as MirroredNotification[] }));
       } else if (notifError) {
         logger.warn('PairDataProvider: notifications query error:', notifError);
       }
 
       if (cancelledRef.current || initId !== initIdRef.current) return;
 
-      const deviceChannel = supabase.channel(`pairdata_device_${resolvedPair.child_device_id}`);
-      const notifChannel = supabase.channel(`pairdata_notifications_${resolvedPair.id}`);
+      const uniqueSuffix = Math.random().toString(36).slice(2);
+      const deviceChannel = supabase.channel(`pairdata_device_${resolvedPair.child_device_id}_${uniqueSuffix}`);
+      const notifChannel = supabase.channel(`pairdata_notifications_${resolvedPair.id}_${uniqueSuffix}`);
 
       deviceChannel.on(
         'postgres_changes',
@@ -206,13 +222,23 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
           table: 'mirrored_notifications',
           filter: `pair_id=eq.${resolvedPair.id}`,
         },
-        (payload) => {
-          const newNotif = payload.new as MirroredNotification;
-          setState((prev) => {
-            const exists = prev.notifications.some((n) => n.id === newNotif.id);
-            if (exists) return prev;
-            return { ...prev, notifications: [newNotif, ...prev.notifications] };
-          });
+        async (payload) => {
+          const notifId = (payload.new as any).id;
+          if (!notifId) return;
+
+          const { data: fetched } = await supabase.functions.invoke(
+            'get-notifications',
+            { body: { ids: [notifId] } },
+          );
+
+          if (fetched?.data?.length > 0) {
+            const newNotif = fetched.data[0] as MirroredNotification;
+            setState((prev) => {
+              const exists = prev.notifications.some((n) => n.id === newNotif.id);
+              if (exists) return prev;
+              return { ...prev, notifications: [newNotif, ...prev.notifications] };
+            });
+          }
         },
       );
 

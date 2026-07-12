@@ -1,15 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Dimensions, Text, BackHandler, RefreshControl, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { StyleSheet, View, Dimensions, Text, TouchableOpacity, BackHandler, RefreshControl } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
 import { BlurView, BlurTargetView } from 'expo-blur';
 import { ThemedView } from '@/components/themed-view';
+import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
-import { UserAvatar } from '@/components/user-avatar';
+import { SyncAnimation } from '@/components/ui/sync-animation';
 import { supabase } from '@/lib/supabase';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -51,14 +51,21 @@ export default function ChildHome() {
 
   const fetchParentName = useCallback(async () => {
     if (!pairId) return;
-    const { data } = await supabase
+    const { data: pair } = await supabase
       .from('pairs')
-      .select('parent_device:devices!parent_device_id(device_name)')
+      .select('parent_user_id')
       .eq('id', pairId)
       .single();
-    
-    if (data && data.parent_device) {
-      setParentName((data.parent_device as any).device_name || 'Parent Device');
+
+    if (pair?.parent_user_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', pair.parent_user_id)
+        .maybeSingle();
+      if (profile) {
+        setParentName((profile as any).display_name || 'Parent Device');
+      }
     }
   }, [pairId]);
 
@@ -129,7 +136,7 @@ export default function ChildHome() {
     checkSetup();
 
     const channel = supabase
-      .channel(`child_setup_${pairId}`)
+      .channel(`child_setup_${pairId}_${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         {
@@ -253,22 +260,15 @@ export default function ChildHome() {
   if (setupCompleted === false) {
     return (
       <ThemedView style={s.container}>
-        <SafeAreaView style={s.waitingSafeArea} edges={['top']}>
-          <View style={s.waitingHeader}>
-            <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-            <Text style={s.headerTitle}>Sync Guardian</Text>
-          </View>
           <View style={s.waitingBody}>
-            <View style={s.waitingIconWrap}>
-              <MaterialCommunityIcons name="account-clock-outline" size={48} color={C.primary} />
-            </View>
+            <SyncAnimation />
             <Text style={s.waitingTitle}>Almost there</Text>
             <Text style={s.waitingText}>
-              Your parent is choosing which apps to monitor. Your dashboard will appear as soon as they finish setup.
+              {parentName === 'Parent Device'
+                ? 'Your dashboard will appear as soon as your parent finishes setup. Hand them this phone, or ask them to open Sync Guardian and choose which apps to monitor.'
+                : `${parentName} is choosing which apps to monitor. Your dashboard will appear as soon as they finish setup.`}
             </Text>
-            <ActivityIndicator style={s.waitingSpinner} color={C.primary} size="large" />
           </View>
-        </SafeAreaView>
       </ThemedView>
     );
   }
@@ -276,22 +276,7 @@ export default function ChildHome() {
   return (
     <ThemedView style={s.container}>
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-        <SafeAreaView style={s.safeArea} edges={['top']}>
-          {/* Floating Glass Header */}
-          <View style={s.header}>
-            <View style={s.headerLeft}>
-              <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-              <Text style={s.headerTitle}>Sync Guardian</Text>
-            </View>
-            <View style={s.headerRight}>
-              <UserAvatar
-                fallbackSource={require('@/assets/images/leo_avatar.jpg')}
-                role="child"
-              />
-            </View>
-          </View>
-
-          <ScrollView
+          <EdgeFadeScrollView
             contentContainerStyle={s.scrollContent}
             showsVerticalScrollIndicator={false}
             refreshControl={
@@ -304,7 +289,7 @@ export default function ChildHome() {
               <View style={s.heroTextBlock}>
                 <Text style={s.flowLabel}>SYSTEM SECURED</Text>
                 <Text style={s.heroTitle}>
-                  Digital Sanctuary is{'\n'}
+                  Sync Guardian is{'\n'}
                   <Text style={s.heroTitleAccent}>Active</Text>
                 </Text>
                 <Text style={s.heroDescription}>
@@ -369,13 +354,13 @@ export default function ChildHome() {
                 <View style={s.cardBlobConnection} />
               </View>
 
-              {/* Card 2: Current Rhythm (Half Width) */}
+              {/* Card 2: Today's Activity (Half Width) */}
               <View style={[s.bentoCard, s.cardRhythm, s.halfWidth]}>
                 <View style={[s.iconWrapper, { backgroundColor: C.surfaceVariant }]}>
                   <Ionicons name="leaf-outline" size={24} color={C.onSurfaceVariant} />
                 </View>
-                <Text style={s.cardTitle}>Today&apos;s Rhythm</Text>
-                <Text style={s.cardDesc}>Creative Exploration</Text>
+                <Text style={s.cardTitle}>Today&apos;s Activity</Text>
+                <Text style={s.cardDesc}>Updates appear as they happen.</Text>
               </View>
 
               {/* Card 3: Privacy (Half Width) */}
@@ -390,11 +375,64 @@ export default function ChildHome() {
               </View>
             </View>
 
+            <DiagnosticPanel />
             <View style={s.bottomSpacer} />
-          </ScrollView>
-        </SafeAreaView>
+          </EdgeFadeScrollView>
       </BlurTargetView>
     </ThemedView>
+  );
+}
+
+// ============================================================
+// DIAGNOSTIC PANEL (collapsible — shows capture/ingest status)
+// ============================================================
+function DiagnosticPanel() {
+  const {
+    lastCaptureAt,
+    lastCapturePackage,
+    lastIngestAt,
+    lastIngestError,
+    lastIngestDropped,
+  } = useAuthStore();
+  const [expanded, setExpanded] = useState(false);
+
+  if (!lastCaptureAt && !lastIngestAt && !lastIngestError && !lastIngestDropped) {
+    return null;
+  }
+
+  const captureTime = lastCaptureAt ? new Date(lastCaptureAt).toLocaleTimeString() : '-';
+  const ingestTime = lastIngestAt ? new Date(lastIngestAt).toLocaleTimeString() : '-';
+
+  return (
+    <TouchableOpacity onPress={() => setExpanded(!expanded)} activeOpacity={0.7} style={s.diagPanel}>
+      <View style={s.diagHeader}>
+        <Ionicons name="pulse-outline" size={16} color={C.primary} />
+        <Text style={s.diagTitle}>
+          {lastCaptureAt ? 'Capture active' : 'No capture yet'}
+        </Text>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={C.onSurfaceVariant} />
+      </View>
+      {expanded && (
+        <View style={s.diagBody}>
+          <Text style={s.diagLine}>
+            Last capture: {captureTime}{lastCapturePackage ? ` (${lastCapturePackage})` : ''}
+          </Text>
+          <Text style={s.diagLine}>
+            Last ingested: {ingestTime}
+          </Text>
+          {lastIngestError && (
+            <Text style={s.diagError}>Error: {lastIngestError}</Text>
+          )}
+          {lastIngestDropped && (
+            <Text style={s.diagWarn}>Dropped by server: {lastIngestDropped}</Text>
+          )}
+          <Text style={s.diagHint}>
+            Tip: Keep app open/backgrounded (don&apos;t force-close).{'\n'}
+            WhatsApp must be backgrounded when msg arrives.
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -406,43 +444,12 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: C.surface,
   },
-  safeArea: {
-    flex: 1,
-  },
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 8,
   },
 
-  /* ---------- Header ---------- */
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(255,248,240,0.80)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerIcon: {
-    marginRight: 2,
-  },
-  headerTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-    color: C.primary,
-    letterSpacing: -0.5,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
+
   /* ---------- Hero Section ---------- */
   heroSection: {
     marginBottom: 48,
@@ -639,32 +646,59 @@ const s = StyleSheet.create({
     height: 130,
   },
 
-  /* ---------- Parent setup waiting screen ---------- */
-  waitingSafeArea: {
-    flex: 1,
+  /* ---------- Diagnostic Panel ---------- */
+  diagPanel: {
+    marginTop: 16,
+    backgroundColor: C.surfaceContainerLow,
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
   },
-  waitingHeader: {
+  diagHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(255,248,240,0.80)',
   },
+  diagTitle: {
+    flex: 1,
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    color: C.onSurface,
+  },
+  diagBody: {
+    marginTop: 10,
+    gap: 6,
+  },
+  diagLine: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 12,
+    color: C.onSurfaceVariant,
+  },
+  diagError: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 12,
+    color: C.error,
+  },
+  diagWarn: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 12,
+    color: C.secondary,
+  },
+  diagHint: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 11,
+    color: C.onSurfaceVariant,
+    lineHeight: 16,
+    marginTop: 4,
+    opacity: 0.7,
+  },
+
   waitingBody: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-  },
-  waitingIconWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: C.primaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
   },
   waitingTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
@@ -679,8 +713,5 @@ const s = StyleSheet.create({
     color: C.onSurfaceVariant,
     textAlign: 'center',
     maxWidth: 320,
-  },
-  waitingSpinner: {
-    marginTop: 32,
   },
 });

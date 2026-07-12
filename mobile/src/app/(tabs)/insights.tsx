@@ -1,15 +1,16 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity, Text, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, RefreshControl } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedView } from '@/components/themed-view';
-import { UserAvatar } from '@/components/user-avatar';
+import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { InsightsEmptyState } from '@/components/insights-empty-state';
 import { AppIcon } from '@/components/app-icon';
 import { useInsightsData, type TimeWindow, type InsightsNotification } from '@/hooks/use-insights-data';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ============================================================
 // EXACT STITCH COLORS (from v3 HTML Tailwind config)
@@ -86,7 +87,7 @@ function generateNarrative(notifications: InsightsNotification[], window: TimeWi
   const peaks = getPeakWindows(notifications);
   const topPeak = peaks.reduce((a, b) => a.count > b.count ? a : b, peaks[0]);
   const peakLabel = topPeak.count > 1 ? ` Peak hours: ${topPeak.label}.` : '';
-  return `${total} signal${total !== 1 ? 's' : ''} ${period}. Most from ${name}.${peakLabel}`;
+  return `${total} notification${total !== 1 ? 's' : ''} ${period}. Most from ${name}.${peakLabel}`;
 }
 
 function formatTimeAgo(timestamp: string): string {
@@ -100,14 +101,14 @@ function formatTimeAgo(timestamp: string): string {
 }
 
 function formatLatestSignal(notifications: InsightsNotification[]): string {
-  if (notifications.length === 0) return 'No signals yet';
+  if (notifications.length === 0) return 'No notifications yet';
   const n = notifications[0];
   const app = n.source_app_name || n.source_package || '';
   const title = n.notification_title || '';
   if (app && title) return `${app} \u2014 ${title}`;
   if (app) return app;
   if (title) return title;
-  return 'Unknown signal';
+  return 'Unknown notification';
 }
 
 // ============================================================
@@ -187,7 +188,7 @@ function getUsageData(window: TimeWindow) {
 }
 function getBezierPath(points: { x: number; y: number }[]): { strokePath: string; fillPath: string } {
   if (points.length === 0) return { strokePath: '', fillPath: '' };
-  
+
   let strokePath = `M ${points[0].x},${points[0].y}`;
   for (let i = 0; i < points.length - 1; i++) {
     const p0 = points[i];
@@ -198,16 +199,17 @@ function getBezierPath(points: { x: number; y: number }[]): { strokePath: string
     const cpY2 = p1.y;
     strokePath += ` C ${cpX1},${cpY1} ${cpX2},${cpY2} ${p1.x},${p1.y}`;
   }
-  
+
   const first = points[0];
   const last = points[points.length - 1];
   const fillPath = `${strokePath} L ${last.x},120 L ${first.x},120 Z`;
-  
+
   return { strokePath, fillPath };
 }
 
 export default function InsightsScreen() {
   const { notifications, isLoading, isRefreshing, error, window, setWindow, refresh } = useInsightsData();
+  useRegisterHeaderRefresh(refresh);
   const { pairId } = useAuthStore();
 
   const topApps = React.useMemo(() => getTopApps(notifications), [notifications]);
@@ -218,7 +220,7 @@ export default function InsightsScreen() {
     const data = getPeakWindows(notifications);
     const maxVal = Math.max(...data.map(b => b.count), 1);
     const W = 388;
-    
+
     return data.map((bucket, i) => {
       const x = (i * W) / 5;
       const y = 105 - (bucket.count / maxVal) * 90;
@@ -230,22 +232,7 @@ export default function InsightsScreen() {
 
   return (
     <ThemedView style={s.container}>
-      <SafeAreaView style={s.safeArea} edges={['top']}>
-        {/* Floating Glass Header */}
-        <View style={s.header}>
-          <View style={s.headerLeft}>
-            <MaterialCommunityIcons name="spa" size={24} color={C.primary} style={s.headerIcon} />
-            <Text style={s.headerTitle}>Sync Guardian</Text>
-          </View>
-          <View style={s.headerRight}>
-            <UserAvatar
-              fallbackSource={require('@/assets/images/mother_avatar.jpg')}
-              role="parent"
-            />
-          </View>
-        </View>
-
-        <ScrollView
+        <EdgeFadeScrollView
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -253,8 +240,37 @@ export default function InsightsScreen() {
           }
         >
           {isLoading && !isRefreshing ? (
-            <View style={s.centerState}>
-              <ActivityIndicator size="large" color={C.primary} />
+            <View style={{ gap: 16, paddingTop: 16 }}>
+              {/* Selector placeholder */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                {[1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} width={70} height={32} borderRadius={9999} />
+                ))}
+              </View>
+              {/* Pulse Narrative Card placeholder */}
+              <View style={{ backgroundColor: C.surfaceContainerLowest, borderRadius: 32, padding: 24, gap: 10 }}>
+                <Skeleton width={100} height={12} borderRadius={6} />
+                <Skeleton width="90%" height={16} borderRadius={8} />
+                <Skeleton width="60%" height={16} borderRadius={8} />
+              </View>
+              {/* Total Usage Card placeholder */}
+              <View style={{ backgroundColor: C.surfaceContainerLowest, borderRadius: 32, padding: 24, gap: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <View style={{ gap: 6 }}>
+                    <Skeleton width={120} height={20} borderRadius={10} />
+                    <Skeleton width={160} height={12} borderRadius={6} />
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <Skeleton width={80} height={24} borderRadius={12} />
+                    <Skeleton width={120} height={12} borderRadius={6} />
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', height: 120, alignItems: 'flex-end', paddingTop: 16 }}>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} width={42} height={`${20 + i * 15}%`} borderRadius={9999} />
+                  ))}
+                </View>
+              </View>
             </View>
           ) : error ? (
             <View style={s.centerState}>
@@ -268,6 +284,14 @@ export default function InsightsScreen() {
             <InsightsEmptyState hasPair={!!pairId} />
           ) : (
             <>
+              {/* ========== HERO HEADING ========== */}
+              <View style={s.heroSection}>
+                <Text style={s.heroTitle}>Insights</Text>
+                <Text style={s.heroDescription}>
+                  See when and how the connected device is used.
+                </Text>
+              </View>
+
               {/* Window Selector */}
               <View style={s.windowSelectorRow}>
                 {(['today', 'week', 'month', 'year'] as TimeWindow[]).map((w) => (
@@ -288,7 +312,7 @@ export default function InsightsScreen() {
 
               {/* Pulse Narrative */}
               <View style={s.pulseCard}>
-                <Text style={s.pulseLabel}>Signal Pulse</Text>
+                <Text style={s.pulseLabel}>Activity Overview</Text>
                 <Text style={s.pulseText}>{narrative}</Text>
               </View>
 
@@ -339,24 +363,6 @@ export default function InsightsScreen() {
               <View style={s.peakCard}>
                 <Text style={s.peakTitle}>Peak Hours</Text>
 
-                {/* Graph Legends (Positioned above graph) */}
-                <View style={s.peakXAxisRow}>
-                  {peakPoints.map((p, i) => {
-                    const shortLabel = p.label
-                      .replace('12\u20134AM', '12a')
-                      .replace('4\u20138AM', '4a')
-                      .replace('8AM\u201312PM', '8a')
-                      .replace('12\u20134PM', '12p')
-                      .replace('4\u20138PM', '4p')
-                      .replace('8PM\u201312AM', '8p');
-                    return (
-                      <Text key={i} style={s.peakXAxisLabel}>
-                        {shortLabel}
-                      </Text>
-                    );
-                  })}
-                </View>
-
                 <View style={s.chartWrapper}>
                   {/* Y-Axis Legend overlay */}
                   <View style={s.peakYAxis}>
@@ -393,6 +399,24 @@ export default function InsightsScreen() {
                     />
                   </Svg>
                 </View>
+
+                {/* Graph Legends (Positioned below graph) */}
+                <View style={s.peakXAxisRow}>
+                  {peakPoints.map((p, i) => {
+                    const shortLabel = p.label
+                      .replace('12\u20134AM', '12a')
+                      .replace('4\u20138AM', '4a')
+                      .replace('8AM\u201312PM', '8a')
+                      .replace('12\u20134PM', '12p')
+                      .replace('4\u20138PM', '4p')
+                      .replace('8PM\u201312AM', '8p');
+                    return (
+                      <Text key={i} style={s.peakXAxisLabel}>
+                        {shortLabel}
+                      </Text>
+                    );
+                  })}
+                </View>
               </View>
 
               {/* App Insights */}
@@ -414,11 +438,11 @@ export default function InsightsScreen() {
                 }) : null}
               </View>
 
-              {/* Latest Signal */}
+              {/* Latest Notification */}
               <View style={s.latestCard}>
                 <AppIcon iconBase64={notifications[0]?.app_icon_base64} size={40} fallbackSize={20} />
                 <View style={s.latestTextWrap}>
-                  <Text style={s.latestLabel}>Latest Signal</Text>
+                  <Text style={s.latestLabel}>Latest Notification</Text>
                   <Text style={s.latestTitle} numberOfLines={1}>
                     {formatLatestSignal(notifications)}
                   </Text>
@@ -427,61 +451,59 @@ export default function InsightsScreen() {
                   {formatTimeAgo(notifications[0]?.notification_posted_at || '')}
                 </Text>
               </View>
+
+              <View style={s.encryptBadge}>
+                <Ionicons name="shield-checkmark" size={14} color={C.primary} />
+                <Text style={s.encryptBadgeText}>All notification contents are securely encrypted at rest</Text>
+              </View>
             </>
           )}
 
           {/* Spacer to avoid bottom custom tab bar overlay */}
           <View style={s.bottomSpacer} />
-        </ScrollView>
-      </SafeAreaView>
+        </EdgeFadeScrollView>
     </ThemedView>
   );
 }
 
 // ============================================================
-// STYLES — mapped precisely from Stitch Tailwind
+// STYLES - mapped precisely from Stitch Tailwind
 // ============================================================
 const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.surface,
   },
-  safeArea: {
-    flex: 1,
-  },
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 8,
   },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(255,248,240,0.80)',
+  /* ---------- Hero Section ---------- */
+  heroSection: {
+    marginBottom: 24,
+    gap: 12,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerIcon: {
-    marginRight: 2,
-  },
-  headerTitle: {
+  flowLabel: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 18,
+    fontSize: 12,
+    letterSpacing: 2.5,
+    color: C.secondary,
+    textTransform: 'uppercase',
+  },
+  heroTitle: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 40,
+    color: C.onSurface,
+  },
+  heroDescription: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 16,
     lineHeight: 24,
-    color: C.primary,
-    letterSpacing: -0.5,
+    color: C.onSurfaceVariant,
+    maxWidth: 320,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
+
   /* ---------- Window Selector ---------- */
   windowSelectorRow: {
     flexDirection: 'row',
@@ -535,7 +557,7 @@ const s = StyleSheet.create({
     borderRadius: 32,
     paddingTop: 24,
     paddingHorizontal: 24,
-    paddingBottom: 0,
+    paddingBottom: 20,
     marginBottom: 16,
     overflow: 'hidden',
   },
@@ -556,8 +578,8 @@ const s = StyleSheet.create({
   peakYAxis: {
     position: 'absolute',
     left: 24,
-    bottom: 12,
-    height: 50,
+    top: 10,
+    bottom: 20,
     justifyContent: 'space-between',
     zIndex: 10,
   },
@@ -570,8 +592,8 @@ const s = StyleSheet.create({
   peakXAxisRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4,
-    marginBottom: 8,
+    marginTop: 12,
+    marginBottom: 0,
   },
   peakXAxisLabel: {
     fontFamily: 'Manrope-SemiBold',
@@ -619,13 +641,13 @@ const s = StyleSheet.create({
   appInsightsBarBg: {
     flex: 1,
     height: 16,
-    borderRadius: 4,
+    borderRadius: 9999,
     backgroundColor: C.surfaceContainer,
     overflow: 'hidden',
   },
   appInsightsBarFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 9999,
     backgroundColor: C.primary,
   },
   appInsightsCount: {
@@ -637,7 +659,7 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
 
-  /* ---------- Latest Signal Card ---------- */
+  /* ---------- Latest Notification Card ---------- */
   latestCard: {
     backgroundColor: C.surfaceContainerLow,
     borderRadius: 24,
@@ -672,6 +694,24 @@ const s = StyleSheet.create({
     fontFamily: 'Manrope-Medium',
     fontSize: 12,
     color: C.onSurfaceVariant,
+  },
+
+  encryptBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(68, 103, 77, 0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 9999,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  encryptBadgeText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 11,
+    color: C.primary,
   },
 
   /* ---------- Total Usage Card ---------- */
@@ -793,4 +833,4 @@ const s = StyleSheet.create({
   bottomSpacer: {
     height: 130,
   },
-});
+} as any);

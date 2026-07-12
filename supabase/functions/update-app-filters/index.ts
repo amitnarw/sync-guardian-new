@@ -3,6 +3,7 @@ import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
 import { isValidUUID, isValidString, sanitizeString } from '../_shared/validation.ts'
+import { upsertOnboardingState } from '../_shared/onboarding-state.ts'
 import { logger, mapError } from '../_shared/logger.ts'
 
 interface FilterChange {
@@ -89,6 +90,28 @@ serve(async (req) => {
       .eq('child_device_id', childDeviceId)
       .eq('parent_user_id', user.id)
     if (pairErr) throw pairErr
+
+    // Onboarding is now complete for both users.
+    try {
+      await upsertOnboardingState(user.id, {
+        onboarding_step: 'completed',
+        onboarding_completed: true,
+      })
+      const { data: childPair } = await adminClient
+        .from('pairs')
+        .select('child_user_id')
+        .eq('child_device_id', childDeviceId)
+        .eq('parent_user_id', user.id)
+        .single()
+      if (childPair?.child_user_id) {
+        await upsertOnboardingState(childPair.child_user_id, {
+          onboarding_step: 'completed',
+          onboarding_completed: true,
+        })
+      }
+    } catch (obErr) {
+      logger.warn('update-app-filters', 'onboarding upsert failed', { error: String(obErr) })
+    }
 
     logger.info('update-app-filters', 'updated app filters', { updated })
 

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedView } from '@/components/themed-view';
+import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
 import { useAppModal } from '@/hooks/use-app-modal';
+import { setOnboardingRole } from '@/services/onboarding-api';
 
 const C = {
   primary: '#486730',
@@ -24,18 +26,19 @@ const C = {
 export default function PermissionsScreen() {
   const { userRole } = useAuthStore();
   const { showModal } = useAppModal();
-  const permissions = usePermissionStatus(userRole || 'parent');
+  const permissions = usePermissionStatus(userRole === 'admin' ? 'parent' : (userRole ?? 'parent'));
   const [loading, setLoading] = useState(false);
 
   const allGranted = permissions.every((p) => p.granted);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     setLoading(true);
-    if (userRole === 'child') {
-      router.replace('/(child)/home');
-    } else {
-      router.replace('/(tabs)/home');
+    try {
+      await setOnboardingRole(userRole as 'parent' | 'child', 'pairing');
+    } catch {
+      // Non-fatal: hub will re-route based on DB state.
     }
+    router.replace('/onboarding');
   };
 
   return (
@@ -48,14 +51,14 @@ export default function PermissionsScreen() {
           </View>
         </View>
 
-        <ScrollView
+        <EdgeFadeScrollView
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           <View style={s.heroSection}>
             <Text style={s.heroTitle}>Permissions Needed</Text>
             <Text style={s.heroSubtitle}>
-              Sync Guardian needs a few permissions to work properly. You can change these anytime in Settings.
+              Sync Guardian needs all of these permissions to work. None can be skipped, grant each one to continue.
             </Text>
           </View>
 
@@ -63,13 +66,14 @@ export default function PermissionsScreen() {
             <PermissionStatusRow
               key={p.key}
               label={p.label}
+              description={p.guideMessage}
               granted={p.granted}
               onRequest={() =>
                 showModal({
                   title: p.guideTitle,
                   message: p.guideMessage,
                   steps: p.guideSteps,
-                  icon: 'info',
+                  icon: 'warning',
                   primaryButton: 'Open Settings',
                   onPrimaryPress: p.openSettings,
                   secondaryButton: 'Cancel',
@@ -79,25 +83,21 @@ export default function PermissionsScreen() {
           ))}
 
           <Text style={s.noteText}>
-            Tap each permission above to see instructions. You can always update these in the Settings screen later.
+            Tap a permission to see how to enable it. Each one opens the correct system settings where you can toggle it on.
           </Text>
-        </ScrollView>
+        </EdgeFadeScrollView>
 
         <View style={s.footer}>
           <Button
-            title={allGranted ? 'Continue' : 'Continue'}
+            title="Continue"
             onPress={handleContinue}
-            disabled={loading}
+            disabled={loading || !allGranted}
             style={s.continueBtn}
           />
           {!allGranted && (
-            <Button
-              title="Continue anyway"
-              onPress={handleContinue}
-              variant="secondary"
-              disabled={loading}
-              style={s.skipBtn}
-            />
+            <Text style={s.footerHint}>
+              Grant all permissions above to continue. None can be skipped.
+            </Text>
           )}
         </View>
       </SafeAreaView>
@@ -118,7 +118,6 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 16,
   },
   headerLogo: {
     flexDirection: 'row',
@@ -133,7 +132,6 @@ const s = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 8,
     paddingBottom: 24,
   },
   heroSection: {
@@ -165,14 +163,19 @@ const s = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 24,
-    paddingBottom: 16,
     gap: 12,
     alignItems: 'center',
   },
   continueBtn: {
     width: '100%',
   },
-  skipBtn: {
+  footerHint: {
+    fontFamily: 'Manrope-Medium',
+    fontSize: 13,
+    lineHeight: 20,
+    color: C.secondary,
+    textAlign: 'center',
     width: '100%',
+    marginTop: 4,
   },
 });

@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearAppMetadataCache } from './use-app-metadata';
 
-export type UserRole = 'parent' | 'child' | null;
+export type UserRole = 'parent' | 'child' | 'admin' | null;
 
 interface AuthState {
   userRole: UserRole;
@@ -47,6 +47,17 @@ interface AuthState {
   syncDeviceError: string | null;
   incrementSyncDeviceError: (msg: string) => void;
   clearSyncDeviceError: () => void;
+
+  // Notification capture observability
+  lastCaptureAt: number | null;
+  lastCapturePackage: string | null;
+  setCapture: (pkg: string) => void;
+  lastIngestAt: number | null;
+  lastIngestError: string | null;
+  lastIngestDropped: string | null;
+  setIngestSuccess: () => void;
+  setIngestError: (error: string) => void;
+  setIngestDropped: (reason: string) => void;
 
   resetAuth: () => void;
   clearPair: () => void;
@@ -102,6 +113,16 @@ export const useAuthStore = create<AuthState>()(
 
       clearPair: () => set({ pairId: null, deviceId: null }),
 
+      lastCaptureAt: null,
+      lastCapturePackage: null,
+      setCapture: (pkg) => set({ lastCaptureAt: Date.now(), lastCapturePackage: pkg }),
+      lastIngestAt: null,
+      lastIngestError: null,
+      lastIngestDropped: null,
+      setIngestSuccess: () => set({ lastIngestAt: Date.now(), lastIngestError: null, lastIngestDropped: null }),
+      setIngestError: (error) => set({ lastIngestError: error }),
+      setIngestDropped: (reason) => set({ lastIngestDropped: reason }),
+
       resetAuth: () => {
         clearAppMetadataCache();
         set({
@@ -118,6 +139,11 @@ export const useAuthStore = create<AuthState>()(
           pairRevokedAt: null,
           syncDeviceErrorCount: 0,
           syncDeviceError: null,
+          lastCaptureAt: null,
+          lastCapturePackage: null,
+          lastIngestAt: null,
+          lastIngestError: null,
+          lastIngestDropped: null,
         });
       },
     }),
@@ -138,6 +164,11 @@ export const useAuthStore = create<AuthState>()(
         fcmToken: state.fcmToken,
         profileImage: state.profileImage,
         displayName: state.displayName,
+        lastCaptureAt: state.lastCaptureAt,
+        lastCapturePackage: state.lastCapturePackage,
+        lastIngestAt: state.lastIngestAt,
+        lastIngestError: state.lastIngestError,
+        lastIngestDropped: state.lastIngestDropped,
       }),
     },
   )
