@@ -12,6 +12,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Base64
 import com.facebook.react.HeadlessJsTaskService
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
@@ -41,6 +42,11 @@ class NotificationListenerService : NotificationListenerService() {
     val appLabel = appInfo.first
     val appIconBase64 = appInfo.second
 
+    val textLines = extras.getCharSequenceArray(android.app.Notification.EXTRA_TEXT_LINES)
+    val bigText = extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString()
+    val isGroupSummary = extras.getBoolean("android.isGroupSummary", false)
+    val group = sbn.notification.group
+
     val notificationJson = JSONObject().apply {
       put("app", app)
       put("app_label", appLabel)
@@ -49,6 +55,16 @@ class NotificationListenerService : NotificationListenerService() {
       put("text", text)
       put("time", sbn.postTime.toString())
       put("notification_key", sbn.key)
+      bigText?.let { put("big_text", it) }
+      put("is_group_summary", isGroupSummary)
+      group?.let { put("group", it) }
+      textLines?.let {
+        val arr = JSONArray()
+        for (line in it) {
+          arr.put(line.toString())
+        }
+        put("text_lines", arr)
+      }
     }.toString()
 
     if (isAppInForeground()) {

@@ -8,6 +8,7 @@
 4. **RLS**: All tables have Row-Level Security. Authenticated users only get SELECT on their own data.
 5. **FCM**: Push notifications go through `_shared/fcm.ts` module, never through separate HTTP edge functions.
 6. **Pairing**: QR codes contain signed JWTs (`qr_jwt`), never raw tokens.
+7. **Notification capture**: Uses the custom `notification-access` Expo Native Module (Nitro), wrapped via `src/services/notification-listener.ts`. Not `react-native-android-notification-listener`.
 
 ## Design System (from CLAUDE.md)
 
@@ -51,18 +52,23 @@ supabase secrets set --local NOTIFICATION_ENCRYPTION_KEY="..."
 
 | Function | Auth | Purpose |
 |----------|------|---------|
-| `ingest-child-notification` | JWT (child user) | Ingest and route notifications to parent |
 | `create-pairing-token` | JWT (child user) | Generate QR pairing token + code |
 | `claim-pairing-token` | JWT (parent user) | Claim a pairing token and create pair |
+| `ingest-child-notification` | JWT (child user) | Ingest and route notifications to parent |
+| `get-notifications` | JWT (pair member) | Fetch decrypted notifications for the caller's pair |
 | `ping-child` | JWT (parent user) | Send wake-up FCM to child device (triggers child presence sync + MMKV buffer flush) |
 | `revoke-pair` | JWT (either user) | Revoke/unpair a device pair |
 | `sync-device` | JWT (device owner) | Update device presence, push_token, foreground |
-| `get-notifications` | JWT (pair member) | Fetch decrypted notifications for the caller's pair |
+| `get-onboarding-state` | JWT (any) | Fetch user onboarding state and selected role |
+| `set-onboarding-role` | JWT (any) | Set user onboarding role (parent / child / admin) |
+| `sync-installed-apps` | JWT (child user) | Sync child's installed-apps list to the parent |
+| `update-app-filters` | JWT (child user) | Update app filter preferences for which apps to mirror |
+| `backfill-encrypt-notifications` | API key (`x-api-key`) | Re-encrypt existing mirrored_notifications after key rotation (temporary) |
 | `health` | None (public) | Health check with DB + env var validation |
 
 ## Known Gaps (not production-blocking)
 
-- Google OAuth uses URL fragment parsing (deferred; see Phase 1.7 plan)
+- Google OAuth uses `expo-auth-session` + Supabase hosted UI; `use-auth.ts` handles both PKCE (`?code=`) and implicit (`#access_token`) redirect formats. Sign-in needs end-to-end validation with a real APK before all environments can be considered fully supported.
 - Rate limiter in `auth-verifier.ts` is in-memory (per-instance only)
 - No Sentry/Crashlytics integration for crash reporting
 - Notification crypto tests in `notification-crypto.test.ts` (requires Deno to run)

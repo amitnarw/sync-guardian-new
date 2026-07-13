@@ -24,42 +24,6 @@ export function useAuth() {
     resetAuth,
   } = useAuthStore();
 
-  const signInWithEmail = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
-    setIsAuthenticated(true);
-    setUserId(data.user.id);
-    setEmail(data.user.email ?? null);
-    const { profileImage, displayName } = extractProfileData(data.user);
-    setProfileImage(profileImage);
-    setDisplayName(displayName);
-  };
-
-  const signUpWithEmail = async (email: string, password: string, displayName?: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: displayName ? { data: { full_name: displayName } } : undefined,
-    });
-    if (error) throw error;
-    // signUp creates the user but may require email confirmation
-    // If session available immediately (no confirmation), set auth
-    if (data.session) {
-      setIsAuthenticated(true);
-      if (data.user) {
-        setUserId(data.user.id);
-        setEmail(data.user.email ?? null);
-        const { profileImage, displayName } = extractProfileData(data.user);
-        setProfileImage(profileImage);
-        setDisplayName(displayName);
-      }
-    }
-    return data;
-  };
-
   const signInWithGoogle = async () => {
     const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
@@ -151,8 +115,6 @@ export function useAuth() {
   };
 
   return {
-    signInWithEmail,
-    signUpWithEmail,
     signInWithGoogle,
     signOut,
   };

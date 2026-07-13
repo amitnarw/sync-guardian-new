@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "531533199203",
+    "project_id": "same-notification-305a1",
+    "storage_bucket": "same-notification-305a1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:531533199203:android:3e521a723413c219fb0556",
+        "android_client_info": {
+          "package_name": "com.amitnarw.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAh9aZeoZIWZaBUvyg_rRLZ0uz7TnSiRZg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

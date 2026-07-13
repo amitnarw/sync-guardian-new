@@ -25,6 +25,7 @@ export function useAppMetadata() {
     pendingRef.current.add(packageName);
     try {
       // Lazy-load the Android-only native module only when needed.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { resolveAppInfo } = require('notification-access');
       const info = resolveAppInfo(packageName);
       cache.set(packageName, info);

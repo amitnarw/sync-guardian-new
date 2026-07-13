@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, RefreshControl } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, RefreshControl } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -10,7 +10,7 @@ import { AppIcon } from '@/components/app-icon';
 import { useInsightsData, type TimeWindow, type InsightsNotification } from '@/hooks/use-insights-data';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
-import { Skeleton } from '@/components/ui/skeleton';
+import { InsightsSkeleton } from '@/components/skeletons/insights-skeleton';
 
 // ============================================================
 // EXACT STITCH COLORS (from v3 HTML Tailwind config)
@@ -49,12 +49,12 @@ interface Bucket { label: string; count: number; }
 
 function getPeakWindows(notifications: InsightsNotification[]): Bucket[] {
   const b = [
-    { label: '12\u20134AM', count: 0 },
-    { label: '4\u20138AM', count: 0 },
-    { label: '8AM\u201312PM', count: 0 },
-    { label: '12\u20134PM', count: 0 },
-    { label: '4\u20138PM', count: 0 },
-    { label: '8PM\u201312AM', count: 0 },
+    { label: '12-4AM', count: 0 },
+    { label: '4-8AM', count: 0 },
+    { label: '8AM-12PM', count: 0 },
+    { label: '12-4PM', count: 0 },
+    { label: '4-8PM', count: 0 },
+    { label: '8PM-12AM', count: 0 },
   ];
   for (const n of notifications) {
     const h = new Date(n.notification_posted_at).getHours();
@@ -105,7 +105,7 @@ function formatLatestSignal(notifications: InsightsNotification[]): string {
   const n = notifications[0];
   const app = n.source_app_name || n.source_package || '';
   const title = n.notification_title || '';
-  if (app && title) return `${app} \u2014 ${title}`;
+  if (app && title) return `${app} | ${title}`;
   if (app) return app;
   if (title) return title;
   return 'Unknown notification';
@@ -240,38 +240,7 @@ export default function InsightsScreen() {
           }
         >
           {isLoading && !isRefreshing ? (
-            <View style={{ gap: 16, paddingTop: 16 }}>
-              {/* Selector placeholder */}
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} width={70} height={32} borderRadius={9999} />
-                ))}
-              </View>
-              {/* Pulse Narrative Card placeholder */}
-              <View style={{ backgroundColor: C.surfaceContainerLowest, borderRadius: 32, padding: 24, gap: 10 }}>
-                <Skeleton width={100} height={12} borderRadius={6} />
-                <Skeleton width="90%" height={16} borderRadius={8} />
-                <Skeleton width="60%" height={16} borderRadius={8} />
-              </View>
-              {/* Total Usage Card placeholder */}
-              <View style={{ backgroundColor: C.surfaceContainerLowest, borderRadius: 32, padding: 24, gap: 16 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <View style={{ gap: 6 }}>
-                    <Skeleton width={120} height={20} borderRadius={10} />
-                    <Skeleton width={160} height={12} borderRadius={6} />
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                    <Skeleton width={80} height={24} borderRadius={12} />
-                    <Skeleton width={120} height={12} borderRadius={6} />
-                  </View>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', height: 120, alignItems: 'flex-end', paddingTop: 16 }}>
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Skeleton key={i} width={42} height={`${20 + i * 15}%`} borderRadius={9999} />
-                  ))}
-                </View>
-              </View>
-            </View>
+            <InsightsSkeleton />
           ) : error ? (
             <View style={s.centerState}>
               <Text style={s.emptyTitle}>Unable to load insights</Text>
@@ -404,12 +373,12 @@ export default function InsightsScreen() {
                 <View style={s.peakXAxisRow}>
                   {peakPoints.map((p, i) => {
                     const shortLabel = p.label
-                      .replace('12\u20134AM', '12a')
-                      .replace('4\u20138AM', '4a')
-                      .replace('8AM\u201312PM', '8a')
-                      .replace('12\u20134PM', '12p')
-                      .replace('4\u20138PM', '4p')
-                      .replace('8PM\u201312AM', '8p');
+                      .replace('12-4AM', '12a')
+                      .replace('4-8AM', '4a')
+                      .replace('8AM-12PM', '8a')
+                      .replace('12-4PM', '12p')
+                      .replace('4-8PM', '4p')
+                      .replace('8PM-12AM', '8p');
                     return (
                       <Text key={i} style={s.peakXAxisLabel}>
                         {shortLabel}

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Dimensions, Platform } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
-import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/hooks/use-auth-store';
@@ -10,8 +10,6 @@ import { setOnboardingRole } from '@/services/onboarding-api';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 // Blob Path 1: Parent border-radius: 60% 40% 70% 30% / 40% 50% 60% 70%;
 const pathParent = "M153.6 0 C210.1 0 256 57.3 256 128 C256 212.8 175.7 256 76.8 256 C34.4 256 0 175.7 0 102.4 C0 34.4 68.8 0 153.6 0 Z";
 // Blob Path 2: Child border-radius: 40% 60% 30% 70% / 50% 40% 70% 60%;
@@ -131,7 +129,7 @@ export default function RoleSelectionScreen() {
 
   useEffect(() => {
     screenOpacity.value = withTiming(1, { duration: 600 });
-  }, []);
+  }, [screenOpacity]);
 
   const handleRoleSelect = async (role: 'parent' | 'child') => {
     setUserRole(role);

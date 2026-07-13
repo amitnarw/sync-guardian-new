@@ -2,7 +2,7 @@
 
 This document is a complete implementation brief for building **Sync Guardian**, a single Android app that can operate in either **Parent** mode or **Child** mode. The app mirrors notifications from a Child device to a Parent device in near real time, persists mirrored notifications, and alerts the Parent with push notifications when the Parent app is not actively open.[cite:35][cite:46][cite:94]
 
-The chosen stack is **Expo/React Native for the mobile app**, **Supabase for backend services**, **FCM for Android push delivery**, **MMKV for local device buffering**, and **react-native-android-notification-listener** for Android notification capture.[cite:46][cite:57][cite:83][cite:94]
+The chosen stack is **Expo/React Native for the mobile app**, **Supabase for backend services**, **FCM for Android push delivery**, **MMKV for local device buffering**, and a **custom `notification-access` Expo Native Module (Nitro)** for Android notification capture.[cite:46][cite:57][cite:83][cite:94]
 
 ## Product scope
 
@@ -24,7 +24,7 @@ This specification covers **notification mirroring only**. It does not include l
 
 - **Framework:** Expo + React Native, but tested and run as a native Android build rather than Expo Go because custom native notification-listener behavior requires native Android integration.[cite:15][cite:19]
 - **Single app / dual roles:** one app binary for both Parent and Child; role is selected during onboarding and saved in app state and backend profile.[cite:124][cite:138]
-- **Notification listener:** `react-native-android-notification-listener`, which wraps Android notification-listener functionality and exposes notification data to React Native.[cite:46]
+- **Notification listener:** Custom `notification-access` Expo Native Module (Nitro), which wraps Android `NotificationListenerService` and exposes notification data, installed-app listing, and permission queries to React Native.[cite:46]
 - **Local buffer:** MMKV for fast local persistence of unsent notifications and lightweight device state.[cite:46]
 - **Push reception:** FCM on Android for closed-app or inactive-app delivery and wake-up flows.[cite:57][cite:94]
 
@@ -365,17 +365,24 @@ Suggested fields:
 
 ## Edge Functions and backend logic
 
-### Edge Functions to create
+### Edge Functions deployed
 
-Recommended functions:
-- `create-pairing-token`
-- `claim-pairing-token`
-- `ingest-child-notification`
-- `flush-child-buffer`
-- `send-parent-push`
-- `send-child-recovery-push`
-- `update-device-presence`
-- `unpair-devices`[cite:75][cite:83]
+Actual functions deployed to Supabase:
+- `create-pairing-token` — generate QR pairing token + code (child)
+- `claim-pairing-token` — claim a pairing token and create pair (parent)
+- `ingest-child-notification` — ingest and route notifications to parent (child)
+- `get-notifications` — fetch decrypted notifications for the caller's pair
+- `ping-child` — send wake-up FCM to child device (parent)
+- `revoke-pair` — revoke/unpair a device pair (either)
+- `sync-device` — update device presence, push_token, foreground
+- `get-onboarding-state` — fetch user onboarding state and role
+- `set-onboarding-role` — set user onboarding role (parent/child/admin)
+- `sync-installed-apps` — sync child's installed-apps list to the parent (child)
+- `update-app-filters` — update app filter preferences (child)
+- `backfill-encrypt-notifications` — re-encrypt existing notifications after key rotation (API key)
+- `health` — public health check
+
+FCM push helpers (`sendParentPush`, `sendChildRecoveryPush`, `sendPairRevokedPush`) are internal functions in `_shared/fcm.ts` rather than standalone deployed edge functions.
 
 ### Notification ingestion function behavior
 
@@ -518,7 +525,7 @@ The following rules should be treated as implementation constraints:
 2. Do **not** build iOS notification interception.
 3. Use **Supabase** as the main backend platform.
 4. Use **FCM** for Android push delivery and optional Child wake/recovery.
-5. Use **react-native-android-notification-listener** for Child notification capture.[cite:46]
+5. Use the **custom `notification-access` Expo Native Module (Nitro)** for Child notification capture.[cite:46]
 6. Use **MMKV** to buffer unsent Child notifications locally.
 7. Use **database persistence for every mirrored notification**; the database is the source of truth.[cite:83]
 8. Use **Supabase Realtime** for Parent live feed when Parent app is active.[cite:138]

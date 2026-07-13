@@ -13,7 +13,7 @@ const STEP_ROUTE: Record<OnboardingStep, string> = {
 };
 
 export default function OnboardingHub() {
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +43,7 @@ export default function OnboardingHub() {
         if (state.selected_role === 'child') {
           router.replace('/onboarding-app-selection');
         } else {
-          router.replace('/app-filters');
+          router.replace('/onboarding-parent-wait');
         }
         return;
       }

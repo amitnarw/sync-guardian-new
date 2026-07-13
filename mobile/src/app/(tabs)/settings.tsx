@@ -128,7 +128,7 @@ export default function SettingsScreen() {
   const handlePingChild = async (childDeviceId: string, pairId: string) => {
     setPingingId(pairId);
     try {
-      const { data, error } = await supabase.functions.invoke('ping-child', {
+      const { error } = await supabase.functions.invoke('ping-child', {
         body: { child_device_id: childDeviceId },
       });
       if (error) {

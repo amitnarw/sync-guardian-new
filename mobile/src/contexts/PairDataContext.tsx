@@ -265,11 +265,12 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     cancelledRef.current = false;
+    const initIdAtSetup = initIdRef.current;
     init(false);
 
     return () => {
       cancelledRef.current = true;
-      ++initIdRef.current;
+      initIdRef.current = initIdAtSetup + 1;
       removeAllChannels();
     };
   }, [deviceId, storePairId, isParent, init, removeAllChannels]);

@@ -1,6 +1,9 @@
 // Lightweight logger + error sanitizer for Deno edge functions.
 // Aligns with AGENTS.md guidance to avoid leaking internal details in responses.
 
+import { AuthError } from './auth-verifier.ts'
+import { ValidationError } from './validation.ts'
+
 type LogLevel = 'info' | 'warn' | 'error'
 
 // Strip UUIDs and token-like strings from logs so sensitive identifiers

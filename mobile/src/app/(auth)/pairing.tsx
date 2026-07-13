@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { AuthColors, AuthFonts, AuthRadius } from '@/constants/auth-theme';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
@@ -42,10 +42,55 @@ export default function PairingScreen() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600);
 
+  const generatePairingToken = useCallback(async (isRegen = false) => {
+    try {
+      if (isRegen) {
+        setIsRegenerating(true);
+      } else {
+        setLoading(true);
+      }
+      const { data, error } = await supabase.functions.invoke('create-pairing-token', {
+        body: {},
+      });
+
+      if (error) throw error;
+
+      setDeviceId(data.data.child_device_id);
+      setPairingData(data.data);
+    } catch (err: unknown) {
+      let msg = 'Could not create pairing code.';
+      let statusInfo = '';
+
+      if (err instanceof FunctionsHttpError) {
+        statusInfo = ` (status ${err.context.status})`;
+        try {
+          const body = await err.context.text();
+          const parsed = JSON.parse(body);
+          msg = parsed.error || msg;
+        } catch {
+          msg = `Server returned an error${statusInfo}. Please try again.`;
+        }
+      } else if (err instanceof Error && err.message !== 'Failed to create session') {
+        msg = err.message;
+        if (err.message.includes('failed to send a request') || err.message.includes('Network request failed')) {
+          msg = 'Could not connect. Please check your internet and try again.';
+        }
+      }
+
+      logger.error('create-pairing-token error:', msg);
+      showModal({ title: 'Pairing Failed', message: msg + statusInfo, icon: 'error', primaryButton: 'Got it' });
+    } finally {
+      if (isRegen) {
+        setIsRegenerating(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [showModal, setDeviceId]);
+
   useEffect(() => {
     if (userRole === 'child') {
       (async () => {
-        // Ensure session is ready before calling the edge function
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           showModal({ title: 'Pairing Failed', message: 'Session not ready. Please try signing in again.', icon: 'error', primaryButton: 'Got it' });
@@ -57,7 +102,7 @@ export default function PairingScreen() {
     } else {
       setLoading(false);
     }
-  }, [userRole]);
+  }, [userRole, generatePairingToken, showModal]);
 
   // Listen for the parent device claiming the token, and auto-regenerate on failure/expiry
   useEffect(() => {
@@ -129,7 +174,7 @@ export default function PairingScreen() {
       cancelled = true;
       clearInterval(pollInterval);
     };
-  }, [pairingData, isRegenerating]);
+  }, [pairingData, isRegenerating, generatePairingToken, setPairId]);
 
   // Countdown timer for pairing code expiry
   useEffect(() => {
@@ -142,53 +187,6 @@ export default function PairingScreen() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [pairingData?.expires_at]);
-
-  const generatePairingToken = async (isRegen = false) => {
-    try {
-      if (isRegen) {
-        setIsRegenerating(true);
-      } else {
-        setLoading(true);
-      }
-      const { data, error } = await supabase.functions.invoke('create-pairing-token', {
-        body: {},
-      });
-
-      if (error) throw error;
-      
-      // The edge function returns { data: { code, token, child_device_id, ... } }
-      setDeviceId(data.data.child_device_id);
-      setPairingData(data.data);
-    } catch (err: unknown) {
-      let msg = 'Could not create pairing code.';
-      let statusInfo = '';
-
-      if (err instanceof FunctionsHttpError) {
-        statusInfo = ` (status ${err.context.status})`;
-        try {
-          const body = await err.context.text();
-          const parsed = JSON.parse(body);
-          msg = parsed.error || msg;
-        } catch {
-          msg = `Server returned an error${statusInfo}. Please try again.`;
-        }
-      } else if (err instanceof Error && err.message !== 'Failed to create session') {
-        msg = err.message;
-        if (err.message.includes('failed to send a request') || err.message.includes('Network request failed')) {
-          msg = 'Could not connect. Please check your internet and try again.';
-        }
-      }
-
-      logger.error('create-pairing-token error:', msg);
-      showModal({ title: 'Pairing Failed', message: msg + statusInfo, icon: 'error', primaryButton: 'Got it' });
-    } finally {
-      if (isRegen) {
-        setIsRegenerating(false);
-      } else {
-        setLoading(false);
-      }
-    }
-  };
 
   const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
     if (scanned) return;

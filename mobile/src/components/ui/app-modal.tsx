@@ -81,7 +81,7 @@ export const AppModal = ({
         Haptics.notificationAsync(hapticMap[icon])
       }
     }
-  }, [visible])
+  }, [visible, backdropOpacity, cardOpacity, icon, translateY])
 
   const animateOutAndCall = useCallback((callback?: () => void) => {
     cardOpacity.value = withTiming(0, { duration: 200 })
@@ -91,7 +91,7 @@ export const AppModal = ({
         runOnJS(callback)()
       }
     })
-  }, [])
+  }, [backdropOpacity, cardOpacity, translateY])
 
   useEffect(() => {
     if (visible && autoDismissMs && !secondaryButton) {

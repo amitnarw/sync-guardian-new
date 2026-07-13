@@ -23,7 +23,7 @@ export function useProtectedRoute(allowedRoles: 'parent' | 'child' | ('parent' |
     if (!allowed.includes(userRole as any)) {
       router.replace('/role-selection');
     }
-  }, [_hasHydrated, isAuthenticated, userRole]);
+  }, [_hasHydrated, isAuthenticated, userRole, allowedRoles]);
 }
 
 /**

@@ -13,7 +13,7 @@ The stack has been strictly defined to ensure reliability, offline support, and 
 
 ### Mobile App
 - **Framework:** Expo + React Native (Must be run as a native Android build `npx expo run:android`, not Expo Go).
-- **Notification Capture:** `react-native-android-notification-listener` (Native Android module wrapper).
+- **Notification Capture:** Custom `notification-access` Expo Native Module (Nitro), wrapping Android `NotificationListenerService`. (Not the community `react-native-android-notification-listener`.)
 - **Local Buffer:** **MMKV** for ultra-fast local persistence of unsent notifications when the Child device loses internet.
 - **State Management:** Zustand.
 - **Push Delivery:** FCM (Firebase Cloud Messaging) for background wake-ups and parent→child ping/wake signal (presence sync + buffer flush).
@@ -59,8 +59,16 @@ The following tables are required:
 ## 6. Required Supabase Edge Functions
 - `create-pairing-token`
 - `claim-pairing-token`
-- `ingest-child-notification` (Validates, stores in DB, and decides whether to trigger FCM push based on Parent's `is_foreground` state).
-- `send-parent-push`
+- `ingest-child-notification` (Validates, encrypts, stores in DB, and triggers FCM push based on Parent's foreground state).
+- `get-notifications` (Decrypts and returns notification content for the caller's pair).
+- `ping-child` (Send wake-up FCM to child device, triggering presence sync + MMKV buffer flush).
+- `revoke-pair` (Revoke/unpair a device pair).
+- `sync-device` (Update device presence, push_token, foreground).
+- `get-onboarding-state` / `set-onboarding-role` (Onboarding flow management).
+- `sync-installed-apps` (Child sends installed-app list to parent).
+- `update-app-filters` (Child updates which apps to mirror).
+- `backfill-encrypt-notifications` (Temporary — re-encrypt after key rotation).
+- `health` (Public health check).
 
 ## 7. Implementation Checklist for AI Agents
 If you are an AI agent reading this to continue development, follow this strict sequence:
@@ -68,7 +76,7 @@ If you are an AI agent reading this to continue development, follow this strict 
 - [ ] **Step 1**: Delete the old `backend` folder containing the Express server. It is obsolete.
 - [ ] **Step 2**: Initialize a local Supabase project structure to replace the backend. Write the initial SQL migrations for the `devices`, `pairs`, and `mirrored_notifications` tables.
 - [ ] **Step 3**: Write the core Supabase Edge Functions (pairing and ingestion).
-- [ ] **Step 4**: Inside `mobile/`, install the new core dependencies: `react-native-android-notification-listener`, `react-native-mmkv`, and FCM push modules.
+- [ ] **Step 4**: Inside `mobile/`, install the core dependencies: `react-native-mmkv` and FCM push modules. The custom `notification-access` module (Nitro) is already in `mobile/modules/notification-access/`.
 - [ ] **Step 5**: Set up the Expo Config Plugins for the native Android `NotificationListenerService`.
 - [ ] **Step 6**: Build the mobile Pairing UI (QR Scanner) and link it to the Supabase Edge Functions.
 - [ ] **Step 7**: Implement the Child notification interceptor and MMKV buffering.

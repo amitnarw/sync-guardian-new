@@ -49,7 +49,7 @@ export default function SplashScreen() {
     }, 2800);
 
     return () => clearTimeout(exitTimeout);
-  }, []);
+  }, [blobScale, containerOpacity, contentOpacity]);
 
   const animatedContainerStyle = useAnimatedStyle(() => ({ opacity: containerOpacity.value }));
   const animatedBlobStyle = useAnimatedStyle(() => ({ transform: [{ scale: blobScale.value }] }));

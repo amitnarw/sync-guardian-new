@@ -2,13 +2,14 @@ import React from 'react';
 import { StyleSheet, Text, Pressable, ViewStyle, Image, ActivityIndicator } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
+import { AuthColors } from '@/constants/auth-theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface ButtonProps {
   title?: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'white';
   icon?: keyof typeof MaterialIcons.glyphMap;
   imageSource?: any;
   style?: ViewStyle | ViewStyle[];
@@ -33,6 +34,7 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
   }));
 
   const isPrimary = variant === 'primary';
+  const isWhite = variant === 'white';
   const isDisabled = loading || disabled;
 
   const content = stacked ? (
@@ -41,11 +43,11 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
         <MaterialIcons
           name={icon}
           size={isPrimary ? 22 : 20}
-          color={isPrimary ? '#e8ffea' : '#363228'}
+          color={isPrimary ? '#e8ffea' : isWhite ? AuthColors.onSurface : '#363228'}
         />
       )}
       {title && (
-        <Text style={[styles.buttonText, isPrimary ? styles.primaryText : styles.secondaryText, styles.stackedText]}>
+        <Text style={[styles.buttonText, isPrimary ? styles.primaryText : isWhite ? styles.whiteText : styles.secondaryText, styles.stackedText]}>
           {title}
         </Text>
       )}
@@ -59,7 +61,7 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
         />
       )}
       {title && (
-        <Text style={[styles.buttonText, isPrimary ? styles.primaryText : styles.secondaryText]}>
+        <Text style={[styles.buttonText, isPrimary ? styles.primaryText : isWhite ? styles.whiteText : styles.secondaryText]}>
           {title}
         </Text>
       )}
@@ -67,7 +69,7 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
         <MaterialIcons
           name={icon}
           size={isPrimary ? 20 : 18}
-          color={isPrimary ? '#e8ffea' : '#363228'}
+          color={isPrimary ? '#e8ffea' : isWhite ? AuthColors.onSurface : '#363228'}
         />
       )}
     </>
@@ -80,7 +82,7 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
       onPress={isDisabled ? undefined : onPress}
       style={[
         styles.button,
-        isPrimary ? styles.primaryButton : styles.secondaryButton,
+        isPrimary ? styles.primaryButton : isWhite ? styles.whiteButton : styles.secondaryButton,
         stacked && styles.stackedButton,
         animatedStyle,
         style,
@@ -88,7 +90,7 @@ export const Button = ({ title, onPress, variant = 'primary', icon, imageSource,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={isPrimary ? '#e8ffea' : '#363228'} />
+        <ActivityIndicator color={isPrimary ? '#e8ffea' : isWhite ? AuthColors.onSurface : '#363228'} />
       ) : (
         content
       )}
@@ -124,6 +126,13 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: '#efe7da',
   },
+  whiteButton: {
+    backgroundColor: AuthColors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: AuthColors.outlineVariant,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   buttonText: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontWeight: '700',
@@ -134,6 +143,9 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     color: '#363228',
+  },
+  whiteText: {
+    color: AuthColors.onSurface,
   },
   imageIcon: {
     width: 24,

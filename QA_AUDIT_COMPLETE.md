@@ -3,6 +3,8 @@
 ## Audit Date
 2026-07-05
 
+> **Last verified against codebase: 2026-07-12** — Items below reflect the audit snapshot; corrections and post-audit findings are noted inline.
+
 ## Audit Performed By
 Senior Tester / Production Code Quality Review
 
@@ -79,9 +81,8 @@ The app is now production-ready for MVP release to a small group. The remaining 
 - Prevents routing based on stale state
 
 ### 9. Sensitive Data Protection ✅
-- Removed `userId`, `pairId`, `deviceId`, `fcmToken` from AsyncStorage
-- These values are now kept in memory only (SecureStore pending)
-- Auth store only persists `userRole`, `hasCompletedOnboarding`, `isAuthenticated`, `email`
+- Removed `userId`, `pairId`, `deviceId`, `fcmToken` from AsyncStorage local cache? 
+  - **Correction (2026-07-12):** `pairId`, `deviceId`, and `fcmToken` have been kept in the Zustand persisted state (`partialize` in `use-auth-store.ts`). `isAuthenticated` and `userId` are kept in memory only (not persisted), matching AGENTS.md rule #1. Persisted fields: `userRole`, `hasCompletedOnboarding`, `email`, `pairId`, `deviceId`, `fcmToken`, `profileImage`, `displayName`, and capture/ingest observability fields.
 
 ### 10. MMKV Persistent Dedup ✅
 - Added `processedKeys` Set stored in MMKV
@@ -97,7 +98,7 @@ The app is now production-ready for MVP release to a small group. The remaining 
 ### 12. Build System ✅
 - Fixed iOS icon path in `app.json` (missing extension)
 - Removed local Supabase fallback URL/key from `src/lib/supabase.ts`
-- Added `expo-secure-store` dependency (pending install)
+- Added `expo-secure-store` dependency (installed and present in `package.json`)
 
 ---
 
@@ -255,7 +256,7 @@ SELECT setval('mirrored_notifications_id_seq', (SELECT COALESCE(MAX(id), 1) FROM
 - `functions/claim-pairing-token/index.ts` - uses atomic RPC
 - `functions/ingest-child-notification/index.ts` - authz, dedup, delivery state
 
-### Mobile (2 files)
+### Mobile Config (2 files)
 - `app.json` - fixed iOS icon path
 - `package.json` - added expo-secure-store
 
@@ -275,3 +276,12 @@ SELECT setval('mirrored_notifications_id_seq', (SELECT COALESCE(MAX(id), 1) FROM
 
 **Status**: ✅ Ready for internal testing (small group)
 **Target**: Production release after 1-week testing period
+
+---
+## Post-Audit Findings (2026-07-12)
+
+### A. `mapError` Scope Bug (Fixed)
+`supabase/functions/_shared/logger.ts:81,84`: `mapError` references `AuthError`/`ValidationError` via `instanceof` but only *re-exported* them (lines 113–114) without importing into the module's scope. This caused `ReferenceError` whenever an AuthError or ValidationError was passed to `mapError`, resulting in a generic `500` response (via the secondary error handler) instead of `401`/`400`. Functions that relied on the Supabase gateway for JWT enforcement (`get-notifications`, `ping-child`) were unaffected; the rest would return `500` on any auth/validation failure. **Fix:** Added explicit `import { AuthError }` and `import { ValidationError }` at the top of `logger.ts`.
+
+### B. Build .env Isolation
+The `.env` file in `mobile/` is listed in `.gitignore`, so EAS Build workers never receive the `EXPO_PUBLIC_*` environment variables. A build without EAS secrets for these values produces an APK that cannot connect to Supabase. **Action:** `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, and `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` must be set as EAS secrets (`eas secret:create --name VAR --value "..."`).

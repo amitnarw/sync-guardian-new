@@ -11,9 +11,18 @@ supabase/        — Supabase project (PostgreSQL, Edge Functions, Auth)
   migrations/    — Database schema migrations
   functions/     — Edge Functions
     _shared/     — Shared utilities (auth, FCM, validation, JWTs)
-    ingest-child-notification/
     create-pairing-token/
     claim-pairing-token/
+    ingest-child-notification/
+    get-notifications/
+    ping-child/
+    revoke-pair/
+    sync-device/
+    get-onboarding-state/
+    set-onboarding-role/
+    sync-installed-apps/
+    update-app-filters/
+    backfill-encrypt-notifications/
     health/
 ```
 
@@ -22,7 +31,7 @@ supabase/        — Supabase project (PostgreSQL, Edge Functions, Auth)
 - **Mobile**: Expo SDK 55, React Native 0.83, TypeScript, Zustand
 - **Backend**: Supabase (PostgreSQL, Auth, Edge Functions)
 - **Push**: Firebase Cloud Messaging (FCM) v1 API
-- **Auth**: Supabase Auth (email/password, Google OAuth)
+- **Auth**: Supabase Auth (Google OAuth only)
 - **Storage**: Supabase PostgreSQL with Row-Level Security
 
 ## Setup
@@ -72,6 +81,7 @@ Edge function secrets (set via `supabase secrets set` or EAS):
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key (admin) |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase service account JSON |
 | `QR_JWT_SECRET` | Secret for signing QR pairing JWTs |
+| `NOTIFICATION_ENCRYPTION_KEY` | 32-byte base64 key for AES-256-GCM encryption of notification content |
 
 ## Security
 

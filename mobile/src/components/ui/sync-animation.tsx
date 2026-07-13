@@ -38,7 +38,7 @@ export const SyncAnimation = () => {
       -1,
       true
     );
-  }, []);
+  }, [coreRotation, iconPulse, ripple1, ripple2, ripple3]);
 
   const rippleStyle1 = useAnimatedStyle(() => ({
     transform: [{ scale: 1 + ripple1.value * 2.8 }],

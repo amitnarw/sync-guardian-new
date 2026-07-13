@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Modal,
-  Pressable,
   View,
   Text,
   TouchableOpacity,
@@ -89,7 +88,7 @@ export function DateRangePicker({
         }
       });
     }
-  }, [visible]);
+  }, [visible, backdropOpacity, cardOpacity, endDate, endTime, startDate, startTime, translateY]);
 
   // Handle hardware back button
   useEffect(() => {

@@ -1,13 +1,14 @@
 import React, { useRef } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator, RefreshControl, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Dimensions } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { StyleSheet, View, Text, RefreshControl, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { ThemedView } from '@/components/themed-view';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { usePairData } from '@/hooks/use-pair-data';
 import { AppIcon } from '@/components/app-icon';
 import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ActivitySkeleton } from '@/components/skeletons/activity-skeleton';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 // ============================================================
@@ -36,6 +37,7 @@ const C = {
   outlineVariant: '#b9b1a3',
   error: '#a83836',
   white: '#ffffff',
+  primaryDeep: '#2f4a37',
 } as const;
 
 export default function ActivityScreen() {
@@ -139,275 +141,265 @@ export default function ActivityScreen() {
 
   return (
     <ThemedView style={s.container}>
-        <EdgeFadeScrollView
-          contentContainerStyle={s.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
-          }
-        >
-          {/* ========== HERO "HEARTH" HEADER ========== */}
-          <View style={s.heroSection}>
-            {/* Blurry Background Hearth Gradient Blob */}
-            <View style={s.gradientBlobContainer}>
-              <LinearGradient
-                colors={[C.primaryContainer, 'rgba(255, 248, 240, 0.75)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.hearthBlob}
-              />
-            </View>
+      <EdgeFadeScrollView
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
+        }
+      >
+        {/* ========== PREMIUM HERO ========== */}
+        <View style={s.heroSection}>
+          <LinearGradient
+            colors={[C.primaryDeep, C.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%">
+            <Defs>
+              <RadialGradient id="heroGlow" cx="82%" cy="12%" r="65%">
+                <Stop offset="0%" stopColor={C.primaryContainer} stopOpacity={0.5} />
+                <Stop offset="100%" stopColor={C.primaryContainer} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#heroGlow)" />
+          </Svg>
+          <LinearGradient
+            colors={['rgba(255,255,255,0.14)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
 
-            <View style={s.heroContent}>
-              <View style={s.heroBadgePill}>
-                <MaterialCommunityIcons name="spa" size={14} color={C.primary} />
-                <Text style={s.heroBadgeText}>{dateRange === 'all' ? 'All Activity' : 'Custom Range'}</Text>
-              </View>
-              <Text style={s.heroTitle}>Activity</Text>
-              <Text style={s.heroDescription}>
-                Every notification mirrored from the connected device, in one timeline.
-              </Text>
-
-            </View>
+          <View style={s.heroContent}>
+            <Text style={s.heroTitle}>Activity</Text>
+            <Text style={s.heroDescription}>
+              Every notification mirrored from the connected device, in one timeline.
+            </Text>
           </View>
+        </View>
 
-          <View style={s.encryptBadge}>
-            <Ionicons name="shield-checkmark" size={14} color={C.primary} />
-            <Text style={s.encryptBadgeText}>All notification contents are securely encrypted at rest</Text>
-          </View>
+        <View style={s.encryptBadge}>
+          <Ionicons name="shield-checkmark" size={14} color={C.primary} />
+          <Text style={s.encryptBadgeText}>All notification contents are securely encrypted at rest</Text>
+        </View>
 
-          {/* ========== SEARCH & FILTER SECTION ========== */}
-          {!isLoading && notifications.length > 0 && (
-            <View style={{ zIndex: 100, position: 'relative' }}>
-              <View style={s.filterBarContainer}>
-                {/* Search Bar */}
-                <View style={s.searchBar}>
-                  <Ionicons name="search-outline" size={18} color={C.onSurfaceVariant} style={s.searchIcon} />
-                  <TextInput
-                    style={s.searchInput}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search..."
-                    placeholderTextColor={C.onSurfaceVariant}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7} style={s.searchClear}>
-                      <Ionicons name="close-circle" size={18} color={C.outline} />
-                    </TouchableOpacity>
-                  )}
-                </View>
+        {/* ========== TIMELINE FEED ========== */}
+        <Text style={s.sectionTitle}>Recent Activity</Text>
 
-                {/* App Filter Button */}
-                <TouchableOpacity
-                  ref={appButtonRef}
-                  style={[s.filterTriggerBtn, selectedPackage && s.filterTriggerBtnActive]}
-                  onPress={openAppDropdown}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="apps-outline" size={20} color={selectedPackage ? C.white : C.primary} />
-                </TouchableOpacity>
-
-                {/* Date Filter Button */}
-                <TouchableOpacity
-                  ref={dateButtonRef}
-                  style={[s.filterTriggerBtn, dateRange !== 'all' && s.filterTriggerBtnActive]}
-                  onPress={openDateDropdown}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="calendar-outline" size={20} color={dateRange !== 'all' ? C.white : C.primary} />
-                </TouchableOpacity>
+        {/* ========== SEARCH & FILTER SECTION ========== */}
+        {!isLoading && notifications.length > 0 && (
+          <View style={{ zIndex: 100, position: 'relative' }}>
+            <View style={s.filterBarContainer}>
+              {/* Search Bar */}
+              <View style={s.searchBar}>
+                <Ionicons name="search-outline" size={18} color={C.onSurfaceVariant} style={s.searchIcon} />
+                <TextInput
+                  style={s.searchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search..."
+                  placeholderTextColor={C.onSurfaceVariant}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7} style={s.searchClear}>
+                    <Ionicons name="close-circle" size={18} color={C.outline} />
+                  </TouchableOpacity>
+                )}
               </View>
 
-              {/* App Selector Dropdown Modal */}
-              <Modal
-                visible={showAppSelector}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowAppSelector(false)}
+              {/* App Filter Button */}
+              <TouchableOpacity
+                ref={appButtonRef}
+                style={[s.filterTriggerBtn, selectedPackage && s.filterTriggerBtnActive]}
+                onPress={openAppDropdown}
+                activeOpacity={0.7}
               >
-                <Pressable style={s.dropdownOverlay} onPress={() => setShowAppSelector(false)}>
-                  <View style={[s.dropdownMenuFloating, { top: appDropdownTop, right: appDropdownRight }]}>
-                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled showsVerticalScrollIndicator>
+                <Ionicons name="apps-outline" size={20} color={selectedPackage ? C.white : C.primary} />
+              </TouchableOpacity>
+
+              {/* Date Filter Button */}
+              <TouchableOpacity
+                ref={dateButtonRef}
+                style={[s.filterTriggerBtn, dateRange !== 'all' && s.filterTriggerBtnActive]}
+                onPress={openDateDropdown}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="calendar-outline" size={20} color={dateRange !== 'all' ? C.white : C.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* App Selector Dropdown Modal */}
+            <Modal
+              visible={showAppSelector}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setShowAppSelector(false)}
+            >
+              <Pressable style={s.dropdownOverlay} onPress={() => setShowAppSelector(false)}>
+                <View style={[s.dropdownMenuFloating, { top: appDropdownTop, right: appDropdownRight }]}>
+                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled showsVerticalScrollIndicator>
+                    <TouchableOpacity
+                      style={[s.dropdownItem, !selectedPackage && s.dropdownItemActive]}
+                      onPress={() => {
+                        setSelectedPackage(null);
+                        setShowAppSelector(false);
+                      }}
+                    >
+                      <Text style={[s.dropdownItemText, !selectedPackage && s.dropdownItemTextActive]}>All Apps</Text>
+                    </TouchableOpacity>
+                    {uniqueApps.map((app) => (
                       <TouchableOpacity
-                        style={[s.dropdownItem, !selectedPackage && s.dropdownItemActive]}
+                        key={app.package}
+                        style={[s.dropdownItem, selectedPackage === app.package && s.dropdownItemActive]}
                         onPress={() => {
-                          setSelectedPackage(null);
+                          setSelectedPackage(app.package);
                           setShowAppSelector(false);
                         }}
                       >
-                        <Text style={[s.dropdownItemText, !selectedPackage && s.dropdownItemTextActive]}>All Apps</Text>
+                        <AppIcon iconBase64={app.icon} size={20} fallbackSize={10} />
+                        <Text style={[s.dropdownItemText, selectedPackage === app.package && s.dropdownItemTextActive]} numberOfLines={1}>
+                          {app.name}
+                        </Text>
                       </TouchableOpacity>
-                      {uniqueApps.map((app) => (
-                        <TouchableOpacity
-                          key={app.package}
-                          style={[s.dropdownItem, selectedPackage === app.package && s.dropdownItemActive]}
-                          onPress={() => {
-                            setSelectedPackage(app.package);
-                            setShowAppSelector(false);
-                          }}
-                        >
-                          <AppIcon iconBase64={app.icon} size={20} fallbackSize={10} />
-                          <Text style={[s.dropdownItemText, selectedPackage === app.package && s.dropdownItemTextActive]} numberOfLines={1}>
-                            {app.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </Pressable>
-              </Modal>
-
-              {/* Date & Time Selector Modal */}
-              <DateRangePicker
-                visible={showDateSelector}
-                onClose={() => setShowDateSelector(false)}
-                startDate={customStartDate}
-                endDate={customEndDate}
-                startTime={customStartTime}
-                endTime={customEndTime}
-                onApply={(start, end, startTime, endTime) => {
-                  setCustomStartDate(start);
-                  setCustomEndDate(end);
-                  setCustomStartTime(startTime);
-                  setCustomEndTime(endTime);
-                  setDateRange('custom');
-                  setShowDateSelector(false);
-                }}
-                onReset={() => {
-                  setCustomStartDate(null);
-                  setCustomEndDate(null);
-                  setCustomStartTime('00:00');
-                  setCustomEndTime('23:59');
-                  setDateRange('all');
-                  setShowDateSelector(false);
-                }}
-              />
-            </View>
-          )}
-
-          {/* ========== TIMELINE FEED ========== */}
-          <Text style={s.sectionTitle}>Recent Activity</Text>
-
-          {isLoading ? (
-            <View style={{ gap: 24, paddingVertical: 16 }}>
-              {[1, 2, 3, 4].map((i) => (
-                <View key={i} style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
-                  {/* Left icon placeholder */}
-                  <Skeleton width={44} height={44} borderRadius={22} />
-                  {/* Right card placeholder */}
-                  <View style={{ flex: 1, backgroundColor: C.surfaceContainerLowest, borderRadius: 28, padding: 20, gap: 10 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Skeleton width={80} height={12} borderRadius={6} />
-                      <Skeleton width={40} height={16} borderRadius={9999} />
-                    </View>
-                    <Skeleton width="70%" height={20} borderRadius={10} style={{ marginVertical: 4 }} />
-                    <Skeleton width="100%" height={14} borderRadius={7} />
-                    <Skeleton width="85%" height={14} borderRadius={7} />
-                  </View>
+                    ))}
+                  </ScrollView>
                 </View>
-              ))}
-            </View>
-          ) : error && notifications.length === 0 ? (
-            <View style={{ padding: 32, alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
-            </View>
-          ) : notifications.length === 0 ? (
-            <View style={{ padding: 32, alignItems: 'center' }}>
-              <Ionicons name="notifications-off-outline" size={40} color={C.outline} />
-              <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>No notifications yet</Text>
-            </View>
-          ) : filteredNotifications.length === 0 ? (
-            <View style={{ padding: 48, alignItems: 'center' }}>
-              <Ionicons name="search-outline" size={40} color={C.outline} />
-              <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 15, color: C.outline, marginTop: 12, textAlign: 'center' }}>
-                No notifications match your filters
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setSearchQuery('');
-                  setSelectedPackage(null);
-                  setCustomStartDate(null);
-                  setCustomEndDate(null);
-                  setCustomStartTime('00:00');
-                  setCustomEndTime('23:59');
-                  setDateRange('all');
-                }}
-                activeOpacity={0.7}
-                style={{ marginTop: 16, backgroundColor: C.primary, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 9999 }}
-              >
-                <Text style={{ fontFamily: 'PlusJakartaSans-Bold', fontSize: 13, color: C.white }}>Reset Filters</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={s.timelineContainer}>
-              <View style={[
-                s.timelineLine,
-                firstIconY !== null && lastIconY !== null ? {
-                  top: firstIconY,
-                  bottom: undefined,
-                  height: lastIconY - firstIconY,
-                } : {
-                  top: 26,
-                  bottom: 26,
-                }
-              ]} />
+              </Pressable>
+            </Modal>
 
-              {filteredNotifications.map((n, idx) => {
-                const isToday = new Date(n.notification_posted_at).toDateString() === new Date().toDateString();
-                const isYesterday = new Date(n.notification_posted_at).toDateString() === new Date(Date.now() - 86400000).toDateString();
-                const showDateMarker = idx === 0 || (
-                  new Date(n.notification_posted_at).toDateString() !== new Date(filteredNotifications[idx - 1].notification_posted_at).toDateString()
-                );
-                const timeStr = new Date(n.notification_posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            {/* Date & Time Selector Modal */}
+            <DateRangePicker
+              visible={showDateSelector}
+              onClose={() => setShowDateSelector(false)}
+              startDate={customStartDate}
+              endDate={customEndDate}
+              startTime={customStartTime}
+              endTime={customEndTime}
+              onApply={(start, end, startTime, endTime) => {
+                setCustomStartDate(start);
+                setCustomEndDate(end);
+                setCustomStartTime(startTime);
+                setCustomEndTime(endTime);
+                setDateRange('custom');
+                setShowDateSelector(false);
+              }}
+              onReset={() => {
+                setCustomStartDate(null);
+                setCustomEndDate(null);
+                setCustomStartTime('00:00');
+                setCustomEndTime('23:59');
+                setDateRange('all');
+                setShowDateSelector(false);
+              }}
+            />
+          </View>
+        )}
 
-                return (
-                  <React.Fragment key={n.id}>
-                    {showDateMarker && (
-                      <View style={[s.dateMarkerRow, idx > 0 ? { marginTop: 24 } : undefined]}>
-                        <View style={[s.dateMarkerPill, !isToday ? s.dateMarkerPillYesterday : undefined]}>
-                          <Text style={[s.dateMarkerText, !isToday ? { color: C.onSurfaceVariant } : undefined]}>
-                            {isToday ? 'Today' : isYesterday ? 'Yesterday' : new Date(n.notification_posted_at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                    <View
-                      style={s.activityRow}
-                      onLayout={
-                        idx === 0
-                          ? (e) => setFirstIconY(e.nativeEvent.layout.y + 26)
-                          : idx === notifications.length - 1
-                            ? (e) => setLastIconY(e.nativeEvent.layout.y + 26)
-                            : undefined
-                      }
-                    >
-                      <View style={s.iconNodeWrap}>
-                        <AppIcon iconBase64={n.app_icon_base64} size={44} fallbackSize={18} />
-                      </View>
-                      <View style={s.activityCard}>
-                        <View style={s.cardHeader}>
-                          <Text style={[s.cardSubLabel, { color: C.primary }]} numberOfLines={1} ellipsizeMode="tail">{n.source_app_name || 'Notification'}</Text>
-                          <View style={s.timeBadgePill}>
-                            <Text style={s.timeBadgeText}>{timeStr}</Text>
-                          </View>
-                        </View>
-                        <Text style={s.cardTitle}>{n.notification_title || '(no title)'}</Text>
-                        {n.notification_body ? (
-                          <Text style={s.cardDesc} numberOfLines={3}>{n.notification_body}</Text>
-                        ) : null}
+        {isLoading ? (
+          <ActivitySkeleton />
+        ) : error && notifications.length === 0 ? (
+          <View style={{ padding: 32, alignItems: 'center' }}>
+            <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
+          </View>
+        ) : notifications.length === 0 ? (
+          <View style={{ padding: 32, alignItems: 'center' }}>
+            <Ionicons name="notifications-off-outline" size={40} color={C.outline} />
+            <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>No notifications yet</Text>
+          </View>
+        ) : filteredNotifications.length === 0 ? (
+          <View style={{ padding: 48, alignItems: 'center' }}>
+            <Ionicons name="search-outline" size={40} color={C.outline} />
+            <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 15, color: C.outline, marginTop: 12, textAlign: 'center' }}>
+              No notifications match your filters
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setSearchQuery('');
+                setSelectedPackage(null);
+                setCustomStartDate(null);
+                setCustomEndDate(null);
+                setCustomStartTime('00:00');
+                setCustomEndTime('23:59');
+                setDateRange('all');
+              }}
+              activeOpacity={0.7}
+              style={{ marginTop: 16, backgroundColor: C.primary, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 9999 }}
+            >
+              <Text style={{ fontFamily: 'PlusJakartaSans-Bold', fontSize: 13, color: C.white }}>Reset Filters</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={s.timelineContainer}>
+            <View style={[
+              s.timelineLine,
+              firstIconY !== null && lastIconY !== null ? {
+                top: firstIconY,
+                bottom: undefined,
+                height: lastIconY - firstIconY,
+              } : {
+                top: 26,
+                bottom: 26,
+              }
+            ]} />
+
+            {filteredNotifications.map((n, idx) => {
+              const isToday = new Date(n.notification_posted_at).toDateString() === new Date().toDateString();
+              const isYesterday = new Date(n.notification_posted_at).toDateString() === new Date(Date.now() - 86400000).toDateString();
+              const showDateMarker = idx === 0 || (
+                new Date(n.notification_posted_at).toDateString() !== new Date(filteredNotifications[idx - 1].notification_posted_at).toDateString()
+              );
+              const timeStr = new Date(n.notification_posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+              return (
+                <React.Fragment key={n.id}>
+                  {showDateMarker && (
+                    <View style={[s.dateMarkerRow, idx > 0 ? { marginTop: 10 } : undefined]}>
+                      <View style={[s.dateMarkerPill, !isToday ? s.dateMarkerPillYesterday : undefined]}>
+                        <Text style={[s.dateMarkerText, !isToday ? { color: C.onSurfaceVariant } : undefined]}>
+                          {isToday ? 'Today' : isYesterday ? 'Yesterday' : new Date(n.notification_posted_at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </Text>
                       </View>
                     </View>
-                  </React.Fragment>
-                );
-              })}
-            </View>
-          )}
+                  )}
+                  <View
+                    style={s.activityRow}
+                    onLayout={
+                      idx === 0
+                        ? (e) => setFirstIconY(e.nativeEvent.layout.y + 26)
+                        : idx === notifications.length - 1
+                          ? (e) => setLastIconY(e.nativeEvent.layout.y + 26)
+                          : undefined
+                    }
+                  >
+                    <View style={s.iconNodeWrap}>
+                      <AppIcon iconBase64={n.app_icon_base64} size={44} fallbackSize={18} />
+                    </View>
+                    <View style={s.activityCard}>
+                      <View style={s.cardHeader}>
+                        <Text style={[s.cardSubLabel, { color: C.primary }]} numberOfLines={1} ellipsizeMode="tail">{n.source_app_name || 'Notification'}</Text>
+                        <View style={s.timeBadgePill}>
+                          <Text style={s.timeBadgeText}>{timeStr}</Text>
+                        </View>
+                      </View>
+                      <Text style={s.cardTitle}>{n.notification_title || '(no title)'}</Text>
+                      {n.notification_body ? (
+                        <Text style={s.cardDesc} numberOfLines={3}>{n.notification_body}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </React.Fragment>
+              );
+            })}
+          </View>
+        )}
 
-          {/* Bottom padding spacing */}
-          <View style={s.bottomSpacer} />
-        </EdgeFadeScrollView>
+        {/* Bottom padding spacing */}
+        <View style={s.bottomSpacer} />
+      </EdgeFadeScrollView>
     </ThemedView>
   );
 }
@@ -429,7 +421,6 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginHorizontal: 16,
     marginBottom: 16,
   },
   searchBar: {
@@ -487,18 +478,21 @@ const s = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  /* ---------- Hero Hearth Header ---------- */
+  /* ---------- Premium Hero ---------- */
   heroSection: {
     position: 'relative',
-    paddingVertical: 40,
+    paddingVertical: 36,
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 16,
     marginBottom: 2,
     borderRadius: 32,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(68, 103, 77, 0.12)',
+    shadowColor: '#1c2a20',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 32,
+    elevation: 8,
   },
   sectionTitle: {
     fontFamily: 'PlusJakartaSans-Bold',
@@ -506,59 +500,32 @@ const s = StyleSheet.create({
     lineHeight: 26,
     color: C.onSurface,
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 8,
     marginHorizontal: 16,
   },
-  gradientBlobContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 0,
-  },
-  hearthBlob: {
-    width: '100%',
-    height: '100%',
-  },
   heroContent: {
-    zIndex: 1,
+    zIndex: 2,
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
-  heroBadgePill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 9999,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(68, 103, 77, 0.1)',
-  },
-  heroBadgeText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
-    color: C.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
+
   heroTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 40,
-    lineHeight: 48,
-    color: C.primary,
+    fontSize: 38,
+    lineHeight: 44,
+    color: C.white,
     letterSpacing: -1,
+    textShadowColor: 'rgba(0,0,0,0.18)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   heroDescription: {
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 16,
-    lineHeight: 24,
-    color: C.onSurfaceVariant,
+    fontSize: 15,
+    lineHeight: 22,
+    color: 'rgba(255,255,255,0.88)',
     textAlign: 'center',
-    maxWidth: 280,
+    maxWidth: 300,
   },
   encryptBadge: {
     flexDirection: 'row',
@@ -569,6 +536,7 @@ const s = StyleSheet.create({
     borderRadius: 9999,
     marginTop: 8,
     marginBottom: 24,
+    marginHorizontal: 10,
     gap: 6,
   },
   encryptBadgeText: {
@@ -602,7 +570,7 @@ const s = StyleSheet.create({
   dateMarkerPill: {
     backgroundColor: 'rgba(255, 248, 240, 0.75)',
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingTop: 8,
     borderRadius: 9999,
     shadowColor: '#363228',
     shadowOffset: { width: 0, height: 8 },
@@ -627,7 +595,7 @@ const s = StyleSheet.create({
   /* Activity Row */
   activityRow: {
     flexDirection: 'row',
-    marginBottom: 32,
+    marginBottom: 25,
     position: 'relative',
   },
   activityRowYesterday: {

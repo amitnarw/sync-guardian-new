@@ -15,6 +15,7 @@ interface PermissionItem {
 let NotificationAccess: any = null
 if (Platform.OS === 'android') {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     NotificationAccess = require('notification-access')
   } catch {}
 }

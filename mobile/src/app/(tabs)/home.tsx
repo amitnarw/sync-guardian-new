@@ -1,8 +1,8 @@
 import React from 'react';
-import { StyleSheet, View, TouchableOpacity, Image, Text, BackHandler, ActivityIndicator, RefreshControl } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, BackHandler, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withSpring } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
@@ -11,9 +11,11 @@ import { BlurView, BlurTargetView } from 'expo-blur';
 import { usePairData } from '@/hooks/use-pair-data';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { useSetupStatus } from '@/hooks/use-setup-status';
+import { useAuthStore } from '@/hooks/use-auth-store';
+import { supabase } from '@/lib/supabase';
 import { AppIcon } from '@/components/app-icon';
 import { AuthRadius } from '@/constants/auth-theme';
-import { Skeleton } from '@/components/ui/skeleton';
+import { HomeSkeleton } from '@/components/skeletons/home-skeleton';
 
 // ============================================================
 // EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
@@ -41,6 +43,7 @@ const C = {
   outlineVariant: '#b9b1a3',
   error: '#a83836',
   white: '#ffffff',
+  primaryDeep: '#2f4a37',
 } as const;
 
 function groupNotificationsByApp(notifs: { source_package: string | null; source_app_name: string | null; app_icon_base64: string | null }[]) {
@@ -53,6 +56,190 @@ function groupNotificationsByApp(notifs: { source_package: string | null; source
   const sorted = Object.values(groups).sort((a, b) => b.count - a.count);
   const max = sorted[0]?.count || 1;
   return sorted.map((g) => ({ ...g, percentage: Math.round((g.count / max) * 100) }));
+}
+
+function countTodayNotifications(notifs: { notification_posted_at: string }[]): number {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const ts = todayStart.getTime();
+  return notifs.filter((n) => {
+    const t = new Date(n.notification_posted_at).getTime();
+    return !isNaN(t) && t >= ts;
+  }).length;
+}
+
+type HealthStatus = 'healthy' | 'connected' | 'issue';
+
+function computeHealthStatus({
+  childDevice,
+  isOnline,
+  todayCount,
+}: {
+  childDevice: { last_seen_at: string | null; push_token: string | null } | null;
+  isOnline: boolean;
+  todayCount: number;
+}): HealthStatus {
+  if (!childDevice) return 'issue';
+  const lastSeen = childDevice.last_seen_at ? Date.now() - new Date(childDevice.last_seen_at).getTime() : Infinity;
+  if (isOnline && todayCount > 0) return 'healthy';
+  if (lastSeen < 30 * 60 * 1000) return 'connected';
+  return 'issue';
+}
+
+function MonitoringHealthCard({
+  childDevice,
+  isOnline,
+  todayCount,
+  latestNotification,
+}: {
+  childDevice: { last_seen_at: string | null; push_token: string | null } | null;
+  isOnline: boolean;
+  todayCount: number;
+  latestNotification: { source_app_name: string | null; notification_posted_at: string } | null;
+}) {
+  const status = computeHealthStatus({ childDevice, isOnline, todayCount });
+
+  const statusConfig = {
+    healthy: { label: 'All systems Ok', dotColor: '#44674d', pillBg: '#c5eccc', pillText: '#2a4d33' },
+    connected: { label: 'Connected', dotColor: '#8a6a00', pillBg: '#ffefc0', pillText: '#6b4f00' },
+    issue: { label: 'Check connection', dotColor: '#a83836', pillBg: '#ffdad3', pillText: '#7a2020' },
+  }[status];
+
+  const lastSyncText = childDevice?.last_seen_at
+    ? formatTimeAgo(new Date(childDevice.last_seen_at).getTime())
+    : 'Never';
+
+  const pushOk = !!childDevice?.push_token;
+
+  const latestApp = latestNotification?.source_app_name || null;
+  const latestTime = latestNotification
+    ? formatTimeAgo(new Date(latestNotification.notification_posted_at).getTime())
+    : null;
+
+  // Pulsing animation on the status indicator dot
+  const pulseScale = useSharedValue(1);
+  const pulseOpacity = useSharedValue(1);
+  React.useEffect(() => {
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.6, { duration: 900 }),
+        withTiming(1, { duration: 900 }),
+      ),
+      -1,
+      false,
+    );
+    pulseOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 900 }),
+        withTiming(0.7, { duration: 900 }),
+      ),
+      -1,
+      false,
+    );
+  }, [pulseOpacity, pulseScale]);
+  const pulseRingStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+    opacity: pulseOpacity.value,
+  }));
+
+  // Shimmer/slide-in on pill rows
+  const pillOpacity = useSharedValue(0);
+  const pillTranslate = useSharedValue(12);
+  React.useEffect(() => {
+    pillOpacity.value = withTiming(1, { duration: 600 });
+    pillTranslate.value = withSpring(0, { damping: 18, stiffness: 120 });
+  }, [pillOpacity, pillTranslate]);
+  const pillAnimStyle = useAnimatedStyle(() => ({
+    opacity: pillOpacity.value,
+    transform: [{ translateY: pillTranslate.value }],
+  }));
+
+  return (
+    <View style={s.healthSection}>
+      {/* ── Bento top row: Status card + Today count ── */}
+      <View style={s.healthBentoRow}>
+        {/* Left: main status card */}
+        <View style={s.healthStatusCard}>
+          {/* Animated pulse dot */}
+          <View style={s.healthPulseWrap}>
+            <View style={s.healthPulseStack}>
+              {/* Expanding ring */}
+              <Animated.View
+                style={[s.healthPulseRing, { backgroundColor: statusConfig.dotColor + '30' }, pulseRingStyle]}
+              />
+              {/* Solid core */}
+              <View style={[s.healthPulseDot, { backgroundColor: statusConfig.dotColor }]} />
+            </View>
+          </View>
+          <Text style={s.healthStatusTitle}>Monitoring</Text>
+          <Text style={[s.healthStatusPill, { color: statusConfig.pillText, backgroundColor: statusConfig.pillBg }]}>
+            {statusConfig.label}
+          </Text>
+          <Text style={s.healthStatusSyncText}>Last sync · {lastSyncText}</Text>
+        </View>
+
+        {/* Right: today's count stat — full activity hero treatment */}
+        <View style={s.healthStatCard}>
+          {/* Layer 1: base dark-to-medium gradient */}
+          <LinearGradient
+            colors={[C.primaryDeep, C.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          {/* Layer 2: Top-right corner glow (native LinearGradient to prevent SVG clipping) */}
+          <LinearGradient
+            colors={['rgba(197, 236, 204, 0.45)', 'transparent']}
+            start={{ x: 1, y: 0 }}
+            end={{ x: 0.3, y: 0.7 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          {/* Layer 3: white shimmer top-to-bottom */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.14)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={[s.healthStatIconWrap, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
+            <Ionicons name="notifications-outline" size={18} color={C.onPrimary} />
+          </View>
+          <Text style={[s.healthStatNumber, { color: C.onPrimary }]}>{todayCount}</Text>
+          <Text style={[s.healthStatLabel, { color: C.onPrimary, opacity: 0.85 }]}>notifications{'\n'}today</Text>
+        </View>
+      </View>
+
+      {/* ── Animated pill metric rows ── */}
+      <Animated.View style={[s.healthPillStack, pillAnimStyle]}>
+        {/* Push delivery */}
+        <View style={s.healthPillRow}>
+          <View style={[s.healthPillIcon, { backgroundColor: pushOk ? C.primaryContainer : C.secondaryContainer }]}>
+            <Ionicons name="send-outline" size={15} color={pushOk ? C.primary : C.secondary} />
+          </View>
+          <View style={s.healthPillText}>
+            <Text style={s.healthPillLabel}>Push delivery</Text>
+            <Text style={[s.healthPillValue, { color: pushOk ? C.primary : C.secondary }]}>
+              {pushOk ? 'Ready' : 'Not configured'}
+            </Text>
+          </View>
+          <View style={[s.healthPillDot, { backgroundColor: pushOk ? C.primary : C.secondary }]} />
+        </View>
+
+        {/* Latest received */}
+        <View style={s.healthPillRow}>
+          <View style={[s.healthPillIcon, { backgroundColor: C.primaryContainer }]}>
+            <Ionicons name="radio-outline" size={15} color={C.primary} />
+          </View>
+          <View style={s.healthPillText}>
+            <Text style={s.healthPillLabel}>Latest received</Text>
+            <Text style={s.healthPillValue}>
+              {latestApp ? `${latestApp} · ${latestTime}` : 'None yet'}
+            </Text>
+          </View>
+        </View>
+      </Animated.View>
+    </View>
+  );
 }
 
 function HomeScreenBanner({ onPress, title, subtitle, cta }: { onPress: () => void; title: string; subtitle: string; cta: string }) {
@@ -92,14 +279,14 @@ function getGreeting(): string {
 }
 
 export default function HomeScreen() {
-  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isOnline, isLoading, isRefreshing, error, refresh } = usePairData();
+  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isOnline, isLoading, isRefreshing, refresh } = usePairData();
   const { showModal } = useAppModal();
   const { loading: setupLoading, hasPair, setupComplete, incompletePairId } = useSetupStatus();
 
   const childName = childNameFromPair || 'Child';
   const groupedApps = groupNotificationsByApp(notifications);
   const uniqueAppCount = groupedApps.length;
-  const lastSeenTime = childDevice?.last_seen_at ? new Date(childDevice.last_seen_at).getTime() : null;
+  const todayCount = countTodayNotifications(notifications);
 
   React.useEffect(() => {
     const backAction = () => {
@@ -116,7 +303,29 @@ export default function HomeScreen() {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, []);
+  }, [showModal]);
+
+  // Auto-ping the child device once on mount to flush any buffered notifications.
+  const autoPingDone = React.useRef(false);
+  const pairId = useAuthStore((s) => s.pairId);
+
+  React.useEffect(() => {
+    if (!pairId || autoPingDone.current) return;
+    autoPingDone.current = true;
+    (async () => {
+      await supabase.auth.getSession().catch(() => { });
+      const { data: pair } = await supabase
+        .from('pairs')
+        .select('child_device_id')
+        .eq('id', pairId)
+        .maybeSingle();
+      if (pair?.child_device_id) {
+        await supabase.functions
+          .invoke('ping-child', { body: { child_device_id: pair.child_device_id } })
+          .catch(() => { });
+      }
+    })();
+  }, [pairId]);
 
   const blurTargetRef = React.useRef<View>(null);
   const scale = useSharedValue(1);
@@ -234,7 +443,7 @@ export default function HomeScreen() {
       -1,
       true
     );
-  }, []);
+  }, [bottomLeft, bottomRight, insBottomLeft, insBottomRight, insTopLeft, insTopRight, rotation, scale, topLeft, topRight]);
 
   const animatedBlobStyle = useAnimatedStyle(() => {
     return {
@@ -357,7 +566,7 @@ export default function HomeScreen() {
                 </Animated.View>
               </Animated.View>
 
-              {/* Floating Presence Card */}
+              {/* Floating Encryption Card */}
               <View style={s.timerCardContainer}>
                 <BlurView
                   intensity={80}
@@ -365,101 +574,26 @@ export default function HomeScreen() {
                   style={s.timerCard}
                 >
                   <View style={s.timerHeader}>
-                    <View style={[s.presenceDot, { backgroundColor: isOnline ? C.primary : C.outline }]} />
-                    <Text style={s.timerText}>
-                      {isOnline
-                        ? 'Online now'
-                        : lastSeenTime
-                          ? `Last seen ${formatTimeAgo(lastSeenTime)}`
-                          : 'No activity yet'}
-                    </Text>
+                    <Ionicons name="shield-checkmark" size={18} color={C.primary} />
+                    <Text style={s.timerText}>AES-256 Encrypted</Text>
                   </View>
+                  <Text style={s.timerSubText}>Notifications secured{`\n`}end-to-end at rest</Text>
                 </BlurView>
               </View>
             </View>
           </View>
 
-          <View style={s.leoCard}>
-            {isLoading ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 12 }}>
-                <Skeleton width={52} height={52} borderRadius={26} />
-                <View style={{ flex: 1, gap: 8 }}>
-                  <Skeleton width={140} height={16} borderRadius={8} />
-                  <Skeleton width={200} height={12} borderRadius={6} />
-                </View>
-                <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                  <Skeleton width={12} height={12} borderRadius={6} style={{ alignSelf: 'center' }} />
-                  <Skeleton width={40} height={12} borderRadius={6} />
-                </View>
-              </View>
-            ) : error && !childDevice ? (
-              <View style={{ padding: 32, alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
-              </View>
-            ) : !childDevice ? (
-              <View style={{ padding: 32, alignItems: 'center' }}>
-                <Ionicons name="phone-portrait-outline" size={40} color={C.outline} />
-                <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>No child connected yet</Text>
-              </View>
-            ) : (
-              <View style={s.leoRow}>
-                <View style={s.leoAvatarWrap}>
-                  <Image
-                    source={require('@/assets/images/leo_avatar.jpg')}
-                    style={s.leoAvatar}
-                  />
-                  {isOnline && (
-                    <View style={s.leoOnlineDot}>
-                      <View style={s.leoOnlineDotInner} />
-                    </View>
-                  )}
-                </View>
-                <View style={s.leoInfo}>
-                  <Text style={s.leoName}>
-                    {childNameFromPair || 'Child'} is {isOnline ? 'Online' : 'Away'}
-                  </Text>
-                  <Text style={s.leoActivity}>
-                    {latestNotification ? (
-                      <>Currently using <Text style={s.leoAppName}>{latestNotification.source_app_name || 'an app'}</Text></>
-                    ) : (
-                      'No recent activity'
-                    )}
-                  </Text>
-                  {childDevice.last_seen_at && (
-                    <View style={s.leoBadges}>
-                      <View style={s.badge}>
-                        <Ionicons name="time-outline" size={14} color={C.primary} />
-                        <Text style={s.badgeText}>
-                          {formatTimeAgo(new Date(childDevice.last_seen_at).getTime())}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-                <View style={s.harmonyBlock}>
-                  <View style={[s.harmonyDot, { backgroundColor: isOnline ? C.primary : C.outline }]} />
-                  <Text style={s.harmonyLabel}>{isOnline ? 'Online' : 'Away'}</Text>
-                </View>
-              </View>
-            )}
-          </View>
-
-          {/* ========== LATEST ACTIVITY CARD ========== */}
-          <View style={s.bedtimeCard}>
-            <Ionicons name="sparkles" size={28} color={C.onPrimary} />
-            <View style={s.bedtimeTextBlock}>
-              <Text style={s.bedtimeTitle}>
-                {latestNotification
-                  ? `${latestNotification.source_app_name || 'App'} activity`
-                  : 'No recent activity'}
-              </Text>
-              <Text style={s.bedtimeSub}>
-                {latestNotification
-                  ? (latestNotification.notification_title || latestNotification.notification_body || `via ${latestNotification.source_app_name || 'app'}`)
-                  : 'Waiting for child device activity...'}
-              </Text>
-            </View>
-          </View>
+          {/* ========== MONITORING HEALTH CARD ========== */}
+          {isLoading ? (
+            <HomeSkeleton />
+          ) : (
+            <MonitoringHealthCard
+              childDevice={childDevice}
+              isOnline={isOnline}
+              todayCount={todayCount}
+              latestNotification={latestNotification}
+            />
+          )}
 
           {/* ========== MOST ACTIVE APPS (live) ========== */}
           <View style={s.appsSection}>
@@ -719,149 +853,176 @@ const s = StyleSheet.create({
     lineHeight: 22,
     color: C.onSurface,
   },
+  timerSubText: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    color: C.onSurfaceVariant,
+    marginTop: 4,
+  },
   presenceDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
   },
 
-  /* ---------- Leo Card ---------- */
-  leoCard: {
+
+  /* ---------- Monitoring Health Section ---------- */
+  healthSection: {
+    marginBottom: 32,
+    gap: 10,
+  },
+  healthBentoRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  /* Left card: status */
+  healthStatusCard: {
+    flex: 1.5,
     backgroundColor: C.surfaceContainerLowest,
-    borderRadius: 32,
-    padding: 32,
-    marginBottom: 16,
+    borderRadius: 28,
+    padding: 22,
     shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.07,
+    shadowRadius: 16,
+    elevation: 3,
+    gap: 8,
   },
-  leoRow: {
-    flexDirection: 'column',
+  healthPulseWrap: {
+    marginBottom: 4,
+  },
+  healthPulseStack: {
+    width: 32,
+    height: 32,
     alignItems: 'center',
-    gap: 32,
+    justifyContent: 'center',
   },
-  leoAvatarWrap: {
-    position: 'relative',
-    padding: 4,
-    borderWidth: 4,
-    borderColor: C.primaryContainer,
-    borderRadius: 64,
-  },
-  leoAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: C.surfaceContainer,
-  },
-  leoOnlineDot: {
+  healthPulseRing: {
     position: 'absolute',
-    bottom: 4,
-    right: 4,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: C.primary,
-    borderWidth: 2,
-    borderColor: C.surfaceContainerLowest,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  leoOnlineDotInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff',
-  },
-  leoInfo: {
-    alignItems: 'center',
-    gap: 16,
-  },
-  leoName: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 24,
-    lineHeight: 32,
-    color: C.onSurface,
-  },
-  leoActivity: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 16,
-    lineHeight: 24,
-    color: C.onSurfaceVariant,
-  },
-  leoAppName: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    color: C.primary,
-  },
-  leoBadges: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center',
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: C.surfaceContainer,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 9999,
-  },
-  badgeText: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.primary,
-  },
-  harmonyBlock: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  harmonyDot: {
+  healthPulseDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginBottom: 8,
   },
-  harmonyLabel: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 10,
-    lineHeight: 14,
-    color: C.onSurfaceVariant,
-    opacity: 0.6,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-
-  /* ---------- Bedtime Card ---------- */
-  bedtimeCard: {
-    backgroundColor: C.primary,
-    borderRadius: 32,
-    padding: 32,
-    marginBottom: 48,
-    gap: 16,
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  bedtimeTextBlock: {
-    gap: 6,
-  },
-  bedtimeTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
+  healthStatusTitle: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
     fontSize: 20,
     lineHeight: 26,
-    color: C.onPrimary,
+    color: C.onSurface,
+    letterSpacing: -0.5,
   },
-  bedtimeSub: {
+  healthStatusPill: {
+    alignSelf: 'flex-start',
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 11,
+    lineHeight: 15,
+    letterSpacing: 0.3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    overflow: 'hidden',
+  },
+  healthStatusSyncText: {
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.primaryContainer,
+    fontSize: 12,
+    lineHeight: 16,
+    color: C.onSurfaceVariant,
+    marginTop: 2,
   },
+  /* Right card: today's notification count */
+  healthStatCard: {
+    flex: 1,
+    backgroundColor: C.primary,
+    borderRadius: 28,
+    padding: 22,
+    shadowColor: C.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 4,
+    gap: 6,
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+  },
+  healthStatIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthStatNumber: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 36,
+    lineHeight: 44,
+    color: C.primary,
+    letterSpacing: -1,
+    marginTop: 4,
+  },
+  healthStatLabel: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 11,
+    lineHeight: 15,
+    color: C.primary,
+    opacity: 0.75,
+  },
+  /* Pill metric rows */
+  healthPillStack: {
+    gap: 8,
+  },
+  healthPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  healthPillIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  healthPillText: {
+    flex: 1,
+    gap: 2,
+  },
+  healthPillLabel: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 11,
+    lineHeight: 14,
+    color: C.onSurfaceVariant,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  healthPillValue: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 14,
+    lineHeight: 19,
+    color: C.onSurface,
+  },
+  healthPillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+
 
   /* ---------- Apps Section ---------- */
   appsSection: {

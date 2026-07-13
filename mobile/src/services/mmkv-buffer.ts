@@ -27,11 +27,12 @@ export interface NotificationPayload {
 }
 
 function dedupKey(p: NotificationPayload): string {
-  return `${p.child_device_id}|${p.pair_id}|${p.notification_posted_at}|${p.notification_title}`;
+  return `${p.child_device_id}|${p.pair_id}|${p.notification_key}`;
 }
 
 function getMMKV() {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { MMKV } = require('react-native-mmkv');
     // @ts-ignore
     return new MMKV();
@@ -145,8 +146,8 @@ let isFlushing = false;
 /** Returns true for HTTP statuses that should be retried (transient), false to drop. */
 function isRetryableStatus(status: number | undefined): boolean {
   if (status === undefined) return true; // network/unknown error -> retry
-  // 4xx (except 429) are permanent client errors; drop them.
-  if (status >= 400 && status < 500) return status === 429;
+  // 4xx: 429 (rate-limit) and 401/403 (first-run auth/registration race) are retryable.
+  if (status >= 400 && status < 500) return status === 429 || status === 401 || status === 403;
   // 5xx are transient; retry.
   if (status >= 500 && status < 600) return true;
   return false;
@@ -167,6 +168,7 @@ export const flushBuffer = async () => {
     const queue = await readQueue();
     if (queue.length === 0) return;
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { supabase } = require('@/lib/supabase');
     const remaining: NotificationPayload[] = [];
 
@@ -184,6 +186,12 @@ export const flushBuffer = async () => {
           continue;
         }
         if (!n.pair_id || !n.child_device_id) {
+          const st = useAuthStore.getState();
+          if (!st.pairId || !st.deviceId) {
+            const retry = (n._retryCount ?? 0) + 1;
+            if (retry <= 5) remaining.push({ ...n, _retryCount: retry });
+            continue;
+          }
           logger.warn('flushBuffer: dropping item with missing pair_id/child_device_id', { title: n.notification_title });
           continue;
         }
@@ -194,6 +202,7 @@ export const flushBuffer = async () => {
       if (batch.length === 0) continue;
 
       try {
+        await supabase.auth.getSession().catch(() => {});
         const { error, data } = await supabase.functions.invoke('ingest-child-notification', {
           body: { notifications: batch },
         });
@@ -216,7 +225,11 @@ export const flushBuffer = async () => {
             }
           }
         } else if (data && (data as any).reason === 'pair_inactive') {
-          logger.info('Flush batch dropped: pair inactive');
+          for (const n of batch) {
+            const retry = (n._retryCount ?? 0) + 1;
+            if (retry <= 5) remaining.push({ ...n, _retryCount: retry });
+          }
+          logger.info('Flush batch re-buffered: pair inactive');
         } else {
           // Track sent notification keys
           for (const n of batch) {

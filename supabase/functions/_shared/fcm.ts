@@ -170,7 +170,7 @@ export async function sendChildRecoveryPush(
       },
       android: {
         priority: 'high' as const,
-        ttl: '0s',
+        ttl: '3600s',
       },
     },
   }

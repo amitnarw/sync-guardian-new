@@ -115,7 +115,7 @@ export default function RootLayout() {
     );
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [setUserId, setIsAuthenticated, setEmail, setProfileImage, setDisplayName, setPairId, setDeviceId, setSessionChecked]);
 
   // Sync device presence + FCM token via edge function
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function RootLayout() {
       }
     }
     syncDevice();
-  }, [isAuthenticated, userRole, deviceId, userId]);
+  }, [isAuthenticated, userRole, deviceId, userId, setFcmToken]);
 
   // Listen for AppState changes to update foreground status
   useEffect(() => {
@@ -226,7 +226,7 @@ export default function RootLayout() {
       subscription.remove();
       if (heartbeatInterval) clearInterval(heartbeatInterval);
     };
-  }, [deviceId, isAuthenticated]);
+  }, [deviceId, isAuthenticated, userRole]);
 
   if (!loaded && !error) {
     return null;

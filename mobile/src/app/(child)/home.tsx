@@ -93,7 +93,7 @@ export default function ChildHome() {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, []);
+  }, [showModal]);
 
   useEffect(() => {
     fetchParentName();
@@ -229,7 +229,7 @@ export default function ChildHome() {
       -1,
       true
     );
-  }, []);
+  }, [bottomLeft, bottomRight, rotation, scale, topLeft, topRight]);
 
   const animatedBlobStyle = useAnimatedStyle(() => {
     return {
@@ -384,7 +384,7 @@ export default function ChildHome() {
 }
 
 // ============================================================
-// DIAGNOSTIC PANEL (collapsible — shows capture/ingest status)
+// DIAGNOSTIC PANEL (collapsible - shows capture/ingest status)
 // ============================================================
 function DiagnosticPanel() {
   const {
