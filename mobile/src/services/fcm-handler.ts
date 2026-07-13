@@ -1,5 +1,7 @@
 import { getApp } from '@react-native-firebase/app';
 import { getMessaging, setBackgroundMessageHandler, onMessage } from '@react-native-firebase/messaging';
+import { AppState } from 'react-native';
+import { router } from 'expo-router';
 import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { supabase } from '@/lib/supabase';
@@ -10,6 +12,11 @@ const messaging = getMessaging(getApp());
 function handlePairRevoked(revokedBy: unknown) {
   if (revokedBy === 'parent') {
     useAuthStore.getState().clearPair()
+    // Only navigate when the app is foregrounded — the usePairStatusGuard
+    // redirects on the persisted null pairId when the user returns.
+    if (AppState.currentState === 'active') {
+      router.replace('/pairing')
+    }
     logger.info('Pair revoked by parent - cleared local pair state')
   } else if (revokedBy === 'child') {
     useAuthStore.getState().markPairRevoked()

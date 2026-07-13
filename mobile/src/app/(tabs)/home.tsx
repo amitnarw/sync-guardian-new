@@ -486,7 +486,7 @@ export default function HomeScreen() {
     if (!hasPair) {
       return (
         <HomeScreenBanner
-          onPress={() => router.push('/parent-setup')}
+          onPress={() => router.push('/pairing')}
           title="Let's connect a child device"
           subtitle="To start monitoring, link your child's phone in a few taps."
           cta="Add Child"

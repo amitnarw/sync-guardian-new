@@ -16,6 +16,9 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.amitnarw.mobile",
+      "permissions": [
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+      ],
       "googleServicesFile": "./google-services.json"
     },
     "web": {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppState, Linking, Platform } from 'react-native'
 import { logger } from '@/services/logger'
 
@@ -24,6 +24,14 @@ export function usePermissionStatus(role: 'parent' | 'child') {
   const [notifListenerEnabled, setNotifListenerEnabled] = useState(false)
   const [fcmPermissionGranted, setFcmPermissionGranted] = useState(false)
   const [batteryOptDisabled, setBatteryOptDisabled] = useState(true)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current !== null) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+  }, [])
 
   const refresh = useCallback(() => {
     if (!NotificationAccess) {
@@ -48,11 +56,24 @@ export function usePermissionStatus(role: 'parent' | 'child') {
   }, [refresh])
 
   useEffect(() => {
+    let pollCount = 0
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh()
+      if (state !== 'active') return
+      refresh()
+      // Poll for 5 seconds after returning from settings to catch delayed system updates
+      stopPolling()
+      pollCount = 0
+      pollingRef.current = setInterval(() => {
+        pollCount++
+        refresh()
+        if (pollCount >= 5) stopPolling()
+      }, 1000)
     })
-    return () => sub.remove()
-  }, [refresh])
+    return () => {
+      sub.remove()
+      stopPolling()
+    }
+  }, [refresh, stopPolling])
 
   const openNotifListenerSettings = useCallback(() => {
     if (!NotificationAccess) return
@@ -65,8 +86,26 @@ export function usePermissionStatus(role: 'parent' | 'child') {
   }, [])
 
   const openBatteryOptSettings = useCallback(() => {
+    if (Platform.OS !== 'android') {
+      Linking.openSettings().catch((e) =>
+        logger.warn('openBatteryOptSettings: iOS Linking.openSettings failed', e)
+      )
+      return
+    }
+
+    // Native module opens the best available battery settings screen with fallback chain
+    if (NotificationAccess?.openBatteryOptimizationSettings) {
+      try {
+        const opened = NotificationAccess.openBatteryOptimizationSettings()
+        if (opened) return
+      } catch (e) {
+        logger.warn('openBatteryOptSettings: native open failed', e)
+      }
+    }
+
+    // Last resort: open the app's system settings screen
     Linking.openSettings().catch((e) =>
-      logger.warn('openBatteryOptSettings: Linking.openSettings failed', e)
+      logger.warn('openBatteryOptSettings: app settings fallback failed', e)
     )
   }, [])
 
@@ -107,12 +146,12 @@ export function usePermissionStatus(role: 'parent' | 'child') {
       key: 'battery_opt',
       label: 'Battery Optimization',
       granted: !batteryOptDisabled,
-      guideTitle: 'Turn Off Battery Optimization',
-      guideMessage: 'Battery optimization may prevent Sync Guardian from running in the background. Open App Info and set Battery to "Unrestricted" or "Don\'t optimize".',
+      guideTitle: 'Allow Background Running',
+      guideMessage: 'Sync Guardian must be allowed to run in the background. Tap Fix, then in the App Info screen tap "Battery" (or "Battery usage"), then choose "Unrestricted". On some phones the setting may show as "Don\'t optimize".',
       guideSteps: [
-        'Tap "Battery" on the App Info screen',
-        'Tap "Unrestricted" or select "Don\'t optimize"',
-        'Tap "Done" or "Apply" to confirm',
+        'Tap "Battery" or "Battery usage" on the App Info page that opens',
+        'Select "Unrestricted" or "Don\'t optimize" for Sync Guardian',
+        'Return here and the status will refresh automatically',
       ],
       openSettings: openBatteryOptSettings,
     })

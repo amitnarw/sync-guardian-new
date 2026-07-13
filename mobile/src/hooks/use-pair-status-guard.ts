@@ -7,9 +7,11 @@ import { logger } from '@/services/logger'
 
 export function usePairStatusGuard(role: 'parent' | 'child') {
   const pairId = useAuthStore((s) => s.pairId)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const clearPair = useAuthStore((s) => s.clearPair)
   const { showModal } = useAppModal()
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const redirectingRef = useRef(false)
 
   const shownRef = useRef(false);
 
@@ -19,15 +21,7 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
 
     if (role === 'child') {
       clearPair()
-      showModal({
-        title: 'Pair Disconnected',
-        message: 'Your parent disconnected this device. Tap Reconnect to pair again.',
-        icon: 'warning',
-        primaryButton: 'Reconnect',
-        onPrimaryPress: () => router.replace('/pairing'),
-        secondaryButton: 'Cancel',
-        onSecondaryPress: () => router.replace('/pairing'),
-      })
+      router.replace('/pairing')
     } else {
       showModal({
         title: 'Child Disconnected',
@@ -37,6 +31,17 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
       })
     }
   }, [role, clearPair, showModal])
+
+  // When the child has no pairId but is authenticated, redirect to pairing.
+  // Handles cold-restart after revocation (persisted pairId=null) and the
+  // case where FCM clears pairId while the app is backgrounded.
+  useEffect(() => {
+    if (role !== 'child' || !isAuthenticated) return
+    if (pairId) return
+    if (redirectingRef.current) return
+    redirectingRef.current = true
+    router.replace('/pairing')
+  }, [pairId, isAuthenticated, role])
 
   useEffect(() => {
     if (!pairId) return
@@ -86,4 +91,12 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
       }
     }
   }, [pairId, handleRevoked])
+
+  // Reset the redirect guard when the pairing screen re-mounts with a valid
+  // pairId (user re-paired successfully).
+  useEffect(() => {
+    if (pairId) {
+      redirectingRef.current = false
+    }
+  }, [pairId])
 }

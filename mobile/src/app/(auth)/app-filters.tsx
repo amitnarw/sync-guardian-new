@@ -164,6 +164,7 @@ export default function AppFiltersScreen() {
       setSaving(true)
       const { error: saveErr } = await supabase.functions.invoke('update-app-filters', {
         body: {
+          pair_id: pairId ?? undefined,
           child_device_id: childDeviceId,
           changes: apps.map((a) => ({ package_name: a.package_name, is_enabled: a.is_enabled })),
         },

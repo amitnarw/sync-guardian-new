@@ -21,14 +21,6 @@ serve(async (req) => {
 
     const adminClient = getAdminClient()
     const body = await req.json()
-    const childDeviceId = sanitizeString(body.child_device_id, 100)
-
-    if (!isValidUUID(childDeviceId)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid child_device_id' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
-      )
-    }
 
     if (!Array.isArray(body.changes)) {
       return new Response(
@@ -48,21 +40,43 @@ serve(async (req) => {
       )
     }
 
-    // Verify the caller is the parent paired to this child device.
-    const { data: pair } = await adminClient
-      .from('pairs')
-      .select('id, status')
-      .eq('child_device_id', childDeviceId)
-      .eq('parent_user_id', user.id)
-      .eq('status', 'active')
-      .single()
+    const pairId = sanitizeString(body.pair_id, 100)
+    const childDeviceId = sanitizeString(body.child_device_id, 100)
 
+    // Resolve the target pair: prefer explicit pair_id, else child_device_id.
+    // Accept 'active' or 'pending' status to align with useSetupStatus,
+    // and order+limit to avoid PGRST116 when re-pairing leaves duplicate active pairs.
+    let pairQuery = adminClient
+      .from('pairs')
+      .select('id, child_device_id, child_user_id')
+      .eq('parent_user_id', user.id)
+      .in('status', ['active', 'pending'])
+
+    if (isValidUUID(pairId)) {
+      pairQuery = pairQuery.eq('id', pairId)
+    } else if (isValidUUID(childDeviceId)) {
+      pairQuery = pairQuery.eq('child_device_id', childDeviceId)
+    } else {
+      return new Response(
+        JSON.stringify({ error: 'pair_id or child_device_id is required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
+      )
+    }
+
+    const { data: pairs, error: pairErr } = await pairQuery
+      .order('paired_at', { ascending: false })
+      .limit(1)
+
+    if (pairErr) throw pairErr
+    const pair = pairs?.[0]
     if (!pair) {
       return new Response(
         JSON.stringify({ error: 'Not authorized to manage filters for this device' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 },
       )
     }
+
+    const resolvedChildDeviceId = pair.child_device_id
 
     const enabledPkgs = changes.filter((c) => c.is_enabled).map((c) => sanitizeString(c.package_name, 200))
     const disabledPkgs = changes.filter((c) => !c.is_enabled).map((c) => sanitizeString(c.package_name, 200))
@@ -72,7 +86,7 @@ serve(async (req) => {
       const { error } = await adminClient
         .from('child_app_filters')
         .update({ is_enabled: value })
-        .eq('child_device_id', childDeviceId)
+        .eq('child_device_id', resolvedChildDeviceId)
         .in('package_name', pkgs)
       if (error) throw error
       return pkgs.length
@@ -84,12 +98,12 @@ serve(async (req) => {
 
     // Mark the pair's initial setup as completed so the child device can
     // leave its "waiting for parent" state.
-    const { error: pairErr } = await adminClient
+    const { error: updatePairErr } = await adminClient
       .from('pairs')
       .update({ parent_setup_completed: true })
-      .eq('child_device_id', childDeviceId)
-      .eq('parent_user_id', user.id)
-    if (pairErr) throw pairErr
+      .eq('id', pair.id)
+
+    if (updatePairErr) throw updatePairErr
 
     // Onboarding is now complete for both users.
     try {
@@ -97,14 +111,8 @@ serve(async (req) => {
         onboarding_step: 'completed',
         onboarding_completed: true,
       })
-      const { data: childPair } = await adminClient
-        .from('pairs')
-        .select('child_user_id')
-        .eq('child_device_id', childDeviceId)
-        .eq('parent_user_id', user.id)
-        .single()
-      if (childPair?.child_user_id) {
-        await upsertOnboardingState(childPair.child_user_id, {
+      if (pair.child_user_id) {
+        await upsertOnboardingState(pair.child_user_id, {
           onboarding_step: 'completed',
           onboarding_completed: true,
         })

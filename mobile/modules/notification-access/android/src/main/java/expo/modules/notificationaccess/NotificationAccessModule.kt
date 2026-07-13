@@ -99,23 +99,40 @@ class NotificationAccessModule : Module() {
 
     Function("openBatteryOptimizationSettings") {
       val pkgName = pkg()
+      val pm = ctx().packageManager
 
-      try {
-        ctx().startActivity(
-          Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      // Order: App Info first (contains the OEM's per-app battery management
+      // toggle on Nothing OS and other OEM ROMs). The AOSP global battery
+      // optimization list is a fallback, since it may show the app as
+      // "already optimized" while the OEM layer independently restricts it.
+      // ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS is excluded because some
+      // OEMs silently accept the intent without showing a dialog.
+      val intents = listOf(
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+          data = android.net.Uri.parse("package:$pkgName")
+        },
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+        Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS),
+        Intent(Settings.ACTION_SETTINGS),
+      )
+
+      val opened = intents.firstNotNullOfOrNull { intent ->
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (intent.resolveActivity(pm) != null) {
+          try {
+            ctx().startActivity(intent)
+            true
+          } catch (e: Exception) {
+            android.util.Log.w("SG:NotificationAccess", "Failed to start ${intent.action}", e)
+            null
           }
-        )
-      } catch (_: Exception) {
-        try {
-          ctx().startActivity(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-              data = android.net.Uri.parse("package:$pkgName")
-              addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-          )
-        } catch (_: Exception) {}
-      }
+        } else {
+          android.util.Log.d("SG:NotificationAccess", "No activity for ${intent.action}")
+          null
+        }
+      } ?: false
+
+      opened
     }
 
     Function("resolveAppLabel") { packageName: String ->

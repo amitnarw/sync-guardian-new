@@ -20,8 +20,12 @@ export function isBatteryOptimizationDisabled(): boolean {
   return NotificationAccessModule.isBatteryOptimizationDisabled()
 }
 
-export function openBatteryOptimizationSettings(): void {
+export function openBatteryOptimizationSettings(): boolean {
   return NotificationAccessModule.openBatteryOptimizationSettings()
+}
+
+export function requestBatteryOptimizationExemption(): boolean {
+  return NotificationAccessModule.requestBatteryOptimizationExemption()
 }
 
 export function resolveAppInfo(packageName: string): { label: string; icon: string | null } {

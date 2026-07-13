@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { StyleSheet, View, Dimensions, Text, TouchableOpacity, BackHandler, RefreshControl } from 'react-native';
+import { StyleSheet, View, Dimensions, Text, TouchableOpacity, BackHandler, RefreshControl, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
@@ -11,6 +11,9 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { SyncAnimation } from '@/components/ui/sync-animation';
 import { supabase } from '@/lib/supabase';
+import { logger } from '@/services/logger';
+import { usePermissionStatus } from '@/hooks/use-permission-status';
+import { PermissionStatusRow } from '@/components/permission-status-row';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -45,19 +48,38 @@ const C = {
 export default function ChildHome() {
   const { pairId, deviceId } = useAuthStore();
   const { showModal } = useAppModal();
+  const [pairStatus, setPairStatus] = useState<'active' | 'pending' | 'revoked' | 'missing' | 'loading'>('loading');
   const [parentName, setParentName] = useState('Parent Device');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
+  const permissions = usePermissionStatus('child');
 
-  const fetchParentName = useCallback(async () => {
-    if (!pairId) return;
-    const { data: pair } = await supabase
+  const fetchPairState = useCallback(async () => {
+    if (!pairId) {
+      setPairStatus('missing');
+      return;
+    }
+
+    const { data: pair, error } = await supabase
       .from('pairs')
-      .select('parent_user_id')
+      .select('parent_user_id, status, parent_setup_completed')
       .eq('id', pairId)
       .single();
 
-    if (pair?.parent_user_id) {
+    if (error || !pair) {
+      if (error && error.code === 'PGRST116') {
+        setPairStatus('missing');
+      } else {
+        logger.warn('fetchPairState: error', error?.message);
+        setPairStatus('loading');
+      }
+      return;
+    }
+
+    setPairStatus(pair.status as 'active' | 'pending' | 'revoked');
+    setSetupCompleted(!!pair.parent_setup_completed);
+
+    if (pair.parent_user_id) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('display_name')
@@ -72,11 +94,11 @@ export default function ChildHome() {
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await fetchParentName();
+      await fetchPairState();
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchParentName]);
+  }, [fetchPairState]);
 
   useEffect(() => {
     const backAction = () => {
@@ -95,9 +117,41 @@ export default function ChildHome() {
     return () => backHandler.remove();
   }, [showModal]);
 
+  // Fetch pair state + subscribe to all changes on this pair row
   useEffect(() => {
-    fetchParentName();
-  }, [fetchParentName]);
+    if (!pairId) {
+      setPairStatus('missing');
+      return;
+    }
+    let cancelled = false;
+
+    fetchPairState();
+
+    const channel = supabase
+      .channel(`child_home_${pairId}_${Math.random().toString(36).slice(2)}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pairs',
+          filter: `id=eq.${pairId}`,
+        },
+        (payload) => {
+          if (cancelled) return;
+          const newStatus = (payload.new as any)?.status;
+          const completed = (payload.new as any)?.parent_setup_completed;
+          if (newStatus) setPairStatus(newStatus as 'active' | 'pending' | 'revoked');
+          if (typeof completed === 'boolean') setSetupCompleted(completed);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [pairId, fetchPairState]);
 
   // Best-effort: keep the parent's app filter list in sync with the apps
   // currently installed on this child device (covers pairs created before
@@ -113,50 +167,6 @@ export default function ChildHome() {
       }
     })();
   }, [deviceId]);
-
-  // While the parent hasn't finished choosing apps, keep the child on a
-  // "waiting for parent" screen instead of the dashboard.
-  useEffect(() => {
-    if (!pairId) return;
-    let cancelled = false;
-
-    const checkSetup = async () => {
-      const { data, error } = await supabase
-        .from('pairs')
-        .select('parent_setup_completed')
-        .eq('id', pairId)
-        .single();
-      if (cancelled) return;
-      if (error || !data) {
-        setSetupCompleted(null);
-        return;
-      }
-      setSetupCompleted(!!data.parent_setup_completed);
-    };
-    checkSetup();
-
-    const channel = supabase
-      .channel(`child_setup_${pairId}_${Math.random().toString(36).slice(2)}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'pairs',
-          filter: `id=eq.${pairId}`,
-        },
-        (payload) => {
-          const completed = (payload.new as any)?.parent_setup_completed;
-          if (typeof completed === 'boolean') setSetupCompleted(completed);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
-    };
-  }, [pairId]);
 
   const blurTargetRef = React.useRef<View>(null);
   
@@ -257,18 +267,69 @@ export default function ChildHome() {
     };
   });
 
-  if (setupCompleted === false) {
+  if (pairStatus === 'loading') {
+    return (
+      <ThemedView style={s.container}>
+        <View style={s.waitingBody}>
+          <SyncAnimation />
+          <BlurView intensity={80} tint="light" style={s.loadingCard}>
+            <Text style={s.loadingTitle}>Verifying guardian link</Text>
+            <Text style={s.loadingDesc}>Confirming your secure connection…</Text>
+          </BlurView>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  if (pairStatus === 'missing' || pairStatus === 'revoked') {
+    return null;
+  }
+
+  if (pairStatus === 'pending' || (pairStatus === 'active' && !setupCompleted)) {
     return (
       <ThemedView style={s.container}>
           <View style={s.waitingBody}>
             <SyncAnimation />
             <Text style={s.waitingTitle}>Almost there</Text>
             <Text style={s.waitingText}>
-              {parentName === 'Parent Device'
-                ? 'Your dashboard will appear as soon as your parent finishes setup. Hand them this phone, or ask them to open Sync Guardian and choose which apps to monitor.'
-                : `${parentName} is choosing which apps to monitor. Your dashboard will appear as soon as they finish setup.`}
+              {pairStatus === 'pending'
+                ? 'Waiting for your parent to confirm the connection. Ask them to open Sync Guardian and complete the pairing process.'
+                : parentName === 'Parent Device'
+                  ? 'Your dashboard will appear as soon as your parent finishes setup. Hand them this phone, or ask them to open Sync Guardian and choose which apps to monitor.'
+                  : `${parentName} is choosing which apps to monitor. Your dashboard will appear as soon as they finish setup.`}
             </Text>
           </View>
+      </ThemedView>
+    );
+  }
+
+  // Permission gate: block dashboard if critical Android permissions are missing
+  const criticalPermissions = Platform.OS === 'android'
+    ? permissions.filter(p => (p.key === 'notif_listener' || p.key === 'battery_opt') && !p.granted)
+    : [];
+  if (criticalPermissions.length > 0) {
+    return (
+      <ThemedView style={s.container}>
+        <View style={s.waitingBody}>
+          <SyncAnimation />
+          <BlurView intensity={80} tint="light" style={s.permissionCard}>
+            <Text style={s.permissionTitle}>Permissions Required</Text>
+            <Text style={s.permissionSubtitle}>
+              Sync Guardian needs these permissions to monitor notifications and run in the background.
+            </Text>
+            <View style={s.permissionList}>
+              {criticalPermissions.map(p => (
+                <PermissionStatusRow
+                  key={p.key}
+                  label={p.label}
+                  description={p.guideMessage}
+                  granted={p.granted}
+                  onRequest={p.openSettings}
+                />
+              ))}
+            </View>
+          </BlurView>
+        </View>
       </ThemedView>
     );
   }
@@ -713,5 +774,65 @@ const s = StyleSheet.create({
     color: C.onSurfaceVariant,
     textAlign: 'center',
     maxWidth: 320,
+  },
+  loadingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 32,
+    paddingVertical: 20,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  loadingTitle: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 20,
+    color: C.onSurface,
+    textAlign: 'center',
+  },
+  loadingDesc: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    color: C.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  permissionCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 32,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  permissionTitle: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 22,
+    color: C.onSurface,
+    textAlign: 'center',
+  },
+  permissionSubtitle: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    color: C.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  permissionList: {
+    width: '100%',
+    gap: 8,
   },
 });
