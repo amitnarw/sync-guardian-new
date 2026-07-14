@@ -13,6 +13,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useAuthStore } from '@/hooks/use-auth-store'
 import { supabase } from '@/lib/supabase'
+import { isValidUUID } from '@/lib/uuid'
 import { logger } from '@/services/logger'
 import { AppFiltersSkeleton } from '@/components/skeletons/app-filters-skeleton'
 import { AuthColors, AuthFonts, AuthRadius, AuthShadows } from '@/constants/auth-theme'
@@ -47,7 +48,7 @@ export default function AppFiltersScreen() {
   const load = useCallback(async () => {
     try {
       setError(null)
-      if (!pairId) throw new Error('Pairing information is missing.')
+      if (!isValidUUID(pairId)) throw new Error('Pairing information is missing.')
 
       const { data: pair, error: pairErr } = await supabase
         .from('pairs')
@@ -162,7 +163,7 @@ export default function AppFiltersScreen() {
     if (!childDeviceId) return
     try {
       setSaving(true)
-      const { error: saveErr } = await supabase.functions.invoke('update-app-filters', {
+      const { data: saveData, error: saveErr } = await supabase.functions.invoke('update-app-filters', {
         body: {
           pair_id: pairId ?? undefined,
           child_device_id: childDeviceId,
@@ -170,6 +171,19 @@ export default function AppFiltersScreen() {
         },
       })
       if (saveErr) throw saveErr
+
+      const expectedCount = apps.length
+      const actualUpdated = (saveData as any)?.data?.updated ?? 0
+      if (actualUpdated < expectedCount) {
+        logger.warn('AppFilters: some apps may not have been saved', { expected: expectedCount, actual: actualUpdated })
+        showModal({
+          title: 'Partial Save',
+          message: `Saved settings for ${actualUpdated} out of ${expectedCount} apps. Some apps may not be available yet. You can adjust them later.`,
+          icon: 'warning',
+          primaryButton: 'Continue',
+        })
+      }
+
       if (isReentry) {
         router.back()
       } else {

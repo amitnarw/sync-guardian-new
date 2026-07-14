@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isValidUUID } from '@/lib/uuid';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
 export interface InsightsNotification {
@@ -58,7 +59,7 @@ export function useInsightsData(): UseInsightsDataResult {
   }, []);
 
   const resolvePair = useCallback(async (): Promise<string | null> => {
-    if (storePairId && deviceId) {
+    if (isValidUUID(storePairId) && isValidUUID(deviceId)) {
       const { data } = await supabase
         .from('pairs')
         .select('id')
@@ -66,7 +67,7 @@ export function useInsightsData(): UseInsightsDataResult {
         .single();
       if (data) return data.id;
     }
-    if (deviceId) {
+    if (isValidUUID(deviceId)) {
       const { data } = await supabase
         .from('pairs')
         .select('id')

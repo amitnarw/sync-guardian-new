@@ -13,6 +13,7 @@ import { useAppModal } from '@/hooks/use-app-modal';
 import { useSetupStatus } from '@/hooks/use-setup-status';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { supabase } from '@/lib/supabase';
+import { isValidUUID } from '@/lib/uuid';
 import { AppIcon } from '@/components/app-icon';
 import { AuthRadius } from '@/constants/auth-theme';
 import { HomeSkeleton } from '@/components/skeletons/home-skeleton';
@@ -310,7 +311,7 @@ export default function HomeScreen() {
   const pairId = useAuthStore((s) => s.pairId);
 
   React.useEffect(() => {
-    if (!pairId || autoPingDone.current) return;
+    if (!isValidUUID(pairId) || autoPingDone.current) return;
     autoPingDone.current = true;
     (async () => {
       await supabase.auth.getSession().catch(() => { });

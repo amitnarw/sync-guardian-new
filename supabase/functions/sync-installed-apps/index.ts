@@ -87,18 +87,21 @@ serve(async (req) => {
       if (upsertError) throw upsertError
     }
 
-    // Remove rows for apps no longer present on the child device.
+    // Remove rows for apps no longer present on the child device (except
+    // those the parent explicitly enabled — don't undo parent choices).
     if (incomingPackages.size > 0) {
       await adminClient
         .from('child_app_filters')
         .delete()
         .eq('child_device_id', childDeviceId)
+        .neq('is_enabled', true)
         .not('package_name', 'in', `(${Array.from(incomingPackages).map((p) => `"${p.replace(/"/g, '\\"')}"`).join(',')})`)
     } else {
       await adminClient
         .from('child_app_filters')
         .delete()
         .eq('child_device_id', childDeviceId)
+        .neq('is_enabled', true)
     }
 
     logger.info('sync-installed-apps', 'synced installed apps', { count: rows.length })

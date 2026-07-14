@@ -10,6 +10,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/services/logger';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { isValidUUID } from '@/lib/uuid';
 
 import { MaterialIcons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/button';
@@ -134,19 +135,19 @@ export default function PairingScreen() {
       }
 
        if (data.consumed_at) {
-         if (data.pair_id) {
-           setPairId(data.pair_id);
-           // Upload the child's installed app inventory so the parent can
-           // choose which apps are allowed to send notifications.
-           try {
-             const { syncInstalledApps } = await import('@/services/installed-apps-sync');
-             await syncInstalledApps(pairingData.child_device_id);
-           } catch (syncErr) {
-             logger.warn('Pairing: installed apps sync failed', syncErr);
-           }
-           router.replace('/onboarding');
-           return true;
-         }
+        if (isValidUUID(data.pair_id)) {
+          setPairId(data.pair_id);
+          // Upload the child's installed app inventory so the parent can
+          // choose which apps are allowed to send notifications.
+          try {
+            const { syncInstalledApps } = await import('@/services/installed-apps-sync');
+            await syncInstalledApps(pairingData.child_device_id);
+          } catch (syncErr) {
+            logger.warn('Pairing: installed apps sync failed', syncErr);
+          }
+          router.replace('/onboarding');
+          return true;
+        }
         // Consumed but no pair created -> failed/partial claim -> regenerate immediately
         logger.warn('Pairing: token consumed without pair_id, regenerating');
         generatePairingToken(true);
@@ -229,6 +230,10 @@ export default function PairingScreen() {
       });
 
       if (error) throw error;
+
+      if (!isValidUUID(data?.data?.parent_device_id) || !isValidUUID(data?.data?.id)) {
+        throw new Error('Pairing response contained invalid device identifiers. Please try scanning again.');
+      }
 
       setDeviceId(data.data.parent_device_id);
       setPairId(data.data.id);

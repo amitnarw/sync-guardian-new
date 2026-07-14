@@ -81,19 +81,45 @@ serve(async (req) => {
     const enabledPkgs = changes.filter((c) => c.is_enabled).map((c) => sanitizeString(c.package_name, 200))
     const disabledPkgs = changes.filter((c) => !c.is_enabled).map((c) => sanitizeString(c.package_name, 200))
 
-    const updateGroup = async (pkgs: string[], value: boolean) => {
+    const upsertGroup = async (pkgs: string[], value: boolean) => {
       if (pkgs.length === 0) return 0
-      const { error } = await adminClient
+
+      const { error: updateError } = await adminClient
         .from('child_app_filters')
         .update({ is_enabled: value })
         .eq('child_device_id', resolvedChildDeviceId)
         .in('package_name', pkgs)
-      if (error) throw error
+      if (updateError) throw updateError
+
+      const { data: existing, error: selectError } = await adminClient
+        .from('child_app_filters')
+        .select('package_name')
+        .eq('child_device_id', resolvedChildDeviceId)
+        .in('package_name', pkgs)
+      if (selectError) throw selectError
+
+      const existingPkgs = new Set((existing ?? []).map((r) => r.package_name))
+      const missingPkgs = pkgs.filter((p) => !existingPkgs.has(p))
+
+      if (missingPkgs.length > 0) {
+        const insertRows = missingPkgs.map((package_name) => ({
+          child_device_id: resolvedChildDeviceId,
+          package_name,
+          app_name: null,
+          app_icon_base64: null,
+          is_enabled: value,
+        }))
+        const { error: insertError } = await adminClient
+          .from('child_app_filters')
+          .insert(insertRows)
+        if (insertError) throw insertError
+      }
+
       return pkgs.length
     }
 
-    const enabledCount = await updateGroup(enabledPkgs, true)
-    const disabledCount = await updateGroup(disabledPkgs, false)
+    const enabledCount = await upsertGroup(enabledPkgs, true)
+    const disabledCount = await upsertGroup(disabledPkgs, false)
     const updated = enabledCount + disabledCount
 
     // Mark the pair's initial setup as completed so the child device can

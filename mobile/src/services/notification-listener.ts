@@ -15,7 +15,16 @@ function extractLines(parsed: Record<string, any>): { title: string; body: strin
   const group = parsed.group;
   const isGroupSummary = parsed.is_group_summary === true;
 
+  // Group summaries have text_lines with all messages in one shot.
+  // Group children still carry individual message content — don't skip them,
+  // because many apps (Gmail, WhatsApp) only re-post the summary for the first
+  // notification; subsequent arrivals only trigger child notifications.
+  // The dedup key will naturally collapse true duplicates.
   if (group && !isGroupSummary) {
+    const body = parsed.big_text || parsed.text || '';
+    if (body) {
+      return [{ title, body }];
+    }
     return [];
   }
 
@@ -111,12 +120,19 @@ async function processNotification(json: string): Promise<void> {
 
       if (data) {
         const d = data as { count?: number; dropped?: number; reason?: string };
-        if (d.dropped && d.dropped > 0 && !d.count) {
-          useAuthStore.getState().setIngestDropped(d.reason ?? 'app_filtered');
-          return;
-        }
         if (d.count && d.count > 0) {
           useAuthStore.getState().setIngestSuccess();
+        }
+        if (d.dropped && d.dropped > 0) {
+          useAuthStore.getState().setIngestDropped(
+            d.count && d.count > 0
+              ? `partial: ${d.dropped} dropped (${d.reason ?? 'app_filtered'})`
+              : d.reason ?? 'app_filtered',
+          )
+          if (!d.count) {
+            await flushBuffer();
+            return;
+          }
         }
       }
 

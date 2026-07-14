@@ -10,7 +10,7 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
 import { useAppModal } from '@/hooks/use-app-modal';
-import { setOnboardingRole } from '@/services/onboarding-api';
+import { getOnboardingState, setOnboardingRole } from '@/services/onboarding-api';
 
 const C = {
   primary: '#486730',
@@ -34,7 +34,10 @@ export default function PermissionsScreen() {
   const handleContinue = async () => {
     setLoading(true);
     try {
-      await setOnboardingRole(userRole as 'parent' | 'child', 'pairing');
+      const state = await getOnboardingState();
+      if (!state.onboarding_completed) {
+        await setOnboardingRole(userRole as 'parent' | 'child', 'pairing');
+      }
     } catch {
       // Non-fatal: hub will re-route based on DB state.
     }

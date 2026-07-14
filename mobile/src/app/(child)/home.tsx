@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { StyleSheet, View, Dimensions, Text, TouchableOpacity, BackHandler, RefreshControl, Platform } from 'react-native';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
@@ -11,9 +12,10 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { SyncAnimation } from '@/components/ui/sync-animation';
 import { supabase } from '@/lib/supabase';
+import { isValidUUID } from '@/lib/uuid';
 import { logger } from '@/services/logger';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
-import { PermissionStatusRow } from '@/components/permission-status-row';
+
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -53,9 +55,15 @@ export default function ChildHome() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
   const permissions = usePermissionStatus('child');
+  const criticalPermissions = useMemo(
+    () => Platform.OS === 'android'
+      ? permissions.filter(p => (p.key === 'notif_listener' || p.key === 'battery_opt') && !p.granted)
+      : [],
+    [permissions],
+  );
 
   const fetchPairState = useCallback(async () => {
-    if (!pairId) {
+    if (!isValidUUID(pairId)) {
       setPairStatus('missing');
       return;
     }
@@ -119,7 +127,7 @@ export default function ChildHome() {
 
   // Fetch pair state + subscribe to all changes on this pair row
   useEffect(() => {
-    if (!pairId) {
+    if (!isValidUUID(pairId)) {
       setPairStatus('missing');
       return;
     }
@@ -167,6 +175,15 @@ export default function ChildHome() {
       }
     })();
   }, [deviceId]);
+
+  // Redirect to the blocking /permissions onboarding step when critical
+  // Android permissions are missing, so the child can't reach the dashboard
+  // until all permissions are granted.
+  useEffect(() => {
+    if (pairStatus === 'active' && setupCompleted && criticalPermissions.length > 0) {
+      router.replace('/permissions');
+    }
+  }, [pairStatus, setupCompleted, criticalPermissions]);
 
   const blurTargetRef = React.useRef<View>(null);
   
@@ -303,35 +320,8 @@ export default function ChildHome() {
     );
   }
 
-  // Permission gate: block dashboard if critical Android permissions are missing
-  const criticalPermissions = Platform.OS === 'android'
-    ? permissions.filter(p => (p.key === 'notif_listener' || p.key === 'battery_opt') && !p.granted)
-    : [];
   if (criticalPermissions.length > 0) {
-    return (
-      <ThemedView style={s.container}>
-        <View style={s.waitingBody}>
-          <SyncAnimation />
-          <BlurView intensity={80} tint="light" style={s.permissionCard}>
-            <Text style={s.permissionTitle}>Permissions Required</Text>
-            <Text style={s.permissionSubtitle}>
-              Sync Guardian needs these permissions to monitor notifications and run in the background.
-            </Text>
-            <View style={s.permissionList}>
-              {criticalPermissions.map(p => (
-                <PermissionStatusRow
-                  key={p.key}
-                  label={p.label}
-                  description={p.guideMessage}
-                  granted={p.granted}
-                  onRequest={p.openSettings}
-                />
-              ))}
-            </View>
-          </BlurView>
-        </View>
-      </ThemedView>
-    );
+    return null;
   }
 
   return (
@@ -802,37 +792,5 @@ const s = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  permissionCard: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: 32,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
-    overflow: 'hidden',
-  },
-  permissionTitle: {
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 22,
-    color: C.onSurface,
-    textAlign: 'center',
-  },
-  permissionSubtitle: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    color: C.onSurfaceVariant,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  permissionList: {
-    width: '100%',
-    gap: 8,
-  },
+
 });

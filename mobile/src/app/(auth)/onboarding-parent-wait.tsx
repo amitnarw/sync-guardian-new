@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { isValidUUID } from '@/lib/uuid';
 import { AuthColors } from '@/constants/auth-theme';
 import { SyncAnimation } from '@/components/ui/sync-animation';
 import { useAuthStore } from '@/hooks/use-auth-store';
@@ -16,7 +17,7 @@ export default function OnboardingParentWait() {
   const navigated = useRef(false);
 
   useEffect(() => {
-    if (!pairId) {
+    if (!isValidUUID(pairId)) {
       setError('Pairing information is missing. Please restart pairing.');
       setLoading(false);
       return;

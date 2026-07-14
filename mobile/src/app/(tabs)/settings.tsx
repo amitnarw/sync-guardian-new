@@ -12,6 +12,7 @@ import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
 import { ChildAppsModal } from '@/components/ui/child-apps-modal';
 import { supabase } from '@/lib/supabase';
+import { isValidUUID } from '@/lib/uuid';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { logger } from '@/services/logger';
 
@@ -71,7 +72,7 @@ export default function SettingsScreen() {
   const { showModal, updateModal } = useAppModal();
 
   const fetchChildren = useCallback(async () => {
-    if (!deviceId) return;
+    if (!isValidUUID(deviceId)) return;
     const { data } = await supabase
       .from('pairs')
       .select('id, child_device_id, child_user_id, child_device:devices!child_device_id(is_foreground, last_seen_at)')

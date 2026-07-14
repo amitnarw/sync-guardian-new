@@ -1,9 +1,7 @@
 package expo.modules.notificationaccess
 
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.Manifest
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -20,33 +18,149 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.ByteArrayOutputStream
 
 class NotificationAccessModule : Module() {
-  private var receiverRegistered = false
 
-  private val receiver = object : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-      val json = intent.getStringExtra("notification_json") ?: return
-      sendEvent("onNotificationReceived", mapOf("notification" to json))
+  companion object {
+    private var eventCallback: ((String) -> Unit)? = null
+
+    @JvmStatic
+    fun setEventCallback(callback: (String) -> Unit) {
+      eventCallback = callback
     }
+
+    @JvmStatic
+    fun dispatchNotification(json: String) {
+      Log.d("SG:NotificationAccess", "dispatchNotification: json=${json.take(100)}")
+      eventCallback?.invoke(json)
+    }
+
+    // User-facing apps that should always be available for the parent to choose,
+    // even if they share a package prefix with system components.
+    private val SYSTEM_APP_ALLOWLIST = setOf(
+      "com.android.chrome",
+      "com.google.android.gm",
+      "com.google.android.apps.messaging",
+      "com.google.android.dialer",
+      "com.google.android.calculator",
+      "com.google.android.deskclock",
+      "com.google.android.apps.photos",
+      "com.google.android.apps.docs",
+      "com.google.android.youtube",
+      "com.google.android.play.games",
+      "com.google.android.apps.maps",
+      "com.whatsapp",
+      "com.whatsapp.w4b",
+      "com.facebook.orca",
+      "com.facebook.katana",
+      "com.instagram.android",
+      "com.oculus.appmanager",
+      "com.samsung.android.messaging",
+      "com.samsung.android.dialer",
+      "com.samsung.android.app.contacts",
+      "com.sec.android.app.sbrowser",
+      "com.samsung.android.email.provider",
+      "com.samsung.android.calendar",
+      "com.samsung.android.gallery3d",
+      "com.samsung.android.notes",
+      "com.samsung.android.messaging",
+      "com.samsung.android.oneconnect",
+      "com.mi.globalbrowser",
+      "com.miui.miime",
+      "com.oneplus.mms",
+      "com.oneplus.calculator",
+      "com.coloros.mms",
+      "com.oppo.music",
+      "com.huawei.calculator",
+      "com.huawei.android.launcher",
+    )
+
+    private val SYSTEM_APP_BLOCKED_PREFIXES = listOf(
+      "android",
+      "com.android.systemui",
+      "com.android.packageinstaller",
+      "com.android.providers",
+      "com.android.settings",
+      "com.android.settings.intelligence",
+      "com.android.vending",
+      "com.android.defcontainer",
+      "com.android.externalstorage",
+      "com.android.htmlviewer",
+      "com.android.inputmethod",
+      "com.android.keychain",
+      "com.android.localtransport",
+      "com.android.location.fused",
+      "com.android.managedprovisioning",
+      "com.android.permissioncontroller",
+      "com.android.printspooler",
+      "com.android.providers",
+      "com.android.shell",
+      "com.android.statementservice",
+      "com.android.traceur",
+      "com.android.wallpaperbackup",
+      "com.android.wallpapercropper",
+      "com.android.webview",
+      "com.google.android.gms",
+      "com.google.android.gsf",
+      "com.google.android.googlequicksearchbox",
+      "com.google.android.packageinstaller",
+      "com.google.android.providers",
+      "com.google.android.backup",
+      "com.google.android.feedback",
+      "com.google.android.syncadapters",
+      "com.google.android.partnersetup",
+      "com.google.android.configupdater",
+      "com.google.android.ims",
+      "com.google.android.tts",
+      "com.google.android.module.metadata",
+      "com.samsung.android.bixby",
+      "com.samsung.android.accessibility",
+      "com.samsung.android.app.routines",
+      "com.samsung.android.app.spage",
+      "com.samsung.android.app.cocktailbarservice",
+      "com.samsung.android.app.ledcover",
+      "com.samsung.android.app.telephonyui",
+      "com.samsung.android.MtpApplication",
+      "com.samsung.android.dqagent",
+      "com.samsung.android.game.gamehome",
+      "com.samsung.android.honeyboard",
+      "com.samsung.android.knox",
+      "com.samsung.android.coreapps",
+      "com.samsung.android.app.smartcapture",
+      "com.samsung.android.themecenter",
+      "com.samsung.android.app.dressroom",
+      "com.samsung.android.smarthome",
+      "com.samsung.android.lool",
+      "com.samsung.android.ldm",
+      "com.samsung.android.app.watchmanager",
+      "com.miui.securitycenter",
+      "com.miui.cloudservice",
+      "com.miui.system",
+      "com.xiaomi.misettings",
+      "com.xiaomi.micloudsync",
+      "com.coloros.phonemanager",
+      "com.coloros.oppoguardelf",
+      "com.coloros.safecenter",
+      "com.huawei.systemmanager",
+      "com.huawei.hwid",
+      "com.huawei.android.hwouc",
+      "com.huawei.android.internal.app",
+    )
   }
 
   private fun ctx(): Context = requireNotNull(appContext.reactContext)
   private fun pkg(): String = ctx().packageName
   private fun notifListenerComponent(): String = "${pkg()}/expo.modules.notificationaccess.NotificationListenerService"
 
-  private fun ensureReceiver() {
-    if (receiverRegistered) return
-    val context = ctx()
-    val filter = IntentFilter(ACTION_NOTIFICATION_POSTED)
-    context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-    receiverRegistered = true
-  }
-
   override fun definition() = ModuleDefinition {
     Name("NotificationAccess")
     Events("onNotificationReceived")
 
     OnCreate {
-      ensureReceiver()
+      Log.d("SG:NotificationAccess", "OnCreate called, setting event callback")
+      NotificationAccessModule.setEventCallback { json ->
+        sendEvent("onNotificationReceived", mapOf("notification" to json))
+        Log.d("SG:NotificationAccess", "Event sent to JS via callback")
+      }
+      Log.d("SG:NotificationAccess", "OnCreate done, callback set")
     }
 
     Function("isNotificationListenerEnabled") {
@@ -252,127 +366,4 @@ class NotificationAccessModule : Module() {
     return false
   }
 
-  companion object {
-    // User-facing apps that should always be available for the parent to choose,
-    // even if they share a package prefix with system components.
-    private val SYSTEM_APP_ALLOWLIST = setOf(
-      // Google
-      "com.android.chrome",
-      "com.google.android.gm",
-      "com.google.android.apps.messaging",
-      "com.google.android.dialer",
-      "com.google.android.calculator",
-      "com.google.android.deskclock",
-      "com.google.android.apps.photos",
-      "com.google.android.apps.docs",
-      "com.google.android.youtube",
-      "com.google.android.play.games",
-      "com.google.android.apps.maps",
-      // Meta
-      "com.whatsapp",
-      "com.whatsapp.w4b",
-      "com.facebook.orca",
-      "com.facebook.katana",
-      "com.instagram.android",
-      "com.oculus.appmanager",
-      // Samsung (launcher apps, not framework)
-      "com.samsung.android.messaging",
-      "com.samsung.android.dialer",
-      "com.samsung.android.app.contacts",
-      "com.sec.android.app.sbrowser",
-      "com.samsung.android.email.provider",
-      "com.samsung.android.calendar",
-      "com.samsung.android.gallery3d",
-      "com.samsung.android.notes",
-      "com.samsung.android.messaging",
-      "com.samsung.android.oneconnect",
-      // Xiaomi
-      "com.mi.globalbrowser",
-      "com.miui.miime",
-      // OnePlus
-      "com.oneplus.mms",
-      "com.oneplus.calculator",
-      // Oppo/Realme/ColorOS
-      "com.coloros.mms",
-      "com.oppo.music",
-      // Huawei
-      "com.huawei.calculator",
-      "com.huawei.android.launcher",
-    )
-
-    // Only pure framework / background system components should be hidden.
-    // We block by explicit package names and narrow prefixes rather than whole
-    // OEM namespaces, so real user apps are never dropped.
-    private val SYSTEM_APP_BLOCKED_PREFIXES = listOf(
-      "android",
-      "com.android.systemui",
-      "com.android.packageinstaller",
-      "com.android.providers",
-      "com.android.settings",
-      "com.android.settings.intelligence",
-      "com.android.vending",
-      "com.android.defcontainer",
-      "com.android.externalstorage",
-      "com.android.htmlviewer",
-      "com.android.inputmethod",
-      "com.android.keychain",
-      "com.android.localtransport",
-      "com.android.location.fused",
-      "com.android.managedprovisioning",
-      "com.android.permissioncontroller",
-      "com.android.printspooler",
-      "com.android.providers",
-      "com.android.shell",
-      "com.android.statementservice",
-      "com.android.traceur",
-      "com.android.wallpaperbackup",
-      "com.android.wallpapercropper",
-      "com.android.webview",
-      "com.google.android.gms",
-      "com.google.android.gsf",
-      "com.google.android.googlequicksearchbox",
-      "com.google.android.packageinstaller",
-      "com.google.android.providers",
-      "com.google.android.backup",
-      "com.google.android.feedback",
-      "com.google.android.syncadapters",
-      "com.google.android.partnersetup",
-      "com.google.android.configupdater",
-      "com.google.android.ims",
-      "com.google.android.tts",
-      "com.google.android.module.metadata",
-      "com.samsung.android.bixby",
-      "com.samsung.android.accessibility",
-      "com.samsung.android.app.routines",
-      "com.samsung.android.app.spage",
-      "com.samsung.android.app.cocktailbarservice",
-      "com.samsung.android.app.ledcover",
-      "com.samsung.android.app.telephonyui",
-      "com.samsung.android.MtpApplication",
-      "com.samsung.android.dqagent",
-      "com.samsung.android.game.gamehome",
-      "com.samsung.android.honeyboard",
-      "com.samsung.android.knox",
-      "com.samsung.android.coreapps",
-      "com.samsung.android.app.smartcapture",
-      "com.samsung.android.themecenter",
-      "com.samsung.android.app.dressroom",
-      "com.samsung.android.smarthome",
-      "com.samsung.android.lool",
-      "com.samsung.android.ldm",
-      "com.samsung.android.app.watchmanager",
-      "com.miui.securitycenter",
-      "com.miui.cloudservice",
-      "com.miui.system",
-      "com.xiaomi.misettings",
-      "com.xiaomi.micloudsync",
-      "com.coloros.phonemanager",
-      "com.coloros.oppoguardelf",
-      "com.coloros.safecenter",
-      "com.huawei.systemmanager",
-      "com.huawei.hwid",
-      "com.huawei.android.hwouc",
-      "com.huawei.android.internal.app",
-    )
-  }
 }

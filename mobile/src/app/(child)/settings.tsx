@@ -10,6 +10,7 @@ import { useAppModal } from '@/hooks/use-app-modal';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
 import { supabase } from '@/lib/supabase';
+import { isValidUUID } from '@/lib/uuid';
 import { clearBufferedNotifications } from '@/services/mmkv-buffer';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
@@ -51,7 +52,7 @@ export default function ChildSettingsScreen() {
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      if (pairId) {
+      if (isValidUUID(pairId)) {
         const { data } = await supabase
           .from('pairs')
           .select('status')
@@ -67,7 +68,7 @@ export default function ChildSettingsScreen() {
   }, [pairId]);
 
   useEffect(() => {
-    if (pairId) {
+    if (isValidUUID(pairId)) {
       supabase.from('pairs').select('status').eq('id', pairId).single().then(({ data }) => {
         if (data) setPairStatus(data.status as 'active' | 'revoked' | 'pending');
       });

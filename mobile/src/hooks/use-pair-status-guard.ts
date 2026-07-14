@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { router } from 'expo-router'
 import { supabase } from '@/lib/supabase'
+import { isValidUUID } from '@/lib/uuid'
 import { useAuthStore } from '@/hooks/use-auth-store'
 import { useAppModal } from '@/hooks/use-app-modal'
 import { logger } from '@/services/logger'
@@ -44,7 +45,7 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
   }, [pairId, isAuthenticated, role])
 
   useEffect(() => {
-    if (!pairId) return
+    if (!isValidUUID(pairId)) return
 
     const validate = async () => {
       try {

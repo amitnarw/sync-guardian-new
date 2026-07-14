@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isValidUUID } from '@/lib/uuid';
 import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
@@ -109,7 +110,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
 
       let resolvedPair: { id: string; child_device_id: string; child_user_id: string } | null = null;
 
-      if (sPId && dId) {
+      if (isValidUUID(sPId) && isValidUUID(dId)) {
         const { data, error: pairError } = await supabase
           .from('pairs')
           .select('id, child_device_id, child_user_id')
@@ -121,7 +122,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      if (!resolvedPair && dId) {
+      if (!resolvedPair && isValidUUID(dId)) {
         const { data, error: pairError } = await supabase
           .from('pairs')
           .select('id, child_device_id, child_user_id')

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isValidUUID } from '@/lib/uuid';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { logger } from '@/services/logger';
 
@@ -28,7 +29,7 @@ export function useSetupStatus(): SetupStatus {
   const [incompletePairId, setIncompletePairId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!deviceId) {
+    if (!isValidUUID(deviceId)) {
       setLoading(false);
       setHasPair(false);
       setSetupComplete(false);

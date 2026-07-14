@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearAppMetadataCache } from './use-app-metadata';
+import { isValidUUID } from '@/lib/uuid';
 
 export type UserRole = 'parent' | 'child' | 'admin' | null;
 
@@ -79,9 +80,9 @@ export const useAuthStore = create<AuthState>()(
       setEmail: (email) => set({ email }),
 
       pairId: null,
-      setPairId: (pairId) => set({ pairId }),
+      setPairId: (pairId) => set({ pairId: isValidUUID(pairId) ? pairId : null }),
       deviceId: null,
-      setDeviceId: (deviceId) => set({ deviceId }),
+      setDeviceId: (deviceId) => set({ deviceId: isValidUUID(deviceId) ? deviceId : null }),
 
       fcmToken: null,
       setFcmToken: (fcmToken) => set({ fcmToken }),

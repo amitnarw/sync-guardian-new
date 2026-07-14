@@ -11,12 +11,11 @@ import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Base64
+import android.util.Log
 import com.facebook.react.HeadlessJsTaskService
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
-
-const val ACTION_NOTIFICATION_POSTED = "expo.modules.notificationaccess.NOTIFICATION_POSTED"
 
 class NotificationListenerService : NotificationListenerService() {
 
@@ -36,6 +35,8 @@ class NotificationListenerService : NotificationListenerService() {
     val title = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString() ?: ""
     val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
     val app = sbn.packageName
+
+    Log.d("SG:NotificationListener", "onNotificationPosted: pkg=$app title=$title")
 
     val pm = packageManager
     val appInfo = resolveAppInfo(pm, app)
@@ -67,19 +68,24 @@ class NotificationListenerService : NotificationListenerService() {
       }
     }.toString()
 
-    if (isAppInForeground()) {
-      val broadcast = Intent(ACTION_NOTIFICATION_POSTED).apply {
-        putExtra("notification_json", notificationJson)
+    try {
+      if (isAppInForeground()) {
+        Log.d("SG:NotificationListener", "App is in foreground, dispatching to module")
+        NotificationAccessModule.dispatchNotification(notificationJson)
+        Log.d("SG:NotificationListener", "Dispatched to module")
+      } else {
+        Log.d("SG:NotificationListener", "App is in background, starting headless task")
+        val intent = Intent(this, NotificationHeadlessTaskService::class.java).apply {
+          putExtra("notification", Bundle().apply {
+            putString("notification_json", notificationJson)
+          })
+        }
+        startService(intent)
+        HeadlessJsTaskService.acquireWakeLockNow(this)
+        Log.d("SG:NotificationListener", "Headless task service started")
       }
-      sendBroadcast(broadcast)
-    } else {
-      val intent = Intent(this, NotificationHeadlessTaskService::class.java).apply {
-        putExtra("notification", Bundle().apply {
-          putString("notification_json", notificationJson)
-        })
-      }
-      startService(intent)
-      HeadlessJsTaskService.acquireWakeLockNow(this)
+    } catch (e: Exception) {
+      Log.e("SG:NotificationListener", "Error in onNotificationPosted: ${e.message}", e)
     }
   }
 
