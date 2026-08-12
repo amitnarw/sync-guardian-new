@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { getInstalledApps } from 'notification-access';
 import { logger } from '@/services/logger';
+import { getAppCategories } from '@/services/app-categories';
 
 interface InstalledAppPayload {
   package_name: string;
@@ -8,9 +9,11 @@ interface InstalledAppPayload {
   app_icon_base64?: string | null;
 }
 
-// Syncs the child device's installed launcher apps to the backend so the parent
-// can choose which apps are allowed to send notifications. Apps are disabled by
-// default server-side; the parent opts in.
+// Syncs the child device's installed social-media / messaging / dating apps to
+// the backend so the parent can choose which ones to monitor. Non-social
+// launcher apps are filtered out client-side; the edge function re-filters as
+// a defense-in-depth check. New social-media apps are mirrored by default
+// server-side; the parent opts out.
 export async function syncInstalledApps(childDeviceId: string): Promise<boolean> {
   try {
     if (!childDeviceId) {
@@ -24,9 +27,16 @@ export async function syncInstalledApps(childDeviceId: string): Promise<boolean>
       return false;
     }
 
+    const { packages: allowedPackages } = await getAppCategories();
+    const socialApps = apps.filter((a) => allowedPackages.has(a.packageName));
+    if (socialApps.length === 0) {
+      logger.info('syncInstalledApps', 'no social-media apps installed on child device');
+      return false;
+    }
+
     const payload = {
       child_device_id: childDeviceId,
-      apps: apps.map((a) => ({
+      apps: socialApps.map((a) => ({
         package_name: a.packageName,
         app_name: a.appName,
         app_icon_base64: a.appIconBase64,
@@ -47,7 +57,7 @@ export async function syncInstalledApps(childDeviceId: string): Promise<boolean>
       return false;
     }
 
-    logger.info('syncInstalledApps', `synced ${apps.length} apps`);
+    logger.info('syncInstalledApps', `synced ${socialApps.length} social-media apps`);
     return true;
   } catch (e) {
     logger.error('syncInstalledApps', 'unexpected error', e instanceof Error ? e.message : '');

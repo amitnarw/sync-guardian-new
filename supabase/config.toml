@@ -480,3 +480,8 @@ entrypoint = "./functions/set-onboarding-role/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/get-notifications/index.ts"
+
+[functions.get-app-categories]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-app-categories/index.ts"

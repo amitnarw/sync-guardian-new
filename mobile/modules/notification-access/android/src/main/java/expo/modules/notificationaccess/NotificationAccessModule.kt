@@ -19,6 +19,8 @@ import java.io.ByteArrayOutputStream
 
 class NotificationAccessModule : Module() {
 
+  private val SG_REQUEST_POST_NOTIFICATIONS = 0x5A47
+
   companion object {
     private var eventCallback: ((String) -> Unit)? = null
 
@@ -183,12 +185,141 @@ class NotificationAccessModule : Module() {
       )
     }
 
+    // Opens the Notification Access settings screen, deep-linking to Sync
+    // Guardian's own row. Two-tier fallback chain:
+    // 1. ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS (API 30+, public API)
+    //    Opens a single-screen view for just Sync Guardian's notification listener.
+    // 2. ACTION_NOTIFICATION_LISTENER_SETTINGS + EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME
+    //    Falls back to the full list but tries to deep-link to our row (AOSP behavior).
+    Function("openNotificationListenerSettingsForApp") {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val detail = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).apply {
+          putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, notifListenerComponent())
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (detail.resolveActivity(ctx().packageManager) != null) {
+          try {
+            ctx().startActivity(detail)
+            return@Function true
+          } catch (_: Exception) {}
+        }
+      }
+      val fallback = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, notifListenerComponent())
+        }
+      }
+      if (fallback.resolveActivity(ctx().packageManager) == null) return@Function false
+      try {
+        ctx().startActivity(fallback)
+        true
+      } catch (e: Exception) {
+        android.util.Log.w("SG:NotificationAccess", "Failed to open notification listener settings for app", e)
+        false
+      }
+    }
+
     Function("isFcmPermissionGranted") {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         ContextCompat.checkSelfPermission(ctx(), Manifest.permission.POST_NOTIFICATIONS) ==
           android.content.pm.PackageManager.PERMISSION_GRANTED
       } else {
         true
+      }
+    }
+
+    // AOSP ground-truth for "the POST_NOTIFICATIONS runtime dialog will no longer
+    // be shown": permission not granted AND shouldShowRequestPermissionRationale
+    // returns false (never-ask-again chosen, dialog auto-suppressed after
+    // repeated denials, or notifications turned off in App Info). Only meaningful
+    // on Android 13+ where the runtime permission exists.
+    Function("wasFcmPermissionPermanentlyDenied") {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@Function false
+      if (ContextCompat.checkSelfPermission(ctx(), Manifest.permission.POST_NOTIFICATIONS) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+      ) return@Function false
+      val activity = appContext.currentActivity ?: return@Function false
+      !activity.shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    // Direct ActivityCompat.requestPermissions bypass for the POST_NOTIFICATIONS
+    // dialog. Bypasses expo-notifications' permissionService chain entirely
+    // (which can silently return DENIED if currentActivity is null during a
+    // modal-unmount frame). Polls the permission state on the main looper and
+    // resolves the promise once the user decides Allow/Deny, or after a 60s
+    // safety timeout. Only meaningful on Android 13+ (TIRAMISU).
+    AsyncFunction("requestPostNotificationsPermission") { promise: expo.modules.kotlin.Promise ->
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        promise.resolve(true)
+        return@AsyncFunction
+      }
+      if (ContextCompat.checkSelfPermission(ctx(), Manifest.permission.POST_NOTIFICATIONS) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+      ) {
+        promise.resolve(true)
+        return@AsyncFunction
+      }
+      val activity = appContext.currentActivity
+      if (activity == null) {
+        promise.resolve(false)
+        return@AsyncFunction
+      }
+      androidx.core.app.ActivityCompat.requestPermissions(
+        activity,
+        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+        SG_REQUEST_POST_NOTIFICATIONS
+      )
+      val handler = android.os.Handler(android.os.Looper.getMainLooper())
+      val startTime = android.os.SystemClock.uptimeMillis()
+      val timeoutMs = 60000L
+      val pollInterval = 200L
+      val pollRunnable = object : Runnable {
+        override fun run() {
+          val granted = ContextCompat.checkSelfPermission(
+            ctx(), Manifest.permission.POST_NOTIFICATIONS
+          ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+          val elapsed = android.os.SystemClock.uptimeMillis() - startTime
+          if (granted) {
+            promise.resolve(true)
+            return
+          }
+          if (elapsed >= timeoutMs) {
+            promise.resolve(false)
+            return
+          }
+          handler.postDelayed(this, pollInterval)
+        }
+      }
+      handler.post(pollRunnable)
+    }
+
+    // Whether the POST_NOTIFICATION AppOps is not allowed. This is the signal
+    // that notifications are functionally off (dialog-denied OR toggled off in
+    // App Info). On OEMs where shouldShowRequestPermissionRationale lies, the
+    // JS layer combines this with a persisted "asked before" flag to detect
+    // permanent denial.
+    Function("isFcmNotificationsBlocked") {
+      try {
+        val appOps = ctx().getSystemService(Context.APP_OPS_SERVICE)
+          as? android.app.AppOpsManager ?: return@Function false
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          appOps.unsafeCheckOpNoThrow(
+            "POST_NOTIFICATION",
+            android.os.Process.myUid(),
+            pkg()
+          )
+        } else {
+          @Suppress("DEPRECATION")
+          appOps.checkOpNoThrow(
+            "POST_NOTIFICATION",
+            android.os.Process.myUid(),
+            pkg()
+          )
+        }
+        mode != android.app.AppOpsManager.MODE_ALLOWED
+      } catch (_: Exception) {
+        false
       }
     }
 
@@ -208,6 +339,29 @@ class NotificationAccessModule : Module() {
         !pm.isIgnoringBatteryOptimizations(pkg())
       } else {
         true
+      }
+    }
+
+    // Fires the AOSP ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS dialog, which
+    // asks the user "Allow Sync Guardian to ignore battery optimizations?" with
+    // Allow/Deny buttons rendered over the app. Some OEMs silently accept this
+    // intent without showing a dialog; callers should fall back to the settings
+    // chain (openBatteryOptimizationSettings) when this returns false or when
+    // the permission status does not change afterwards.
+    Function("requestBatteryOptimizationExemption") {
+      val pkgName = pkg()
+      val pm = ctx().packageManager
+      val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+        data = android.net.Uri.parse("package:$pkgName")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      if (intent.resolveActivity(pm) == null) return@Function false
+      try {
+        ctx().startActivity(intent)
+        true
+      } catch (e: Exception) {
+        android.util.Log.w("SG:NotificationAccess", "Failed to request battery optimization exemption", e)
+        false
       }
     }
 

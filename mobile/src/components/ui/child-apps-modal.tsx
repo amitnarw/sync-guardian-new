@@ -125,7 +125,7 @@ export function ChildAppsModal({ visible, onClose, childDeviceId, childName }: C
   )
 
   const handleSave = async () => {
-    if (!childDeviceId || apps.length === 0 || enabledCount === 0) return
+    if (!childDeviceId || apps.length === 0) return
     try {
       setSaving(true)
       const { error: saveErr } = await supabase.functions.invoke('update-app-filters', {
@@ -190,7 +190,9 @@ export function ChildAppsModal({ visible, onClose, childDeviceId, childName }: C
             </View>
           ) : apps.length === 0 ? (
             <View style={styles.centerState}>
-              <Text style={styles.errorText}>No apps were found on the child device yet.</Text>
+              <Text style={styles.errorText}>
+                We didn&apos;t find any supported apps on this device. Install a social media, messaging, or dating app, then reopen this list.
+              </Text>
               <Button title="Close" onPress={onClose} style={styles.retryBtn} />
             </View>
           ) : (
@@ -244,7 +246,8 @@ export function ChildAppsModal({ visible, onClose, childDeviceId, childName }: C
                   })}
                   ListHeaderComponent={
                     <Text style={styles.intro}>
-                      Select which apps are allowed to send notifications from your child&apos;s device.
+                      We&apos;ve pre-selected social media, messaging, and dating apps. Toggle off anything you don&apos;t
+                      want to monitor — everything else is left untouched.
                     </Text>
                   }
                   ItemSeparatorComponent={() => <View style={styles.rowGap} />}
@@ -261,10 +264,9 @@ export function ChildAppsModal({ visible, onClose, childDeviceId, childName }: C
                 icon="arrow-forward"
                 onPress={handleSave}
                 loading={saving}
-                disabled={enabledCount === 0}
               />
               {enabledCount === 0 && (
-                <Text style={styles.hintText}>Select at least one app to continue. Only chosen apps will be monitored.</Text>
+                <Text style={styles.hintText}>No apps will be monitored. Toggle at least one on if you want to receive notifications.</Text>
               )}
             </View>
           )}

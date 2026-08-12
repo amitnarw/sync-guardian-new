@@ -213,7 +213,7 @@ export default function AppFiltersScreen() {
       <View style={styles.waitingBanner}>
         <MaterialIcons name="hourglass-top" size={20} color={AuthColors.onPrimary} />
         <Text style={styles.waitingBannerText}>
-          {childLabel} device is waiting. Pick at least one app to start monitoring.
+          {childLabel} device is waiting. Social, messaging, and dating apps are pre-selected — toggle off any you don&apos;t want to monitor.
         </Text>
       </View>
 
@@ -226,9 +226,11 @@ export default function AppFiltersScreen() {
         </View>
       ) : apps.length === 0 ? (
         <View style={styles.centerState}>
-          <Text style={styles.errorText}>No apps were found on the child device yet.</Text>
+          <Text style={styles.errorText}>
+            We didn&apos;t find any supported apps on this device. Install a social media, messaging, or dating app, then come back to choose what to monitor.
+          </Text>
           <Button
-            title="Continue"
+            title={isReentry ? 'Back to dashboard' : 'Continue'}
             onPress={() => (isReentry ? router.back() : router.replace('/onboarding'))}
             style={styles.retryBtn}
           />
@@ -284,8 +286,8 @@ export default function AppFiltersScreen() {
               refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={AuthColors.primary} />}
               ListHeaderComponent={
                 <Text style={styles.intro}>
-                  Select which apps are allowed to send notifications from your child&apos;s device. Apps start
-                  disabled, nothing is monitored until you turn it on.
+                  We&apos;ve pre-selected social media, messaging, and dating apps. Toggle off anything you don&apos;t
+                  want to monitor — everything else is left untouched.
                 </Text>
               }
               ItemSeparatorComponent={() => <View style={styles.rowGap} />}
@@ -301,10 +303,10 @@ export default function AppFiltersScreen() {
           icon="arrow-forward"
           onPress={handleSave}
           loading={saving}
-          disabled={apps.length === 0 || enabledCount === 0}
+          disabled={apps.length === 0}
         />
-        {enabledCount === 0 && (
-          <Text style={styles.hintText}>Select at least one app to continue. Only chosen apps will be monitored.</Text>
+        {apps.length > 0 && enabledCount === 0 && (
+          <Text style={styles.hintText}>No apps will be monitored. Toggle at least one on if you want to receive notifications.</Text>
         )}
       </View>
     </View>

@@ -55,11 +55,12 @@ export default function ChildHome() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
   const permissions = usePermissionStatus('child');
+  const { items: permissionItems } = permissions;
   const criticalPermissions = useMemo(
     () => Platform.OS === 'android'
-      ? permissions.filter(p => (p.key === 'notif_listener' || p.key === 'battery_opt') && !p.granted)
+      ? permissionItems.filter(p => (p.key === 'notif_listener' || p.key === 'battery_opt') && !p.granted)
       : [],
-    [permissions],
+    [permissionItems],
   );
 
   const fetchPairState = useCallback(async () => {

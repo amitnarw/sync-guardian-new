@@ -8,8 +8,24 @@ export function openNotificationListenerSettings(): void {
   return NotificationAccessModule.openNotificationListenerSettings()
 }
 
+export function openNotificationListenerSettingsForApp(): boolean {
+  return NotificationAccessModule.openNotificationListenerSettingsForApp()
+}
+
 export function isFcmPermissionGranted(): boolean {
   return NotificationAccessModule.isFcmPermissionGranted()
+}
+
+export function wasFcmPermissionPermanentlyDenied(): boolean {
+  return NotificationAccessModule.wasFcmPermissionPermanentlyDenied()
+}
+
+export function requestPostNotificationsPermission(): Promise<boolean> {
+  return NotificationAccessModule.requestPostNotificationsPermission()
+}
+
+export function isFcmNotificationsBlocked(): boolean {
+  return NotificationAccessModule.isFcmNotificationsBlocked()
 }
 
 export function openAppNotificationSettings(): void {

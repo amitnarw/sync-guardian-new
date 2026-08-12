@@ -9,11 +9,10 @@ import { useAuthTheme } from '@/hooks/use-auth-theme';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { ModalProvider } from '@/hooks/use-app-modal';
 import { supabase } from '@/lib/supabase';
-import { getApp } from '@react-native-firebase/app';
-import { getMessaging, requestPermission, getToken, AuthorizationStatus } from '@react-native-firebase/messaging';
-import '@/services/fcm-handler';
+import { requestFcmPermission } from '@/services/fcm-handler';
 import '@/services/notification-listener';
 import { flushBuffer } from '@/services/mmkv-buffer';
+import { primeAppCategoriesCache } from '@/services/app-categories';
 import { logger } from '@/services/logger';
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -41,7 +40,7 @@ const LightTheme = {
 
 export default function RootLayout() {
   const authTheme = useAuthTheme();
-  const { userRole, isAuthenticated, deviceId, userId, setFcmToken, setUserId, setIsAuthenticated, setEmail, setProfileImage, setDisplayName, setPairId, setDeviceId, setSessionChecked } = useAuthStore();
+  const { userRole, isAuthenticated, deviceId, userId, setUserId, setIsAuthenticated, setEmail, setProfileImage, setDisplayName, setPairId, setDeviceId, setSessionChecked } = useAuthStore();
 
   const [loaded, error] = useFonts({
     'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
@@ -59,6 +58,13 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded, error]);
+
+  // Warm the social-media / messaging / dating whitelist cache so the parent
+  // app can open the app-selection screen instantly. The cache file manages
+  // its own AppState listener for background refresh.
+  useEffect(() => {
+    primeAppCategoriesCache();
+  }, []);
 
   // Restore Supabase Auth session on app launch and validate user exists
   useEffect(() => {
@@ -125,16 +131,12 @@ export default function RootLayout() {
       let pushToken: string | null = null;
 
       try {
-        const app = getApp();
-        const messaging = getMessaging(app);
-        const authStatus = await requestPermission(messaging);
-        const enabled =
-          authStatus === AuthorizationStatus.AUTHORIZED ||
-          authStatus === AuthorizationStatus.PROVISIONAL;
-        if (enabled) {
-          const token = await getToken(messaging);
-          setFcmToken(token);
-          pushToken = token;
+        if (useAuthStore.getState().fcmRequestedOnce) {
+          const { granted } = await requestFcmPermission();
+          const token = useAuthStore.getState().fcmToken;
+          if (granted && token) {
+            pushToken = token;
+          }
         }
       } catch (err) {
         logger.warn('Failed to get FCM token:', err);
@@ -163,7 +165,7 @@ export default function RootLayout() {
       }
     }
     syncDevice();
-  }, [isAuthenticated, userRole, deviceId, userId, setFcmToken]);
+  }, [isAuthenticated, userRole, deviceId, userId]);
 
   // Listen for AppState changes to update foreground status
   useEffect(() => {

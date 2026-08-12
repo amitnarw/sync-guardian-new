@@ -27,6 +27,9 @@ interface AuthState {
   fcmToken: string | null;
   setFcmToken: (fcmToken: string | null) => void;
 
+  fcmRequestedOnce: boolean;
+  setFcmRequestedOnce: (requested: boolean) => void;
+
   userId: string | null;
   setUserId: (id: string | null) => void;
 
@@ -87,6 +90,9 @@ export const useAuthStore = create<AuthState>()(
       fcmToken: null,
       setFcmToken: (fcmToken) => set({ fcmToken }),
 
+      fcmRequestedOnce: false,
+      setFcmRequestedOnce: (requested) => set({ fcmRequestedOnce: requested }),
+
       userId: null,
       setUserId: (id) => set({ userId: id }),
 
@@ -134,6 +140,7 @@ export const useAuthStore = create<AuthState>()(
           pairId: null,
           deviceId: null,
           fcmToken: null,
+          fcmRequestedOnce: false,
           userId: null,
           profileImage: null,
           displayName: null,
@@ -163,6 +170,7 @@ export const useAuthStore = create<AuthState>()(
         pairId: state.pairId,
         deviceId: state.deviceId,
         fcmToken: state.fcmToken,
+        fcmRequestedOnce: state.fcmRequestedOnce,
         profileImage: state.profileImage,
         displayName: state.displayName,
         lastCaptureAt: state.lastCaptureAt,

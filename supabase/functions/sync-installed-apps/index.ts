@@ -4,6 +4,7 @@ import { verifyAuth } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
 import { isValidUUID, isValidString, sanitizeString } from '../_shared/validation.ts'
 import { logger, mapError } from '../_shared/logger.ts'
+import { getEnabledAppCategories } from '../_shared/app-categories-cache.ts'
 
 interface IncomingApp {
   package_name: string
@@ -63,9 +64,18 @@ serve(async (req) => {
       (existing ?? []).map((r: { package_name: string; is_enabled: boolean }) => [r.package_name, r.is_enabled]),
     )
 
+    // Load the social-media / messaging / dating whitelist from the DB
+    // (cached in-memory for 5 minutes). Filters incoming apps so only
+    // supported packages are written into child_app_filters.
+    const { packages: allowedPackages } = await getEnabledAppCategories(adminClient)
+
     const incomingPackages = new Set<string>()
     const rows = apps
-      .filter((a) => isValidString(a.package_name, 200))
+      .filter(
+        (a) =>
+          isValidString(a.package_name, 200) &&
+          allowedPackages.has(a.package_name),
+      )
       .map((a) => {
         const packageName = sanitizeString(a.package_name, 200)
         incomingPackages.add(packageName)
@@ -75,8 +85,10 @@ serve(async (req) => {
           package_name: packageName,
           app_name: sanitizeString(a.app_name, 200) || null,
           app_icon_base64: sanitizeString(a.app_icon_base64 as string, 500000) || null,
-          // New apps default to disabled (parent opts in). Existing apps keep their state.
-          is_enabled: wasKnown ? (existingEnabled.get(packageName) ?? false) : false,
+          // New social-media apps mirror by default (parent opts out). Existing
+          // apps keep their prior state so a parent-initiated toggle isn't
+          // overwritten.
+          is_enabled: wasKnown ? (existingEnabled.get(packageName) ?? true) : true,
         }
       })
 
@@ -107,7 +119,15 @@ serve(async (req) => {
     logger.info('sync-installed-apps', 'synced installed apps', { count: rows.length })
 
     return new Response(
-      JSON.stringify({ data: { synced: rows.length, disabled_defaults: rows.filter((r) => !r.is_enabled).length } }),
+      JSON.stringify({
+        data: {
+          synced: rows.length,
+          // "disabled_defaults" now describes how many NEW rows came in with
+          // is_enabled=false (i.e. parent explicitly toggled them off). It no
+          // longer reflects the default for incoming apps (mirrored by default).
+          disabled_defaults: rows.filter((r) => !r.is_enabled).length,
+        },
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {

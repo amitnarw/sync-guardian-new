@@ -10,6 +10,9 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
+import { NotifListenerRequestModal } from '@/components/notif-listener-request-modal';
+import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
+import * as NotificationAccess from 'notification-access';
 import { ChildAppsModal } from '@/components/ui/child-apps-modal';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
@@ -202,30 +205,34 @@ export default function SettingsScreen() {
   }));
 
   const { showModal: showPermModal } = useAppModal();
-  const permissions = usePermissionStatus('parent');
+  const permissions = usePermissionStatus('parent')
+  const { items: permissionItems, notifListenerModalOpen, openNotifListenerModal, closeNotifListenerModal, recentlyGrantedNotifListener } = permissions;
 
   function PermissionsSection() {
-    if (permissions.length === 0) return null;
+    if (permissionItems.length === 0) return null;
     return (
       <View style={s.permissionsSection}>
         <Text style={s.permissionsSectionTitle}>Permissions</Text>
-        {permissions.map((p) => (
+        {permissionItems.map((p) => (
           <PermissionStatusRow
             key={p.key}
             label={p.label}
-            description={p.guideMessage}
+            description={p.promptMessage}
             granted={p.granted}
-            onRequest={() =>
+            onRequest={() => {
+              if (p.key === 'notif_listener') {
+                openNotifListenerModal()
+                return
+              }
               showPermModal({
-                title: p.guideTitle,
-                message: p.guideMessage,
-                steps: p.guideSteps,
+                title: p.promptTitle,
+                message: p.promptMessage,
                 icon: 'warning',
-                primaryButton: 'Open Settings',
-                onPrimaryPress: p.openSettings,
-                secondaryButton: 'Cancel',
+                primaryButton: 'Yes',
+                onPrimaryPress: p.requestPermission,
+                secondaryButton: 'No',
               })
-            }
+            }}
           />
         ))}
       </View>
@@ -432,6 +439,14 @@ export default function SettingsScreen() {
             {/* Bottom spacing */}
             <View style={s.bottomSpacer} />
           </EdgeFadeScrollView>
+          <NotifListenerRequestModal
+            visible={notifListenerModalOpen}
+            onAccept={() => {
+              NotificationAccess.openNotificationListenerSettingsForApp()
+            }}
+            onClose={closeNotifListenerModal}
+          />
+          {recentlyGrantedNotifListener && <NotifListenerSuccessBanner />}
 
         <ChildAppsModal
           visible={!!appsModalChild}

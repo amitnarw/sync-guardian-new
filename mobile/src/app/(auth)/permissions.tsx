@@ -9,8 +9,11 @@ import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
+import { NotifListenerRequestModal } from '@/components/notif-listener-request-modal';
+import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { getOnboardingState, setOnboardingRole } from '@/services/onboarding-api';
+import * as NotificationAccess from 'notification-access';
 
 const C = {
   primary: '#486730',
@@ -26,10 +29,11 @@ const C = {
 export default function PermissionsScreen() {
   const { userRole } = useAuthStore();
   const { showModal } = useAppModal();
-  const permissions = usePermissionStatus(userRole === 'admin' ? 'parent' : (userRole ?? 'parent'));
+  const permissions = usePermissionStatus(userRole === 'admin' ? 'parent' : (userRole ?? 'parent'))
+  const { items: permissionItems, notifListenerModalOpen, openNotifListenerModal, closeNotifListenerModal, recentlyGrantedNotifListener } = permissions;
   const [loading, setLoading] = useState(false);
 
-  const allGranted = permissions.every((p) => p.granted);
+  const allGranted = permissionItems.every((p) => p.granted);
 
   const handleContinue = async () => {
     setLoading(true);
@@ -61,33 +65,32 @@ export default function PermissionsScreen() {
           <View style={s.heroSection}>
             <Text style={s.heroTitle}>Permissions Needed</Text>
             <Text style={s.heroSubtitle}>
-              Sync Guardian needs all of these permissions to work. None can be skipped, grant each one to continue.
+              Sync Guardian needs a few permissions to protect your family. Tap a permission and choose &quot;Yes&quot; to allow it.
             </Text>
           </View>
 
-          {permissions.map((p) => (
+          {permissionItems.map((p) => (
             <PermissionStatusRow
               key={p.key}
               label={p.label}
-              description={p.guideMessage}
+              description={p.promptMessage}
               granted={p.granted}
-              onRequest={() =>
+              onRequest={() => {
+                if (p.key === 'notif_listener') {
+                  openNotifListenerModal()
+                  return
+                }
                 showModal({
-                  title: p.guideTitle,
-                  message: p.guideMessage,
-                  steps: p.guideSteps,
+                  title: p.promptTitle,
+                  message: p.promptMessage,
                   icon: 'warning',
-                  primaryButton: 'Open Settings',
-                  onPrimaryPress: p.openSettings,
-                  secondaryButton: 'Cancel',
+                  primaryButton: 'Yes',
+                  onPrimaryPress: p.requestPermission,
+                  secondaryButton: 'No',
                 })
-              }
+              }}
             />
           ))}
-
-          <Text style={s.noteText}>
-            Tap a permission to see how to enable it. Each one opens the correct system settings where you can toggle it on.
-          </Text>
         </EdgeFadeScrollView>
 
         <View style={s.footer}>
@@ -99,10 +102,18 @@ export default function PermissionsScreen() {
           />
           {!allGranted && (
             <Text style={s.footerHint}>
-              Grant all permissions above to continue. None can be skipped.
+              Allow each permission above to continue. You can change these anytime in Settings.
             </Text>
           )}
         </View>
+        <NotifListenerRequestModal
+          visible={notifListenerModalOpen}
+          onAccept={() => {
+            NotificationAccess?.openNotificationListenerSettingsForApp?.()
+          }}
+          onClose={closeNotifListenerModal}
+        />
+        {recentlyGrantedNotifListener && <NotifListenerSuccessBanner />}
       </SafeAreaView>
     </ThemedView>
   );
@@ -154,15 +165,6 @@ const s = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: C.onSurfaceVariant,
-  },
-  noteText: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 13,
-    lineHeight: 20,
-    color: C.onSurfaceVariant,
-    textAlign: 'center',
-    marginTop: 24,
-    opacity: 0.8,
   },
   footer: {
     paddingHorizontal: 24,
