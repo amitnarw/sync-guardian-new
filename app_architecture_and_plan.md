@@ -67,7 +67,7 @@ The following tables are required:
 - `get-onboarding-state` / `set-onboarding-role` (Onboarding flow management).
 - `sync-installed-apps` (Child sends installed-app list to parent).
 - `update-app-filters` (Child updates which apps to mirror).
-- `backfill-encrypt-notifications` (Temporary — re-encrypt after key rotation).
+- `backfill-encrypt-notifications` (Temporary ,  re-encrypt after key rotation).
 - `health` (Public health check).
 
 ## 7. Implementation Checklist for AI Agents

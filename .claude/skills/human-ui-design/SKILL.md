@@ -1,13 +1,13 @@
 ---
 name: human-ui-design
-description: Human-crafted modern mobile UI design — purposeful animation, real typography scale, spacing hierarchy, and micro-interactions. NOT AI slop patterns. Use when building or reviewing UI: layout, motion, typography, color, or micro-interactions.
+description: Human-crafted modern mobile UI design ,  purposeful animation, real typography scale, spacing hierarchy, and micro-interactions. NOT AI slop patterns. Use when building or reviewing UI: layout, motion, typography, color, or micro-interactions.
 version: 1.0.0
 license: MIT
 ---
 
 # Human-Crafted Mobile UI Design
 
-This skill provides real, human-designed mobile UI principles — not generic AI-generated patterns. Every design decision has reasoning behind it.
+This skill provides real, human-designed mobile UI principles ,  not generic AI-generated patterns. Every design decision has reasoning behind it.
 
 ---
 
@@ -15,7 +15,7 @@ This skill provides real, human-designed mobile UI principles — not generic AI
 
 **AI slop is recognizable**: Random gradients, decorative animations that serve no purpose, oversized padding that wastes space, generic rounded corners on everything, gratuitous shadows, "modern" buzzword aesthetics without function.
 
-**Good design is invisible**: The user doesn't notice it — they just feel that things work intuitively, transitions are smooth, text is readable, and nothing feels accidental.
+**Good design is invisible**: The user doesn't notice it ,  they just feel that things work intuitively, transitions are smooth, text is readable, and nothing feels accidental.
 
 ---
 
@@ -40,7 +40,7 @@ Never pick font sizes arbitrarily. Use a **purposeful scale** with clear functio
 - **Line height**: 1.2–1.4× font size. Body text needs breathing room.
 - **Line length**: 60–80 characters max (~320px on mobile). Long lines hurt readability.
 - **Letter spacing**: Use default. Never manually tracking unless for all-caps labels.
-- **Never use system fonts as both heading and body in the same size** — size difference creates hierarchy.
+- **Never use system fonts as both heading and body in the same size** ,  size difference creates hierarchy.
 - **Use tabular figures for numbers** (`fontVariant: 'tabular-nums'`) in counters, stats, prices.
 - **Selectable text** on any content a user might want to copy (error messages, codes, addresses).
 
@@ -94,17 +94,17 @@ Colors communicate **meaning**, not aesthetics:
 ### Dark Mode / Light Mode
 
 - **Never hardcode colors**. Use semantic tokens that adapt.
-- Background: `#FFFFFF` (light) / `#000000` (dark) — not gray.
+- Background: `#FFFFFF` (light) / `#000000` (dark) ,  not gray.
 - Surface: `#F5F5F7` (light) / `#1C1C1E` (dark).
-- Text: Pure black/white in dark/light mode — not gray-on-gray.
+- Text: Pure black/white in dark/light mode ,  not gray-on-gray.
 - **Semantic tokens** (`--color-surface`, `--color-text-primary`) work in both modes.
 
 ### What NOT to Do
 
 - No random purple/blue gradients on headers (AI slop signature)
 - No multi-stop gradients unless for a specific brand treatment
-- No colored backgrounds on entire screens — reserve color for surfaces/cards
-- No pastel backgrounds with dark text — low contrast, hard to read
+- No colored backgrounds on entire screens ,  reserve color for surfaces/cards
+- No pastel backgrounds with dark text ,  low contrast, hard to read
 
 ---
 
@@ -112,9 +112,9 @@ Colors communicate **meaning**, not aesthetics:
 
 ### The Three Rules of Motion
 
-1. **Purpose** — Every animation communicates something: hierarchy, relationship, state change. If it doesn't, remove it.
-2. **Continuity** — Transitions show users where they came from and where they're going. Never teleport.
-3. **Speed** — Fast enough to feel responsive, slow enough to perceive. ~300ms for transitions, ~150ms for feedback.
+1. **Purpose** ,  Every animation communicates something: hierarchy, relationship, state change. If it doesn't, remove it.
+2. **Continuity** ,  Transitions show users where they came from and where they're going. Never teleport.
+3. **Speed** ,  Fast enough to feel responsive, slow enough to perceive. ~300ms for transitions, ~150ms for feedback.
 
 ### Duration Guidelines
 
@@ -124,14 +124,14 @@ Colors communicate **meaning**, not aesthetics:
 | Feedback | 150–200ms | Toast, checkmark |
 | Transition | 250–350ms | Screen push, modal |
 | Emphasis | 350–500ms | Revealing hidden content |
-| Never | — | Decorative looping animations |
+| Never | ,  | Decorative looping animations |
 
 ### Spring vs Easing
 
 **Use springs for interactive elements** (draggable, dismissible):
 
 ```ts
-// Good spring — feels physical
+// Good spring ,  feels physical
 withSpring(value, {
   damping: 15,      // Less = more bounce (10–20 range)
   stiffness: 150,   // Higher = faster settle (100–200)
@@ -142,14 +142,14 @@ withSpring(value, {
 **Use easing curves for transitions** (navigation, reveals):
 
 ```ts
-// Standard iOS curve — slow start and end
+// Standard iOS curve ,  slow start and end
 withTiming(value, {
   duration: 300,
   easing: Easing.bezier(0.33, 1, 0.68, 1), // iOS curve
 })
 ```
 
-**Never use `ease-in-out` for everything** — it's generic.
+**Never use `ease-in-out` for everything** ,  it's generic.
 
 ### What Animations Should Do
 
@@ -183,9 +183,9 @@ A card groups related information. Rules:
 
 ### When NOT to Use a Card
 
-- Single item tap action — use a list row instead
-- Tightly related items — a section header is enough
-- Every single list item — consider using dividers
+- Single item tap action ,  use a list row instead
+- Tightly related items ,  a section header is enough
+- Every single list item ,  consider using dividers
 
 ---
 
@@ -210,7 +210,7 @@ A card groups related information. Rules:
 - No card wrapper around every row
 - No 24pt corner radius on list items
 - No colored backgrounds on individual rows (unless selected)
-- No extra padding between rows — 0pt, use divider
+- No extra padding between rows ,  0pt, use divider
 
 ---
 
@@ -228,7 +228,7 @@ A card groups related information. Rules:
 
 ### Tab Transitions
 
-- No cross-fade between tabs — instant switch
+- No cross-fade between tabs ,  instant switch
 - Tab bar stays fixed
 - Active tab indicator animates (not fades)
 
@@ -246,13 +246,13 @@ AI slop loves dramatic shadows. Real design uses subtle elevation:
 
 | Level | Use case | Shadow |
 |-------|-----------|--------|
-| 0 | Flat, no shadow | — |
+| 0 | Flat, no shadow | ,  |
 | 1 | Cards at rest | `0 1px 2px rgba(0,0,0,0.05)` |
 | 2 | Elevated cards | `0 2px 8px rgba(0,0,0,0.08)` |
 | 3 | Modals, drawers | `0 8px 24px rgba(0,0,0,0.12)` |
 | 4 | Popovers | `0 12px 32px rgba(0,0,0,0.16)` |
 
-Never use `elevation` property (Android legacy) — always `boxShadow`.
+Never use `elevation` property (Android legacy) ,  always `boxShadow`.
 
 ---
 
@@ -275,7 +275,7 @@ These small details separate human-crafted UI from AI slop:
 
 - Use **SF Symbols** on iOS (`expo-image` with `source="sf:name"`)
 - Use **Material Symbols** on Android
-- **Never mix icon libraries** — pick one system
+- **Never mix icon libraries** ,  pick one system
 - Icon size: 20pt for inline, 24pt for standalone, 44pt for touch targets
 - Stroke weight: 1.5pt–2pt. Never 3pt (too heavy).
 - Never use emoji as icons
@@ -321,7 +321,7 @@ No floating characters, no sad illustrations, no "Oops!" text.
 - **Skeleton screens** for content (not spinners). Shimmer left-to-right.
 - **Spinner** only for actions in progress (send, save, submit)
 - **Progress bar** for determinate operations (upload %)
-- **Never block the whole screen** with a spinner — show it inline or as a banner
+- **Never block the whole screen** with a spinner ,  show it inline or as a banner
 
 ---
 

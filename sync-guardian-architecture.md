@@ -214,8 +214,8 @@ Firebase states that there is **no cost to using Cloud Messaging**.[cite:94] Cur
 ### FCM use cases in this app
 
 Use FCM for two distinct purposes:
-1. **Parent alert push** — visible system notification when the Parent app is not active.[cite:75][cite:82]
-2. **Child recovery/wake signal** — high-priority FCM data message (`wake_child_notification_listener`) that on the Child updates presence (`last_seen_at`) and flushes the local MMKV notification buffer.[cite:40][cite:57]
+1. **Parent alert push** ,  visible system notification when the Parent app is not active.[cite:75][cite:82]
+2. **Child recovery/wake signal** ,  high-priority FCM data message (`wake_child_notification_listener`) that on the Child updates presence (`last_seen_at`) and flushes the local MMKV notification buffer.[cite:40][cite:57]
 
 ### Firebase setup requirement
 
@@ -368,19 +368,19 @@ Suggested fields:
 ### Edge Functions deployed
 
 Actual functions deployed to Supabase:
-- `create-pairing-token` — generate QR pairing token + code (child)
-- `claim-pairing-token` — claim a pairing token and create pair (parent)
-- `ingest-child-notification` — ingest and route notifications to parent (child)
-- `get-notifications` — fetch decrypted notifications for the caller's pair
-- `ping-child` — send wake-up FCM to child device (parent)
-- `revoke-pair` — revoke/unpair a device pair (either)
-- `sync-device` — update device presence, push_token, foreground
-- `get-onboarding-state` — fetch user onboarding state and role
-- `set-onboarding-role` — set user onboarding role (parent/child/admin)
-- `sync-installed-apps` — sync child's installed-apps list to the parent (child)
-- `update-app-filters` — update app filter preferences (child)
-- `backfill-encrypt-notifications` — re-encrypt existing notifications after key rotation (API key)
-- `health` — public health check
+- `create-pairing-token` ,  generate QR pairing token + code (child)
+- `claim-pairing-token` ,  claim a pairing token and create pair (parent)
+- `ingest-child-notification` ,  ingest and route notifications to parent (child)
+- `get-notifications` ,  fetch decrypted notifications for the caller's pair
+- `ping-child` ,  send wake-up FCM to child device (parent)
+- `revoke-pair` ,  revoke/unpair a device pair (either)
+- `sync-device` ,  update device presence, push_token, foreground
+- `get-onboarding-state` ,  fetch user onboarding state and role
+- `set-onboarding-role` ,  set user onboarding role (parent/child/admin)
+- `sync-installed-apps` ,  sync child's installed-apps list to the parent (child)
+- `update-app-filters` ,  update app filter preferences (child)
+- `backfill-encrypt-notifications` ,  re-encrypt existing notifications after key rotation (API key)
+- `health` ,  public health check
 
 FCM push helpers (`sendParentPush`, `sendChildRecoveryPush`, `sendPairRevokedPush`) are internal functions in `_shared/fcm.ts` rather than standalone deployed edge functions.
 

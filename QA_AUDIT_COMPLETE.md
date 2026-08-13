@@ -3,7 +3,7 @@
 ## Audit Date
 2026-07-05
 
-> **Last verified against codebase: 2026-07-12** — Items below reflect the audit snapshot; corrections and post-audit findings are noted inline.
+> **Last verified against codebase: 2026-07-12** ,  Items below reflect the audit snapshot; corrections and post-audit findings are noted inline.
 
 ## Audit Performed By
 Senior Tester / Production Code Quality Review

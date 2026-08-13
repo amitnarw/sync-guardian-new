@@ -33,7 +33,7 @@ references/
 
 ### Create a Local Module (in existing app)
 
-**Always scaffold with `create-expo-module` first**, then modify the generated code. This ensures correct podspec, build.gradle, and module config — avoiding common build errors.
+**Always scaffold with `create-expo-module` first**, then modify the generated code. This ensures correct podspec, build.gradle, and module config ,  avoiding common build errors.
 
 ```bash
 CI=1 npx create-expo-module@latest --local \
@@ -44,7 +44,7 @@ CI=1 npx create-expo-module@latest --local \
 
 `CI=1` skips interactive prompts and uses the provided flags.
 
-> **Important:** In `CI=1` (non-interactive) mode, the scaffold always creates the directory as `modules/my-module/` because the slug is derived from `customTargetPath` which is `undefined` for `--local` modules — the `--name` flag only sets the native class name, not the directory. After scaffolding, rename it to a kebab-case name matching your module (e.g., `KeyValueStore` → `modules/key-value-store/`), then run `cd ios && pod install` so CocoaPods picks up the correct path. Skipping the rename is fine functionally, but skipping `pod install` after any rename causes iOS build failures ("Build input file cannot be found").
+> **Important:** In `CI=1` (non-interactive) mode, the scaffold always creates the directory as `modules/my-module/` because the slug is derived from `customTargetPath` which is `undefined` for `--local` modules ,  the `--name` flag only sets the native class name, not the directory. After scaffolding, rename it to a kebab-case name matching your module (e.g., `KeyValueStore` → `modules/key-value-store/`), then run `cd ios && pod install` so CocoaPods picks up the correct path. Skipping the rename is fine functionally, but skipping `pod install` after any rename causes iOS build failures ("Build input file cannot be found").
 
 Available flags:
 
@@ -110,7 +110,7 @@ npx create-expo-module@latest my-module
 
 ## Module Structure Reference
 
-The Swift and Kotlin DSL share the same structure. Both platforms are shown here for reference — in other reference files, Swift is shown as the primary language unless the Kotlin pattern meaningfully differs.
+The Swift and Kotlin DSL share the same structure. Both platforms are shown here for reference ,  in other reference files, Swift is shown as the primary language unless the Kotlin pattern meaningfully differs.
 
 **Swift (iOS):**
 

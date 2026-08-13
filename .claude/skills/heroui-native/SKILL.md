@@ -1,6 +1,6 @@
 ---
 name: heroui-native
-description: "HeroUI Native component library for React Native (Tailwind v4 via Uniwind). Use when building mobile UIs with HeroUI Native — creating Buttons, Cards, TextFields, Dialogs; installing heroui-native; configuring dark/light themes; or fetching component docs. Keywords: HeroUI Native, heroui-native, React Native UI, Uniwind, mobile components."
+description: "HeroUI Native component library for React Native (Tailwind v4 via Uniwind). Use when building mobile UIs with HeroUI Native ,  creating Buttons, Cards, TextFields, Dialogs; installing heroui-native; configuring dark/light themes; or fetching component docs. Keywords: HeroUI Native, heroui-native, React Native UI, Uniwind, mobile components."
 metadata:
   author: heroui
   version: "2.0.1"
@@ -22,7 +22,7 @@ curl -fsSL https://heroui.com/install | bash -s heroui-native
 
 ## CRITICAL: Native Only - Do Not Use Web Patterns
 
-**This guide is for HeroUI Native ONLY.** Do NOT apply HeroUI React (web) patterns — the package, styling engine, and color format all differ:
+**This guide is for HeroUI Native ONLY.** Do NOT apply HeroUI React (web) patterns ,  the package, styling engine, and color format all differ:
 
 | Feature      | React (Web)          | Native (Mobile)                     |
 | ------------ | -------------------- | ----------------------------------- |
@@ -32,7 +32,7 @@ curl -fsSL https://heroui.com/install | bash -s heroui-native
 | **Platform** | Web browsers         | iOS & Android                       |
 
 ```tsx
-// CORRECT — Native pattern
+// CORRECT ,  Native pattern
 import { Button } from "heroui-native";
 
 <Button variant="primary" onPress={() => console.log("Pressed!")}>

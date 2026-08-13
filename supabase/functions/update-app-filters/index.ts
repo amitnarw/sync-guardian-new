@@ -33,13 +33,6 @@ serve(async (req) => {
       (c: any) => isValidString(c?.package_name, 200) && typeof c?.is_enabled === 'boolean',
     )
 
-    if (changes.length === 0) {
-      return new Response(
-        JSON.stringify({ data: { updated: 0 } }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
-      )
-    }
-
     const pairId = sanitizeString(body.pair_id, 100)
     const childDeviceId = sanitizeString(body.child_device_id, 100)
 
@@ -123,10 +116,14 @@ serve(async (req) => {
     const updated = enabledCount + disabledCount
 
     // Mark the pair's initial setup as completed so the child device can
-    // leave its "waiting for parent" state.
+    // leave its "waiting for parent" state. An empty changes array means the
+    // parent skipped app selection (no monitorable apps on the child device).
     const { error: updatePairErr } = await adminClient
       .from('pairs')
-      .update({ parent_setup_completed: true })
+      .update({
+        parent_setup_completed: true,
+        parent_skipped_app_selection: changes.length === 0,
+      })
       .eq('id', pair.id)
 
     if (updatePairErr) throw updatePairErr

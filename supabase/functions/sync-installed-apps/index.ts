@@ -54,6 +54,17 @@ serve(async (req) => {
       )
     }
 
+    // Resolve the active/pending pair for this child device so we can record
+    // the inventory sync outcome directly on the pair row.
+    const { data: pair } = await adminClient
+      .from('pairs')
+      .select('id')
+      .eq('child_device_id', childDeviceId)
+      .in('status', ['active', 'pending'])
+      .order('paired_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
     // Load existing filters so we preserve parent-chosen is_enabled values.
     const { data: existing } = await adminClient
       .from('child_app_filters')
@@ -100,7 +111,7 @@ serve(async (req) => {
     }
 
     // Remove rows for apps no longer present on the child device (except
-    // those the parent explicitly enabled — don't undo parent choices).
+    // those the parent explicitly enabled ,  don't undo parent choices).
     if (incomingPackages.size > 0) {
       await adminClient
         .from('child_app_filters')
@@ -116,12 +127,26 @@ serve(async (req) => {
         .neq('is_enabled', true)
     }
 
+    // Record the inventory sync outcome on the pair row so the parent's wait
+    // screen can advance even when the child reported zero monitorable apps.
+    if (pair?.id) {
+      const { error: pairUpdateError } = await adminClient
+        .from('pairs')
+        .update({
+          child_inventory_synced_at: new Date().toISOString(),
+          child_monitorable_app_count: rows.length,
+        })
+        .eq('id', pair.id)
+      if (pairUpdateError) throw pairUpdateError
+    }
+
     logger.info('sync-installed-apps', 'synced installed apps', { count: rows.length })
 
     return new Response(
       JSON.stringify({
         data: {
           synced: rows.length,
+          total: rows.length,
           // "disabled_defaults" now describes how many NEW rows came in with
           // is_enabled=false (i.e. parent explicitly toggled them off). It no
           // longer reflects the default for incoming apps (mirrored by default).

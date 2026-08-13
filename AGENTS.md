@@ -1,4 +1,4 @@
-# Sync Guardian — Agent Instructions
+# Sync Guardian ,  Agent Instructions
 
 ## Architecture Rules
 
@@ -35,7 +35,7 @@
 - **Read path**: Parent app calls `get-notifications` edge function (JWT auth) which decrypts server-side with `service_role`. Direct `SELECT` from Supabase returns ciphertext only.
 - **Write path**: `ingest-child-notification` encrypts plaintext fields before upsert. FCM push uses plaintext from in-memory rows (before encryption).
 
-**Key rotation runbook** (rotating the key breaks existing ciphertext — re-backfill required):
+**Key rotation runbook** (rotating the key breaks existing ciphertext ,  re-backfill required):
 1. `supabase secrets set NOTIFICATION_ENCRYPTION_KEY="$(openssl rand -base64 32)"`
 2. Temporarily re-deploy `backfill-encrypt-notifications` (from `supabase/functions/backfill-encrypt-notifications`)
 3. `supabase secrets set BACKFILL_API_KEY="$(openssl rand -base64 16)"`
@@ -63,7 +63,29 @@ supabase secrets set --local NOTIFICATION_ENCRYPTION_KEY="..."
 | `set-onboarding-role` | JWT (any) | Set user onboarding role (parent / child / admin) |
 | `sync-installed-apps` | JWT (child user) | Sync child's installed-apps list to the parent |
 | `update-app-filters` | JWT (child user) | Update app filter preferences for which apps to mirror |
+| `list-plans` | JWT (any) | Fetch the active subscription plan catalog |
+| `get-my-subscription` | JWT (any) | Fetch the caller's trial + subscription access snapshot |
+| `create-autopay-subscription` | JWT (any) | Create a PhonePe UPI AutoPay mandate order for a plan (V2 SDK order) |
+| `phonepe-autopay-webhook` | HMAC `X-VERIFY` | Receive PhonePe mandate/redemption events and update subscription state |
+| `cancel-subscription` | JWT (any) | Cancel the caller's active subscription (PhonePe + local) |
 | `backfill-encrypt-notifications` | API key (`x-api-key`) | Re-encrypt existing mirrored_notifications after key rotation (temporary) |
+
+## PhonePe Subscriptions (Edge Function Secrets)
+
+Required Supabase secrets (set via `supabase secrets set`, never in mobile/.env or Git):
+
+| Secret | Purpose |
+|--------|---------|
+| `PHONEPE_ENV` | `sandbox` or `production` (controls base URL) |
+| `PHONEPE_CLIENT_ID` | OAuth2 client id (V2) |
+| `PHONEPE_CLIENT_SECRET` | OAuth2 client secret (V2) |
+| `PHONEPE_CLIENT_VERSION` | OAuth2 client version (usually `1`) |
+| `PHONEPE_WEBHOOK_SECRET` | Checksum Secret Key for X-VERIFY webhook verification |
+| `PHONEPE_MERCHANT_ID` | Merchant ID (used by `create-autopay-subscription` for the SDK) |
+
+Mobile `mobile/.env` only carries non-secret values: `EXPO_PUBLIC_PHONEPE_ENV` and `EXPO_PUBLIC_PHONEPE_MERCHANT_ID` (both needed by the PhonePe intent SDK at runtime).
+
+Local dev: `supabase functions serve` requires the secrets above (see `supabase secrets set --local ...`).
 | `health` | None (public) | Health check with DB + env var validation |
 
 ## Known Gaps (not production-blocking)

@@ -5,12 +5,12 @@ A notification mirroring app that lets parents monitor notifications on their ch
 ## Architecture
 
 ```
-mobile/          — Expo (React Native) Android app
-supabase/        — Supabase project (PostgreSQL, Edge Functions, Auth)
-  config.toml    — Supabase configuration
-  migrations/    — Database schema migrations
-  functions/     — Edge Functions
-    _shared/     — Shared utilities (auth, FCM, validation, JWTs)
+mobile/          ,  Expo (React Native) Android app
+supabase/        ,  Supabase project (PostgreSQL, Edge Functions, Auth)
+  config.toml    ,  Supabase configuration
+  migrations/    ,  Database schema migrations
+  functions/     ,  Edge Functions
+    _shared/     ,  Shared utilities (auth, FCM, validation, JWTs)
     create-pairing-token/
     claim-pairing-token/
     ingest-child-notification/
@@ -101,4 +101,4 @@ Edge function secrets (set via `supabase secrets set` or EAS):
 
 ## License
 
-Private — All rights reserved.
+Private ,  All rights reserved.
