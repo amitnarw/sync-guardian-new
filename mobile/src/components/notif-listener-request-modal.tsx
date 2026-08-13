@@ -1,17 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withDelay,
+  withRepeat,
   withSequence,
+  withDelay,
+  interpolateColor,
   Easing,
-  type SharedValue,
 } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
-
-type Phase = 'prompt' | 'animating';
 
 interface NotifListenerRequestModalProps {
   visible: boolean;
@@ -24,46 +23,52 @@ const ANIMATION_STEPS = [
   { icon: 'arrow-back' as const, label: 'Tap your back button' },
 ];
 
+const PULSE_DURATION = 1600;
+
 function StepRow({
   step,
   index,
-  progress,
 }: {
   step: typeof ANIMATION_STEPS[number];
   index: number;
-  progress: SharedValue<number>;
 }) {
-  const opacity = useSharedValue(0.2);
-  const scale = useSharedValue(0.95);
+  const pulse = useSharedValue(0);
 
   useEffect(() => {
-    const stepAt = index + 1;
-    opacity.value = withDelay(
-      (stepAt - 1) * 1300,
+    const cycle = () =>
       withSequence(
-        withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) }),
-        withDelay(900, withTiming(0.45, { duration: 350 })),
-      ),
+        withTiming(1, { duration: PULSE_DURATION / 2, easing: Easing.inOut(Easing.cubic) }),
+        withTiming(0, { duration: PULSE_DURATION / 2, easing: Easing.inOut(Easing.cubic) }),
+      );
+    pulse.value = withDelay(
+      index * (PULSE_DURATION / 2),
+      withRepeat(cycle(), -1),
     );
-    scale.value = withDelay(
-      (stepAt - 1) * 1300,
-      withSequence(
-        withTiming(1.05, { duration: 350, easing: Easing.out(Easing.cubic) }),
-        withTiming(1, { duration: 250 }),
-        withDelay(900, withTiming(0.95, { duration: 250 })),
-      ),
-    );
-  }, [index, opacity, scale]);
+  }, [index, pulse]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value * progress.value,
-    transform: [{ scale: scale.value }],
+  const circleStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      pulse.value,
+      [0, 1],
+      ['#e3ecd8', '#c8d9a8'],
+    ),
+  }));
+
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: pulse.value * 0.55,
+  }));
+
+  const rowStyle = useAnimatedStyle(() => ({
+    opacity: 1 - pulse.value * 0.15,
   }));
 
   return (
-    <Animated.View style={[styles.stepRow, animatedStyle]}>
+    <Animated.View style={[styles.stepRow, rowStyle]}>
       <View style={styles.stepIcon}>
-        <MaterialIcons name={step.icon} size={22} color="#486730" />
+        <Animated.View style={[styles.stepCircle, circleStyle]}>
+          <MaterialIcons name={step.icon} size={22} color="#486730" />
+        </Animated.View>
+        <Animated.View style={[styles.stepRing, ringStyle]} />
       </View>
       <Text style={styles.stepLabel}>{step.label}</Text>
     </Animated.View>
@@ -75,77 +80,54 @@ export function NotifListenerRequestModal({
   onAccept,
   onClose,
 }: NotifListenerRequestModalProps) {
-  const [phase, setPhase] = useState<Phase>('prompt');
-  const progress = useSharedValue(1);
+  const progress = useSharedValue(0);
 
   useEffect(() => {
     if (!visible) {
-      setPhase('prompt');
+      progress.value = 0;
       return;
     }
-  }, [visible]);
-
-  useEffect(() => {
-    if (phase !== 'animating') return;
-    progress.value = 0;
     progress.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
-    const timer = setTimeout(() => {
-      onAccept();
-      onClose();
-    }, 2600);
-    return () => clearTimeout(timer);
-  }, [phase, progress, onAccept, onClose]);
+  }, [visible, progress]);
 
   const cardAnimatedStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
     transform: [{ translateY: (1 - progress.value) * 12 }],
   }));
 
-  const handleYes = () => {
-    setPhase('animating');
-  };
+  if (!visible) return null;
 
-  const handleNo = () => {
+  const handleYes = () => {
+    onAccept();
     onClose();
   };
-
-  if (!visible) return null;
 
   return (
     <View style={styles.overlay}>
       <Animated.View style={[styles.card, cardAnimatedStyle]}>
-        {phase === 'prompt' ? (
-          <>
-            <Text style={styles.title}>Turn on notification access?</Text>
-            <Text style={styles.body}>
-              Tap Yes and Sync Guardian will open your phone&apos;s Settings. Look for a
-              switch to turn on notification access for Sync Guardian — flip it on. Then tap
-              your phone&apos;s Back button to come back here.
-            </Text>
-            <Text style={styles.bodyMuted}>
-              If you see a list of apps instead, scroll down and tap{' '}
-              <Text style={styles.bold}>Sync Guardian</Text> to find the switch.
-            </Text>
-            <View style={styles.actions}>
-              <Pressable style={styles.secondaryButton} onPress={handleNo}>
-                <Text style={styles.secondaryText}>No</Text>
-              </Pressable>
-              <Pressable style={styles.primaryButton} onPress={handleYes}>
-                <Text style={styles.primaryText}>Yes</Text>
-              </Pressable>
-            </View>
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>Almost there</Text>
-            <Text style={styles.subtitle}>
-              You&apos;ll land on the switch in a moment.
-            </Text>
-            {ANIMATION_STEPS.map((step, index) => (
-              <StepRow key={index} step={step} index={index} progress={progress} />
-            ))}
-          </>
-        )}
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <Text style={styles.title}>Turn on notification access?</Text>
+          <Text style={styles.body}>
+            Tap Yes and Sync Guardian will open your phone&apos;s Settings. Look for a
+            switch to turn on notification access for Sync Guardian ,  flip it on. Then tap
+            your phone&apos;s Back button to come back here.
+          </Text>
+          {ANIMATION_STEPS.map((step, index) => (
+            <StepRow key={index} step={step} index={index} />
+          ))}
+          <Text style={styles.bodyMuted}>
+            If you see a list of apps instead, scroll down and tap{' '}
+            <Text style={styles.bold}>Sync Guardian</Text> to find the switch.
+          </Text>
+          <View style={styles.actions}>
+            <Pressable style={styles.secondaryButton} onPress={onClose}>
+              <Text style={styles.secondaryText}>No</Text>
+            </Pressable>
+            <Pressable style={styles.primaryButton} onPress={handleYes}>
+              <Text style={styles.primaryText}>Yes</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
       </Animated.View>
     </View>
   );
@@ -163,9 +145,11 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 360,
+    maxHeight: '90%',
     backgroundColor: '#fff8f0',
     borderRadius: 32,
     padding: 28,
+    overflow: 'hidden',
     shadowColor: '#1b1d0e',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.12,
@@ -183,30 +167,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1b1d0e',
     lineHeight: 22,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   bodyMuted: {
     fontFamily: 'Manrope-Medium',
     fontSize: 13,
     color: '#43483d',
     lineHeight: 20,
+    marginTop: 4,
     marginBottom: 20,
   },
   bold: {
     fontFamily: 'Manrope-Bold',
     color: '#1b1d0e',
   },
-  subtitle: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 13,
-    color: '#43483d',
-    marginBottom: 18,
-    lineHeight: 20,
-  },
   actions: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 4,
   },
   primaryButton: {
     flex: 1,
@@ -241,10 +218,22 @@ const styles = StyleSheet.create({
   stepIcon: {
     width: 38,
     height: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepCircle: {
+    width: 38,
+    height: 38,
     borderRadius: 19,
     backgroundColor: '#e3ecd8',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  stepRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 19,
+    borderWidth: 2,
+    borderColor: '#486730',
   },
   stepLabel: {
     fontFamily: 'Manrope-Medium',

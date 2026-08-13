@@ -109,7 +109,7 @@ export function usePermissionStatus(role: 'parent' | 'child'): PermissionStatusR
     }
     // AOSP shows the "Allow Sync Guardian to ignore battery optimizations?"
     // dialog over the app. Some OEMs silently accept this intent without a
-    // dialog — in that case the key-aware refresh below falls back to the App
+    // dialog ,  in that case the key-aware refresh below falls back to the App
     // Info settings chain so the user can flip the OEM toggle.
     if (NotificationAccess?.requestBatteryOptimizationExemption) {
       try {
@@ -135,7 +135,7 @@ export function usePermissionStatus(role: 'parent' | 'child'): PermissionStatusR
   //   battery dialog; if the status never flips AND we know a dialog was shown,
   //   open the App Info chain so the user can flip the OEM toggle. We don't
   //   fallback when the user explicitly denied (dialogFired=true but they said
-  //   no) — they're taken back to the screen and the AppState listener picks up
+  //   no) ,  they're taken back to the screen and the AppState listener picks up
   //   any further changes.
   // - anything else: a single short refresh; full status is re-read via the
   //   AppState listener when the user returns to the app.

@@ -12,6 +12,7 @@ import { usePairData } from '@/hooks/use-pair-data';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { useSetupStatus } from '@/hooks/use-setup-status';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useSubscriptionStore } from '@/hooks/use-subscription-store';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
 import { AppIcon } from '@/components/app-icon';
@@ -179,7 +180,7 @@ function MonitoringHealthCard({
           <Text style={s.healthStatusSyncText}>Last sync · {lastSyncText}</Text>
         </View>
 
-        {/* Right: today's count stat — full activity hero treatment */}
+        {/* Right: today's count stat ,  full activity hero treatment */}
         <View style={s.healthStatCard}>
           {/* Layer 1: base dark-to-medium gradient */}
           <LinearGradient
@@ -258,6 +259,40 @@ function HomeScreenBanner({ onPress, title, subtitle, cta }: { onPress: () => vo
       </TouchableOpacity>
     </View>
   );
+}
+
+function TrialBadge() {
+  const reason = useSubscriptionStore((s) => s.reason);
+  const trialDaysRemaining = useSubscriptionStore((s) => s.trialDaysRemaining);
+  const hasAccess = useSubscriptionStore((s) => s.hasAccess);
+
+  if (reason === 'trial' && trialDaysRemaining != null && trialDaysRemaining > 0) {
+    return (
+      <View style={s.trialBadge}>
+        <Ionicons name="hourglass-outline" size={16} color={C.primary} />
+        <Text style={s.trialBadgeText}>
+          {trialDaysRemaining} {trialDaysRemaining === 1 ? 'day' : 'days'} left in trial
+        </Text>
+        <TouchableOpacity onPress={() => router.push('/(paywall)/plans')} hitSlop={6}>
+          <Text style={s.trialBadgeCta}>Upgrade</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (hasAccess === false) {
+    return (
+      <View style={s.trialBadge}>
+        <Ionicons name="card-outline" size={16} color={C.primary} />
+        <Text style={s.trialBadgeText}>Your subscription is required</Text>
+        <TouchableOpacity onPress={() => router.push('/(paywall)/plans')} hitSlop={6}>
+          <Text style={s.trialBadgeCta}>Subscribe</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return null;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -513,6 +548,7 @@ export default function HomeScreen() {
     <ThemedView style={s.container}>
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
         {renderSetupBanner()}
+        <TrialBadge />
 
         <EdgeFadeScrollView
           contentContainerStyle={s.scrollContent}
@@ -1239,6 +1275,32 @@ const s = StyleSheet.create({
     fontFamily: 'PlusJakartaSans-SemiBold',
     fontSize: 13,
     color: C.onPrimary,
+  },
+
+  /* ---------- Trial Badge ---------- */
+  trialBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 24,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: C.tertiaryContainer,
+    borderRadius: AuthRadius.xl,
+  },
+  trialBadgeText: {
+    flex: 1,
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: C.onSurface,
+  },
+  trialBadgeCta: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    color: C.primary,
   },
 
   /* ---------- Bottom Nav ---------- */

@@ -94,7 +94,7 @@ export async function requestFcmPermission(): Promise<{
 function handlePairRevoked(revokedBy: unknown) {
   if (revokedBy === 'parent') {
     useAuthStore.getState().clearPair()
-    // Only navigate when the app is foregrounded — the usePairStatusGuard
+    // Only navigate when the app is foregrounded ,  the usePairStatusGuard
     // redirects on the persisted null pairId when the user returns.
     if (AppState.currentState === 'active') {
       router.replace('/pairing')

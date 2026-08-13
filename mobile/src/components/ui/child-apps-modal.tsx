@@ -247,7 +247,7 @@ export function ChildAppsModal({ visible, onClose, childDeviceId, childName }: C
                   ListHeaderComponent={
                     <Text style={styles.intro}>
                       We&apos;ve pre-selected social media, messaging, and dating apps. Toggle off anything you don&apos;t
-                      want to monitor — everything else is left untouched.
+                      want to monitor ,  everything else is left untouched.
                     </Text>
                   }
                   ItemSeparatorComponent={() => <View style={styles.rowGap} />}

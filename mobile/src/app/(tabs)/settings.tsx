@@ -7,6 +7,7 @@ import { Image } from 'expo-image';
 import { ThemedView } from '@/components/themed-view';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useSubscriptionStore } from '@/hooks/use-subscription-store';
 import { useAppModal } from '@/hooks/use-app-modal';
 import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
@@ -59,6 +60,40 @@ function formatTimeAgo(timestamp: number): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+function SubscriptionSection() {
+  const { hasAccess, reason, trialDaysRemaining, subscriptionStatus } = useSubscriptionStore();
+
+  let label = 'Manage';
+  if (reason === 'trial' && trialDaysRemaining != null && trialDaysRemaining > 0) {
+    label = `${trialDaysRemaining}d left`;
+  } else if (reason === 'subscription') {
+    label = subscriptionStatus === 'paused' ? 'Paused' : 'Active';
+  } else if (hasAccess === false) {
+    label = 'Subscribe';
+  }
+
+  return (
+    <View style={s.subscriptionSection}>
+      <View style={s.subscriptionHeader}>
+        <View style={[s.iconWrapper, { backgroundColor: C.primaryContainer }]}>
+          <Ionicons name="card-outline" size={26} color={C.primary} />
+        </View>
+        <View style={s.subscriptionText}>
+          <Text style={s.cardTitle}>Subscription</Text>
+          <Text style={s.subscriptionStatus}>{label}</Text>
+        </View>
+        <TouchableOpacity
+          style={s.subscriptionManageBtn}
+          onPress={() => router.push({ pathname: '/(paywall)/manage', params: { from: 'settings' } })}
+          activeOpacity={0.7}
+        >
+          <Text style={s.subscriptionManageText}>{hasAccess ? 'Manage' : 'View plans'}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 export default function SettingsScreen() {
@@ -259,6 +294,7 @@ export default function SettingsScreen() {
     try {
       await supabase.auth.signOut();
       useAuthStore.getState().resetAuth();
+      useSubscriptionStore.getState().clear();
       router.replace('/login');
     } catch {
       setIsSigningOut(false);
@@ -419,6 +455,9 @@ export default function SettingsScreen() {
 
             {/* ========== PERMISSIONS SECTION ========== */}
             <PermissionsSection />
+
+            {/* ========== SUBSCRIPTION SECTION ========== */}
+            <SubscriptionSection />
 
             {/* ========== ACTION AREA: SIGN OUT GENTLY ========== */}
             <View style={s.actionSection}>
@@ -592,6 +631,44 @@ const s = StyleSheet.create({
   actionSection: {
     alignItems: 'center',
     marginBottom: 50,
+  },
+
+  /* ---------- Subscription Section ---------- */
+  subscriptionSection: {
+    marginBottom: 32,
+  },
+  subscriptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 28,
+    padding: 18,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  subscriptionText: {
+    flex: 1,
+    gap: 2,
+  },
+  subscriptionStatus: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 13,
+    color: C.onSurfaceVariant,
+  },
+  subscriptionManageBtn: {
+    backgroundColor: C.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 9999,
+  },
+  subscriptionManageText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 13,
+    color: C.onPrimary,
   },
   signOutButton: {
     flexDirection: 'row',

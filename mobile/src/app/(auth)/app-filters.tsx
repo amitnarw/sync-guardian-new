@@ -213,7 +213,7 @@ export default function AppFiltersScreen() {
       <View style={styles.waitingBanner}>
         <MaterialIcons name="hourglass-top" size={20} color={AuthColors.onPrimary} />
         <Text style={styles.waitingBannerText}>
-          {childLabel} device is waiting. Social, messaging, and dating apps are pre-selected — toggle off any you don&apos;t want to monitor.
+          {childLabel} device is waiting. Social, messaging, and dating apps are pre-selected ,  toggle off any you don&apos;t want to monitor.
         </Text>
       </View>
 
@@ -287,7 +287,7 @@ export default function AppFiltersScreen() {
               ListHeaderComponent={
                 <Text style={styles.intro}>
                   We&apos;ve pre-selected social media, messaging, and dating apps. Toggle off anything you don&apos;t
-                  want to monitor — everything else is left untouched.
+                  want to monitor ,  everything else is left untouched.
                 </Text>
               }
               ItemSeparatorComponent={() => <View style={styles.rowGap} />}

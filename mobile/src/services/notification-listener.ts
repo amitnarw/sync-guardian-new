@@ -16,7 +16,7 @@ function extractLines(parsed: Record<string, any>): { title: string; body: strin
   const isGroupSummary = parsed.is_group_summary === true;
 
   // Group summaries have text_lines with all messages in one shot.
-  // Group children still carry individual message content — don't skip them,
+  // Group children still carry individual message content ,  don't skip them,
   // because many apps (Gmail, WhatsApp) only re-post the summary for the first
   // notification; subsequent arrivals only trigger child notifications.
   // The dedup key will naturally collapse true duplicates.
