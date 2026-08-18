@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { usePairData } from '@/hooks/use-pair-data';
 import { AppIcon } from '@/components/app-icon';
+import { NotificationSourceCard } from '@/components/notification-source-card';
 import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
 import { ActivitySkeleton } from '@/components/skeletons/activity-skeleton';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -378,17 +379,11 @@ export default function ActivityScreen() {
                     <View style={s.iconNodeWrap}>
                       <AppIcon iconBase64={n.app_icon_base64} size={44} fallbackSize={18} />
                     </View>
-                    <View style={s.activityCard}>
-                      <View style={s.cardHeader}>
-                        <Text style={[s.cardSubLabel, { color: C.primary }]} numberOfLines={1} ellipsizeMode="tail">{n.source_app_name || 'Notification'}</Text>
-                        <View style={s.timeBadgePill}>
-                          <Text style={s.timeBadgeText}>{timeStr}</Text>
-                        </View>
+                    <View style={s.activityCardWrap}>
+                      <View style={s.timeBadgePill}>
+                        <Text style={s.timeBadgeText}>{timeStr}</Text>
                       </View>
-                      <Text style={s.cardTitle}>{n.notification_title || '(no title)'}</Text>
-                      {n.notification_body ? (
-                        <Text style={s.cardDesc} numberOfLines={3}>{n.notification_body}</Text>
-                      ) : null}
+                      <NotificationSourceCard notification={n} />
                     </View>
                   </View>
                 </React.Fragment>
@@ -627,87 +622,23 @@ const s = StyleSheet.create({
   },
 
   /* Activity Card */
-  activityCard: {
+  activityCardWrap: {
     flex: 1,
     marginLeft: 10,
-    backgroundColor: C.surfaceContainerLowest,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 28,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    padding: 20,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.04,
-    shadowRadius: 40,
-    elevation: 2,
-  },
-  activityCardOutlined: {
-    backgroundColor: C.surfaceContainerLow,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 237, 224, 0.5)',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.02,
-    shadowRadius: 24,
-    elevation: 1,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cardSubLabel: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 12,
-    lineHeight: 16,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    flexShrink: 1,
-    marginRight: 8,
   },
   timeBadgePill: {
+    alignSelf: 'flex-end',
     backgroundColor: C.surfaceContainerLow,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 9999,
-    flexShrink: 0,
+    marginBottom: 4,
   },
   timeBadgeText: {
     fontFamily: 'PlusJakartaSans-Medium',
     fontSize: 12,
     lineHeight: 16,
     color: C.onSurfaceVariant,
-  },
-  cardTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 20,
-    lineHeight: 26,
-    color: C.onSurface,
-    marginBottom: 8,
-  },
-  cardDesc: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 15,
-    lineHeight: 22,
-    color: C.onSurfaceVariant,
-  },
-  cardActions: {
-    marginTop: 16,
-    flexDirection: 'row',
-  },
-  actionBtn: {
-    backgroundColor: C.surfaceContainerLow,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 9999,
-  },
-  actionBtnText: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 13,
-    lineHeight: 18,
-    color: C.onSurface,
   },
 
   /* Remote Illustration */

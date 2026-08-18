@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, TouchableOpacity, Dimensions, Text, ActivityIndicator, RefreshControl } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,12 +15,11 @@ import { NotifListenerRequestModal } from '@/components/notif-listener-request-m
 import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
 import * as NotificationAccess from 'notification-access';
 import { ChildAppsModal } from '@/components/ui/child-apps-modal';
+import { ConnectedDevicesModal } from '@/components/connected-devices-modal';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { logger } from '@/services/logger';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 // ============================================================
 // EXACT STITCH COLORS (from HTML Tailwind config)
@@ -234,6 +233,7 @@ export default function SettingsScreen() {
 
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [appsModalChild, setAppsModalChild] = useState<{ childDeviceId: string; name: string | null } | null>(null);
+  const [connectedDevicesModalOpen, setConnectedDevicesModalOpen] = useState(false);
   const screenOpacity = useSharedValue(1);
   const containerAnimatedStyle = useAnimatedStyle(() => ({
     opacity: screenOpacity.value,
@@ -332,46 +332,35 @@ export default function SettingsScreen() {
 
             {/* ========== BENTO GRID SECTION ========== */}
             <View style={s.bentoGrid}>
-              {/* Card 1: Profile & Family (Sage Theme) */}
-              <TouchableOpacity style={[s.bentoCard, s.cardProfile]}>
-                <View style={[s.iconWrapper, { backgroundColor: C.primaryContainer }]}>
-                  <Ionicons name="people" size={26} color={C.primary} />
-                </View>
-                <Text style={s.cardTitle}>Profile & Family</Text>
-                <Text style={s.cardDesc}>Manage members, update avatars, and organise your family.</Text>
+              {/* Top row: 2 cards side-by-side */}
+              <View style={s.bentoTopRow}>
+                <TouchableOpacity style={[s.bentoCard, s.cardProfile]} onPress={() => router.push('/(tabs)/child-account')}>
+                  <View style={[s.iconWrapper, { backgroundColor: C.primaryContainer }]}>
+                    <Ionicons name="people" size={26} color={C.primary} />
+                  </View>
+                  <Text style={s.cardTitle}>Profile & Family</Text>
+                  <Text style={s.cardDesc}>Manage members, update avatars, and organise your family.</Text>
+                  <Ionicons name="chevron-forward" size={16} color={C.outline} style={s.cardCaret} />
+                </TouchableOpacity>
 
-                {/* Backing blurry green radial blob */}
-                <View style={s.cardBlobProfile} />
-              </TouchableOpacity>
+                <TouchableOpacity style={[s.bentoCard, s.cardDevices]} onPress={() => setConnectedDevicesModalOpen(true)}>
+                  <View style={[s.iconWrapper, { backgroundColor: C.surfaceVariant }]}>
+                    <Ionicons name="laptop" size={26} color={C.onSurfaceVariant} />
+                  </View>
+                  <Text style={s.cardTitle}>Connected Devices</Text>
+                  <Text style={s.cardDesc}>Overview of connected devices, battery health, and sync status.</Text>
+                  <Ionicons name="chevron-forward" size={16} color={C.outline} style={s.cardCaret} />
+                </TouchableOpacity>
+              </View>
 
-              {/* Card 2: Notification Preferences (Terracotta Theme) - Custom top-right corner */}
-              <TouchableOpacity style={[s.bentoCard, s.cardNotifications]}>
-                <View style={[s.iconWrapper, { backgroundColor: C.secondaryContainer }]}>
-                  <Ionicons name="notifications-circle" size={26} color={C.secondary} />
-                </View>
-                <Text style={s.cardTitle}>Notification Preferences</Text>
-                <Text style={s.cardDesc}>Choose what alerts you get and when.</Text>
-              </TouchableOpacity>
-
-              {/* Card 3: Connected Devices (Umber Theme) - Custom bottom-left corner */}
-              <TouchableOpacity style={[s.bentoCard, s.cardDevices]}>
-                <View style={[s.iconWrapper, { backgroundColor: C.surfaceVariant }]}>
-                  <Ionicons name="laptop" size={26} color={C.onSurfaceVariant} />
-                </View>
-                <Text style={s.cardTitle}>Connected Devices</Text>
-                <Text style={s.cardDesc}>Overview of connected devices, battery health, and sync status.</Text>
-              </TouchableOpacity>
-
-              {/* Card 4: Privacy & Security (Sage/Cream Blend) */}
-              <TouchableOpacity style={[s.bentoCard, s.cardPrivacy]}>
+              {/* Bottom row: full-width Privacy & Security */}
+              <TouchableOpacity style={[s.bentoCard, s.cardFullWidth]} onPress={() => router.push('/(tabs)/privacy-security')}>
                 <View style={[s.iconWrapper, { backgroundColor: C.tertiaryContainer }]}>
                   <Ionicons name="key" size={26} color={C.tertiary} />
                 </View>
                 <Text style={s.cardTitle}>Privacy & Security</Text>
                 <Text style={s.cardDesc}>Data controls, keyword safety, and account settings.</Text>
-
-                {/* Backing blurry tertiary blob */}
-                <View style={s.cardBlobPrivacy} />
+                <Ionicons name="chevron-forward" size={16} color={C.outline} style={s.cardCaret} />
               </TouchableOpacity>
             </View>
 
@@ -493,6 +482,12 @@ export default function SettingsScreen() {
           childName={appsModalChild?.name}
           onClose={() => setAppsModalChild(null)}
         />
+        <ConnectedDevicesModal
+          visible={connectedDevicesModalOpen}
+          onClose={() => setConnectedDevicesModalOpen(false)}
+          devices={children}
+          onManage={(deviceId) => router.push('/(tabs)/child-account')}
+        />
       </Animated.View>
     </ThemedView>
   );
@@ -550,13 +545,15 @@ const s = StyleSheet.create({
 
   /* ---------- Bento Grid ---------- */
   bentoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 16,
     marginBottom: 32,
   },
+  bentoTopRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
   bentoCard: {
-    width: (SCREEN_W - 64) / 2, // Beautiful 2 column wrap
+    flex: 1,
     minHeight: 180,
     backgroundColor: C.surfaceContainerLow,
     borderRadius: 24,
@@ -572,20 +569,16 @@ const s = StyleSheet.create({
   cardProfile: {
     borderRadius: 28,
   },
-  cardNotifications: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 12, // Asymmetrical top-right corner from spec
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-  },
   cardDevices: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderBottomLeftRadius: 12, // Asymmetrical bottom-left corner from spec
-    borderBottomRightRadius: 28,
-  },
-  cardPrivacy: {
     borderRadius: 28,
+  },
+  cardFullWidth: {
+    borderRadius: 28,
+  },
+  cardCaret: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
   },
   iconWrapper: {
     width: 48,
@@ -607,24 +600,6 @@ const s = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     color: C.onSurfaceVariant,
-  },
-  cardBlobProfile: {
-    position: 'absolute',
-    bottom: -24,
-    right: -24,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(68,103,77,0.1)',
-  },
-  cardBlobPrivacy: {
-    position: 'absolute',
-    top: -24,
-    left: -24,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(197,236,204,0.15)',
   },
 
   /* ---------- Action Section ---------- */

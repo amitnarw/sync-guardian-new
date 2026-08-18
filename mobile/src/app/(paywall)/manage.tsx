@@ -172,7 +172,7 @@ export default function ManageSubscriptionScreen() {
             </View>
             <Text style={s.noSubTitle}>No active subscription</Text>
             <Text style={s.noSubText}>Choose a plan to keep your monitoring running.</Text>
-            <TouchableOpacity onPress={() => router.replace('/(paywall)/plans')} activeOpacity={0.85} style={s.viewPlansBtn}>
+            <TouchableOpacity onPress={() => router.push('/(paywall)/plans')} activeOpacity={0.85} style={s.viewPlansBtn}>
               <Text style={s.viewPlansBtnText}>View plans</Text>
             </TouchableOpacity>
           </Animated.View>
