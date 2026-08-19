@@ -5,6 +5,7 @@ export interface SourceAppTheme {
   bubbleAlign?: 'left' | 'right';
   bubbleText: string;
   label: string;
+  variant?: 'telegram';
 }
 
 export const SOURCE_APP_THEMES: Record<string, SourceAppTheme> = {
@@ -23,6 +24,7 @@ export const SOURCE_APP_THEMES: Record<string, SourceAppTheme> = {
     bubbleAlign: 'left',
     bubbleText: '#ffffff',
     label: 'Telegram',
+    variant: 'telegram',
   },
   'com.facebook.orca': {
     accent: '#0084FF',
@@ -49,27 +51,27 @@ export const SOURCE_APP_THEMES: Record<string, SourceAppTheme> = {
     label: 'Discord',
   },
   'com.google.android.apps.messaging': {
-    accent: '#1A73E8',
-    accentSoft: '#d2e3fc',
+    accent: '#007AFF',
+    accentSoft: '#cce4ff',
     isChat: true,
-    bubbleAlign: 'right',
-    bubbleText: '#ffffff',
+    bubbleAlign: 'left',
+    bubbleText: '#000000',
     label: 'Messages',
   },
   'com.android.mms': {
-    accent: '#1A73E8',
-    accentSoft: '#d2e3fc',
+    accent: '#007AFF',
+    accentSoft: '#cce4ff',
     isChat: true,
-    bubbleAlign: 'right',
-    bubbleText: '#ffffff',
+    bubbleAlign: 'left',
+    bubbleText: '#000000',
     label: 'Messages',
   },
   'com.samsung.android.messaging': {
-    accent: '#1A73E8',
-    accentSoft: '#d2e3fc',
+    accent: '#007AFF',
+    accentSoft: '#cce4ff',
     isChat: true,
-    bubbleAlign: 'right',
-    bubbleText: '#ffffff',
+    bubbleAlign: 'left',
+    bubbleText: '#000000',
     label: 'Messages',
   },
   'com.facebook.katana': {
@@ -87,16 +89,16 @@ export const SOURCE_APP_THEMES: Record<string, SourceAppTheme> = {
     label: 'Instagram',
   },
   'com.twitter.android': {
-    accent: '#0F1419',
-    accentSoft: '#d6d8db',
-    isChat: false,
+    accent: '#1D9BF0',
+    accentSoft: '#1a3a52',
+    isChat: true,
     bubbleText: '#ffffff',
     label: 'X',
   },
   'com.x.android': {
-    accent: '#0F1419',
-    accentSoft: '#d6d8db',
-    isChat: false,
+    accent: '#1D9BF0',
+    accentSoft: '#1a3a52',
+    isChat: true,
     bubbleText: '#ffffff',
     label: 'X',
   },
@@ -117,9 +119,16 @@ export const SOURCE_APP_THEMES: Record<string, SourceAppTheme> = {
   'com.linkedin.android': {
     accent: '#0A66C2',
     accentSoft: '#cee0f3',
-    isChat: false,
+    isChat: true,
     bubbleText: '#ffffff',
     label: 'LinkedIn',
+  },
+  'com.reddit.frontpage': {
+    accent: '#FF4500',
+    accentSoft: '#3a1a0f',
+    isChat: true,
+    bubbleText: '#ffffff',
+    label: 'Reddit',
   },
   'com.microsoft.teams': {
     accent: '#6264A7',
