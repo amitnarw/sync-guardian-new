@@ -50,7 +50,13 @@ serve(async (req) => {
       ? event.payload as Record<string, unknown>
       : event
 
-    const eventType = String(event.event ?? event.type ?? payload.event ?? payload.type ?? '')
+    // V2 Autopay canonical: top-level `event` field (V1 `type` is deprecated; `payload.*` is a safety net).
+    const eventType = String(
+      event.event ??
+        event.type ??
+        payload.event ??
+        '',
+    )
     const merchantSubscriptionId = String(
       payload.merchantSubscriptionId ??
       event.merchantSubscriptionId ??
@@ -89,14 +95,29 @@ serve(async (req) => {
       )
     }
 
-    // Map PhonePe events to our status.
-    const lower = eventType.toLowerCase()
+// Map PhonePe V2 Autopay events to our status (exact-match only).
+    // V2 has no explicit `expired` event — derive from payload.state.
     let status: string | null = null
-    if (lower.includes('activate')) status = 'active'
-    else if (lower.includes('charge') || lower.includes('redemption') || lower.includes('debit')) status = 'active'
-    else if (lower.includes('paus')) status = 'paused'
-    else if (lower.includes('revoke') || lower.includes('cancel')) status = 'revoked'
-    else if (lower.includes('expire')) status = 'expired'
+    switch (eventType) {
+      case 'subscription.setup.order.completed':
+      case 'subscription.notification.completed':
+      case 'subscription.redemption.order.completed':
+        status = 'active'
+        break
+      case 'subscription.paused':
+        status = 'paused'
+        break
+      case 'subscription.unpaused':
+        status = 'active'
+        break
+      case 'subscription.revoked':
+      case 'subscription.cancelled':
+        status = 'revoked'
+        break
+      default:
+        if (payload.state === 'EXPIRED') status = 'expired'
+        break
+    }
 
     const updates: Record<string, unknown> = {}
     if (status) {

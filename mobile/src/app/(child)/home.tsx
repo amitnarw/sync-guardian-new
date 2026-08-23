@@ -10,6 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useAppModal } from '@/hooks/use-app-modal';
+import { useSubscriptionStore } from '@/hooks/use-subscription-store';
 import { SyncAnimation } from '@/components/ui/sync-animation';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
@@ -54,6 +55,11 @@ export default function ChildHome() {
   const [parentName, setParentName] = useState('Parent Device');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
+  // Parent-managed access state (server-derived; children never see
+  // billing UI — only a gentle paused indicator on their dashboard).
+  const subHasAccess = useSubscriptionStore((s) => s.hasAccess);
+  const subError = useSubscriptionStore((s) => s.error);
+  const [accessChecked, setAccessChecked] = useState(false);
   const permissions = usePermissionStatus('child');
   const { items: permissionItems } = permissions;
   const criticalPermissions = useMemo(
@@ -62,6 +68,15 @@ export default function ChildHome() {
       : [],
     [permissionItems],
   );
+
+  // True only once the server has confirmed the paired parent's access has
+  // lapsed — never shown while loading or on transient errors.
+  const accessLapsed =
+    pairStatus === 'active' &&
+    setupCompleted === true &&
+    accessChecked &&
+    !subError &&
+    subHasAccess === false;
 
   const fetchPairState = useCallback(async () => {
     if (!isValidUUID(pairId)) {
@@ -104,10 +119,25 @@ export default function ChildHome() {
     setIsRefreshing(true);
     try {
       await fetchPairState();
+      await useSubscriptionStore.getState().refresh();
+      setAccessChecked(true);
     } finally {
       setIsRefreshing(false);
     }
   }, [fetchPairState]);
+
+  // Mirror the paired parent's access state so the dashboard can show a
+  // paused indicator when the parent's trial/subscription has lapsed.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await useSubscriptionStore.getState().refresh();
+      if (!cancelled) setAccessChecked(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const backAction = () => {
@@ -300,7 +330,20 @@ export default function ChildHome() {
   }
 
   if (pairStatus === 'missing' || pairStatus === 'revoked') {
-    return null;
+    // The pair-status guard redirects to /pairing shortly; show a calm
+    // placeholder instead of a blank screen in the meantime.
+    return (
+      <ThemedView style={s.container}>
+        <View style={s.waitingBody}>
+          <SyncAnimation />
+          <Text style={s.waitingTitle}>Not connected</Text>
+          <Text style={s.waitingText}>
+            You&apos;re not linked to a guardian device right now. Ask your parent to send you a
+            new connection invite.
+          </Text>
+        </View>
+      </ThemedView>
+    );
   }
 
   if (pairStatus === 'pending' || (pairStatus === 'active' && !setupCompleted)) {
@@ -322,7 +365,21 @@ export default function ChildHome() {
   }
 
   if (criticalPermissions.length > 0) {
-    return null;
+    // Redirect to /permissions runs in the effect above; show progress
+    // instead of a blank screen during that transition.
+    return (
+      <ThemedView style={s.container}>
+        <View style={s.waitingBody}>
+          <SyncAnimation />
+          <BlurView intensity={80} tint="light" style={s.loadingCard}>
+            <Text style={s.loadingTitle}>Almost there</Text>
+            <Text style={s.loadingDesc}>
+              One moment — finishing your setup…
+            </Text>
+          </BlurView>
+        </View>
+      </ThemedView>
+    );
   }
 
   return (
@@ -339,13 +396,19 @@ export default function ChildHome() {
             <View style={s.heroSection}>
               {/* Text block */}
               <View style={s.heroTextBlock}>
-                <Text style={s.flowLabel}>SYSTEM SECURED</Text>
+                <Text style={s.flowLabel}>
+                  {accessLapsed ? 'ATTENTION NEEDED' : 'SYSTEM SECURED'}
+                </Text>
                 <Text style={s.heroTitle}>
                   Sync Guardian is{'\n'}
-                  <Text style={s.heroTitleAccent}>Active</Text>
+                  <Text style={accessLapsed ? s.heroTitlePaused : s.heroTitleAccent}>
+                    {accessLapsed ? 'Paused' : 'Active'}
+                  </Text>
                 </Text>
                 <Text style={s.heroDescription}>
-                  Sync Guardian is running quietly in the background, maintaining a safe and focused environment.
+                  {accessLapsed
+                    ? 'Your parent\u2019s Sync Guardian plan has ended. Monitoring is paused and will resume automatically once they renew.'
+                    : 'Sync Guardian is running quietly in the background, maintaining a safe and focused environment.'}
                 </Text>
               </View>
 
@@ -382,8 +445,14 @@ export default function ChildHome() {
                     style={s.timerCard}
                   >
                     <View style={s.timerHeader}>
-                      <Ionicons name="checkmark-circle" size={20} color={C.secondary} />
-                      <Text style={s.timerText}>Protection Enabled</Text>
+                      <Ionicons
+                        name={accessLapsed ? 'alert-circle' : 'checkmark-circle'}
+                        size={20}
+                        color={C.secondary}
+                      />
+                      <Text style={s.timerText}>
+                        {accessLapsed ? 'Protection Paused' : 'Protection Enabled'}
+                      </Text>
                     </View>
                   </BlurView>
                 </View>
@@ -529,6 +598,13 @@ const s = StyleSheet.create({
     fontSize: 40,
     lineHeight: 48,
     color: C.primary,
+    letterSpacing: -1,
+  },
+  heroTitlePaused: {
+    fontFamily: 'PlusJakartaSans-ExtraBoldItalic',
+    fontSize: 40,
+    lineHeight: 48,
+    color: C.secondary,
     letterSpacing: -1,
   },
   heroDescription: {

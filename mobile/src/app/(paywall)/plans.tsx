@@ -1,58 +1,73 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  Pressable,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
+  BackHandler,
+  Dimensions,
   Platform,
-  PressableStateCallbackType,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AuthColors as C, AuthRadius as R, AuthGradients } from '@/constants/auth-theme';
-import { listPlans, createAutopaySubscription, type Plan } from '@/services/subscription-api';
-import { startSubscriptionTransaction } from '@/services/phonepe-pg';
-import { useSubscriptionStore } from '@/hooks/use-subscription-store';
-import { useAuthStore } from '@/hooks/use-auth-store';
-import { logger } from '@/services/logger';
-import { Price } from '@/components/paywall/price';
+import { router, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { AuthColors as C, AuthRadius as R } from '@/constants/auth-theme';
+import { listPlans, type Plan } from '@/services/subscription-api';
 import { TrialRibbon } from '@/components/paywall/trial-ribbon';
+import { logger } from '@/services/logger';
+import { useAuthStore } from '@/hooks/use-auth-store';
+import { useSubscriptionStore } from '@/hooks/use-subscription-store';
+import { useCheckoutSheet } from '@/components/paywall/checkout-sheet-controller';
 
 type Frequency = 'monthly' | 'yearly';
 
-const TIER_LABELS: Record<'tier_a' | 'tier_b', { name: string; tagline: string }> = {
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 380);
+const CARD_GAP = 24;
+const CARD_INSET = (SCREEN_WIDTH - CARD_WIDTH) / 2;
+
+const PLAN_META: Record<
+  'tier_a' | 'tier_b',
+  {
+    icon: keyof typeof Ionicons.glyphMap;
+  }
+> = {
   tier_a: {
-    name: 'Guardian',
-    tagline: 'Everything you need to keep one device safe.',
+    icon: 'sparkles',
   },
   tier_b: {
-    name: 'Guardian+',
-    tagline: 'Priority monitoring for families with multiple devices.',
+    icon: 'rocket',
   },
 };
 
-const TIER_A_FEATURES = [
-  'Real-time notification mirror',
-  'One paired child device',
-  '30-day activity history',
-  'Configurable app filters',
-  'UPI AutoPay — cancel anytime',
-];
-
-const TIER_B_FEATURES = [
-  'Up to 4 paired child devices',
-  'Priority push delivery',
-  '90-day activity history',
-  'Per-app granular controls',
-  'Early access to new insights',
-  'Priority support',
-];
+const TIER_FEATURES: Record<'tier_a' | 'tier_b', string[]> = {
+  tier_a: [
+    'Real-time notification mirror',
+    'One paired child device',
+    '30-day activity history',
+    'UPI AutoPay — cancel anytime',
+  ],
+  tier_b: [
+    'Up to 4 paired child devices',
+    'Priority push delivery',
+    '90-day activity history',
+    'Per-app granular controls',
+    'Early access to insights',
+  ],
+};
 
 function computeYearlySavingsPct(monthlyPaise: number, yearlyPaise: number): number {
   const annualized = monthlyPaise * 12;
@@ -64,27 +79,40 @@ interface FrequencyToggleProps {
   value: Frequency;
   onChange: (next: Frequency) => void;
   savingsPct: number;
+  layoutKey: number;
 }
 
-function FrequencyToggle({ value, onChange, savingsPct }: FrequencyToggleProps) {
+function FrequencyToggle({ value, onChange, savingsPct, layoutKey }: FrequencyToggleProps) {
+  const offset = useSharedValue(value === 'yearly' ? 1 : 0);
+  useEffect(() => {
+    offset.value = withTiming(value === 'yearly' ? 1 : 0, { duration: 280 });
+  }, [value, offset]);
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.value * 140 + 4 }] as any,
+  }));
+
   return (
-    <View style={styles.toggleWrap}>
+    <View key={layoutKey} style={s.toggleWrap}>
+      <Animated.View style={[s.toggleIndicator, indicatorStyle]} pointerEvents="none" />
       {(['monthly', 'yearly'] as Frequency[]).map((freq) => {
         const active = value === freq;
         return (
           <Pressable
             key={freq}
-            onPress={() => onChange(freq)}
-            style={[styles.toggleOption, active && styles.toggleOptionActive]}
+            onPress={() => {
+              if (active) return;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              onChange(freq);
+            }}
+            style={s.toggleOption}
           >
-            <Text style={[styles.toggleLabel, active && styles.toggleLabelActive]}>
-              {freq === 'monthly' ? 'Monthly' : 'Yearly'}
+            <Text style={[s.toggleLabel, active && s.toggleLabelActive]}>
+              {freq === 'monthly' ? 'Monthly' : 'Annual'}
             </Text>
             {freq === 'yearly' && savingsPct > 0 && (
-              <View style={[styles.savingsPill, active && styles.savingsPillActive]}>
-                <Text style={[styles.savingsPillText, active && styles.savingsPillTextActive]}>
-                  Save {savingsPct}%
-                </Text>
+              <View style={s.savingsPill}>
+                <Text style={s.savingsPillText}>{savingsPct}% off</Text>
               </View>
             )}
           </Pressable>
@@ -94,73 +122,124 @@ function FrequencyToggle({ value, onChange, savingsPct }: FrequencyToggleProps) 
   );
 }
 
-interface PlanCardProps {
+interface SculpturalCardProps {
   plan: Plan;
-  selected: boolean;
-  onSelect: () => void;
   index: number;
-  isRecommended?: boolean;
+  onContinue: () => void;
 }
 
-function PlanCard({ plan, selected, onSelect, index, isRecommended }: PlanCardProps) {
-  const tier = TIER_LABELS[plan.tier];
-  const features = plan.tier === 'tier_a' ? TIER_A_FEATURES : TIER_B_FEATURES;
+function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
+  const meta = PLAN_META[plan.tier];
+  const features = TIER_FEATURES[plan.tier];
+  const period = plan.frequency === 'monthly' ? 'mo' : 'yr';
+  const isTierA = plan.tier === 'tier_a';
+  const accentColor = isTierA ? C.primary : C.secondary;
 
   return (
-    <Animated.View entering={FadeInDown.duration(450).delay(120 + index * 80)}>
-      <Pressable
-        onPress={onSelect}
-        style={({ pressed }: PressableStateCallbackType) => [
-          styles.planCard,
-          pressed && { opacity: 0.96 },
-          selected && styles.planCardSelected,
-        ]}
-      >
-        {isRecommended && (
-          <View style={styles.recommendedBadge}>
-            <Ionicons name="sparkles" size={12} color={C.onPrimary} />
-            <Text style={styles.recommendedBadgeText}>Recommended</Text>
-          </View>
-        )}
+    <Animated.View
+      entering={FadeInDown.duration(550).delay(160 + index * 90)}
+      style={[s.cardShadow, { width: CARD_WIDTH, marginRight: CARD_GAP }]}
+    >
+      <View style={s.card}>
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <LinearGradient
+            colors={['rgba(54,50,40,0.10)', 'rgba(54,50,40,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ flex: 1 }}
+          />
+        </View>
 
-        <View style={styles.planHeader}>
-          <View style={styles.planTitleRow}>
-            <Text style={styles.planName}>{tier.name}</Text>
-            <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
-              {selected && <View style={styles.radioInner} />}
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <LinearGradient
+            colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.85)']}
+            start={{ x: 0.4, y: 0.4 }}
+            end={{ x: 1, y: 1 }}
+            style={{ flex: 1 }}
+          />
+        </View>
+
+        <View pointerEvents="none" style={s.blob} />
+
+        <View style={s.cardBody}>
+          <View style={s.cardHeaderRow}>
+            <View style={s.cardHeaderBlock}>
+              <Text style={s.cardTitle}>{plan.name}</Text>
+              <Text style={s.cardTagline}>{plan.description}</Text>
+            </View>
+            <View style={s.iconCircle}>
+              <Ionicons name={meta.icon} size={24} color={accentColor} />
             </View>
           </View>
-          <Text style={styles.planTagline}>{tier.tagline}</Text>
-        </View>
 
-        <View style={styles.priceRow}>
-          <Price amountPaise={plan.amount_paise} period={plan.frequency === 'monthly' ? 'month' : 'year'} />
-        </View>
+          <View style={s.priceRow}>
+            <Text style={s.priceValue}>{formatPaise(plan.amount_paise)}</Text>
+            <Text style={s.priceUnit}>/{period}</Text>
+          </View>
 
-        <View style={styles.featureList}>
-          {features.map((feat, i) => (
-            <View key={i} style={styles.featureRow}>
-              <Ionicons name="checkmark-circle" size={16} color={C.primary} />
-              <Text style={styles.featureText}>{feat}</Text>
-            </View>
-          ))}
+          <View style={s.features}>
+            {features.map((label, i) => (
+              <View key={`${plan.id}-feature-${i}`} style={s.featureRow}>
+                <View style={s.featureBullet}>
+                  <Ionicons name="checkmark" size={14} color={accentColor} />
+                </View>
+                <Text style={s.featureText}>{label}</Text>
+              </View>
+            ))}
+          </View>
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              onContinue();
+            }}
+            style={({ pressed }) => [s.cardCta, pressed && { transform: [{ scale: 0.97 }] }]}
+          >
+            <Text style={s.cardCtaText}>Continue</Text>
+          </Pressable>
         </View>
-      </Pressable>
+      </View>
     </Animated.View>
   );
 }
 
 export default function PlansScreen() {
+  const { reason } = useLocalSearchParams<{ reason?: string }>();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [frequency, setFrequency] = useState<Frequency>('yearly');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const userId = useAuthStore((s) => s.userId);
-  const refreshSubscription = useSubscriptionStore((s) => s.refresh);
   const trialDaysRemaining = useSubscriptionStore((s) => s.trialDaysRemaining);
+  const { present: presentCheckoutSheet } = useCheckoutSheet();
+
+  // Defense-in-depth: children never see pricing/billing screens. Their
+  // access is managed by the paired parent and surfaced on the child home.
+  const userRole = useAuthStore((s) => s.userRole);
+  useEffect(() => {
+    if (userRole === 'child') {
+      router.replace('/(child)/home');
+    }
+  }, [userRole]);
+
+  // Back navigation: this screen is reachable from Settings → Manage → View
+  // Plans and from the Home locked-state CTAs (pushed), but also as the
+  // cold-start paywall (replaced — no history). Show the back affordance and
+  // honor hardware back only when there is actually a screen to return to.
+  const canGoBack = router.canGoBack();
+  const handleBack = () => {
+    if (router.canGoBack()) router.back();
+  };
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
+      // No history (cold-start entry): let the OS default run.
+      return false;
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,378 +247,453 @@ export default function PlansScreen() {
       .then((p) => {
         if (cancelled) return;
         setPlans(p);
-        const yearly = p.filter((x) => x.frequency === 'yearly' && x.tier === 'tier_a');
-        const firstYearly = yearly[0] ?? p.find((x) => x.frequency === 'yearly') ?? p[0];
-        if (firstYearly) setSelectedId(firstYearly.id);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load plans'))
-      .finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load plans');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    const forFreq = plans.filter((x) => x.frequency === frequency);
-    const currentSelected = plans.find((x) => x.id === selectedId);
-    if (!currentSelected || currentSelected.frequency !== frequency) {
-      const first = forFreq[0];
-      if (first) setSelectedId(first.id);
-    }
-  }, [frequency, plans, selectedId]);
-
-  const tierAPlans = useMemo(() => plans.filter((x) => x.tier === 'tier_a'), [plans]);
-  const monthlyTierA = tierAPlans.find((p) => p.frequency === 'monthly');
-  const yearlyTierA = tierAPlans.find((p) => p.frequency === 'yearly');
   const visiblePlans = useMemo(
     () => plans.filter((x) => x.frequency === frequency),
     [plans, frequency],
   );
-  const selectedPlan = useMemo(() => plans.find((x) => x.id === selectedId) ?? null, [plans, selectedId]);
 
+  const tierAPlans = useMemo(() => plans.filter((x) => x.tier === 'tier_a'), [plans]);
+  const monthlyTierA = tierAPlans.find((p) => p.frequency === 'monthly');
+  const yearlyTierA = tierAPlans.find((p) => p.frequency === 'yearly');
   const yearlySavingsPct = useMemo(() => {
     if (!monthlyTierA || !yearlyTierA) return 0;
     return computeYearlySavingsPct(monthlyTierA.amount_paise, yearlyTierA.amount_paise);
   }, [monthlyTierA, yearlyTierA]);
 
-  const handleSubscribe = async () => {
-    if (!selectedPlan || submitting) return;
-    if (Platform.OS !== 'android') return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const flowId = `sg${(userId ?? 'user').replace(/[^a-zA-Z0-9]/g, '').slice(0, 24)}`;
-      const order = await createAutopaySubscription(selectedPlan.id);
-      const result = await startSubscriptionTransaction(order.orderId, order.token, flowId);
-      if (result.status === 'SUCCESS') {
-        for (let i = 0; i < 6; i++) {
-          await refreshSubscription();
-          if (useSubscriptionStore.getState().hasAccess) break;
-          await new Promise((r) => setTimeout(r, 1000));
+  // Contextual notice when the user was routed here because their access
+  // lapsed (cold-start gate) — answers "why am I seeing pricing?" politely.
+  const accessNotice: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string } | null =
+    reason === 'trial_ended'
+      ? {
+          icon: 'hourglass-outline',
+          title: 'Your free trial has ended',
+          body: 'Choose a plan below to resume monitoring — everything is waiting for you.',
         }
-        router.replace('/(tabs)/home');
-      } else {
-        setError(result.error ?? 'The subscription could not be completed. Please try again.');
-        refreshSubscription().catch(() => {});
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
-      logger.warn('paywall', 'subscribe failed', { message: e instanceof Error ? e.message : 'unknown' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+      : reason === 'subscription_ended'
+        ? {
+            icon: 'pause-circle-outline',
+            title: 'Your subscription has ended',
+            body: 'Reactivate a plan to continue protecting your family.',
+          }
+        : null;
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.root, styles.center]} edges={['top', 'bottom']}>
+      <SafeAreaView style={[s.root, s.center]} edges={['bottom']}>
         <ActivityIndicator color={C.primary} size="large" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Back button */}
-        {router.canGoBack() && (
-          <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={C.onSurface} />
+    <SafeAreaView style={s.root} edges={['bottom']}>
+      {canGoBack ? (
+        <View style={s.appBar}>
+          <TouchableOpacity
+            onPress={handleBack}
+            hitSlop={10}
+            style={s.appBarButton}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <Ionicons name="chevron-back" size={22} color={C.onSurface} />
           </TouchableOpacity>
-        )}
-
-        {/* Hero */}
-        <Animated.View entering={FadeInDown.duration(500)} style={styles.hero}>
-          <Text style={styles.eyebrow}>Sync Guardian</Text>
-          <Text style={styles.title}>Choose your plan</Text>
-          <Text style={styles.subtitle}>
-            Real-time notification monitoring with UPI AutoPay. Cancel anytime.
+        </View>
+      ) : null}
+      <View style={s.scrollContent}>
+        <Animated.View entering={FadeInUp.duration(550)} style={s.hero}>
+          <Text style={s.heroEyebrow}>Subscription</Text>
+          <Text style={s.heroTitle}>
+            Choose Your{'\n'}
+            <Text style={s.heroTitleAccent}>Journey</Text>
           </Text>
         </Animated.View>
 
-        {/* Trial ribbon */}
-        {trialDaysRemaining != null && trialDaysRemaining > 0 && (
-          <Animated.View entering={FadeInDown.duration(450).delay(60)}>
-            <TrialRibbon daysRemaining={trialDaysRemaining} />
-          </Animated.View>
-        )}
-
-        {/* Frequency toggle */}
-        <Animated.View entering={FadeInDown.duration(450).delay(80)}>
-          <FrequencyToggle value={frequency} onChange={setFrequency} savingsPct={yearlySavingsPct} />
-        </Animated.View>
-
-        {/* Plan cards */}
-        <View style={styles.cardsContainer}>
-          {visiblePlans.map((plan, i) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              selected={selectedId === plan.id}
-              onSelect={() => setSelectedId(plan.id)}
-              index={i}
-              isRecommended={plan.tier === 'tier_a' && plan.frequency === 'yearly'}
-            />
-          ))}
-        </View>
-
-        {/* Error */}
-        {error && (
-          <Animated.View entering={FadeInDown.duration(280)} style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={16} color={C.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </Animated.View>
-        )}
-
-        {/* CTA */}
-        {selectedPlan && (
-          <Animated.View entering={FadeInDown.duration(300).delay(350)}>
-            <Pressable
-              onPress={handleSubscribe}
-              disabled={submitting || Platform.OS !== 'android'}
-              style={({ pressed }) => [
-                styles.ctaButton,
-                pressed && { transform: [{ scale: 0.985 }] },
-                (submitting || Platform.OS !== 'android') && { opacity: 0.6 },
-              ]}
-            >
-              <LinearGradient
-                colors={AuthGradients.primaryButton as unknown as [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.ctaGradient}
-              >
-                {submitting ? (
-                  <ActivityIndicator color={C.onPrimary} size="small" />
-                ) : (
-                  <>
-                    <Text style={styles.ctaText}>
-                      {Platform.OS === 'android'
-                        ? `Continue with UPI AutoPay`
-                        : 'Coming soon on iOS'}
-                    </Text>
-                    {Platform.OS === 'android' && <Ionicons name="arrow-forward" size={18} color={C.onPrimary} />}
-                  </>
-                )}
-              </LinearGradient>
-            </Pressable>
-
-            <View style={styles.ctaLegalRow}>
-              <Ionicons name="shield-checkmark" size={12} color={C.primary} />
-              <Text style={styles.ctaLegal}>Auto-debit from your UPI account. Cancel anytime.</Text>
+        {accessNotice ? (
+          <Animated.View entering={FadeInDown.duration(450)} style={s.accessNotice}>
+            <Ionicons name={accessNotice.icon} size={22} color={C.secondary} />
+            <View style={s.accessNoticeTextWrap}>
+              <Text style={s.accessNoticeTitle}>{accessNotice.title}</Text>
+              <Text style={s.accessNoticeBody}>{accessNotice.body}</Text>
             </View>
           </Animated.View>
-        )}
+        ) : null}
 
-        {/* iOS notice */}
-        {Platform.OS !== 'android' && (
-          <Animated.View entering={FadeInDown.duration(450).delay(340)} style={styles.iosNotice}>
+        {trialDaysRemaining != null && trialDaysRemaining > 0 ? (
+          <Animated.View entering={FadeInDown.duration(450).delay(80)}>
+            <TrialRibbon daysRemaining={trialDaysRemaining} />
+          </Animated.View>
+        ) : null}
+
+        <Animated.View
+          entering={FadeInDown.duration(450).delay(140)}
+          style={s.toggleRow}
+        >
+          <FrequencyToggle
+            value={frequency}
+            onChange={setFrequency}
+            savingsPct={yearlySavingsPct}
+            layoutKey={visiblePlans.length}
+          />
+        </Animated.View>
+
+        <View style={s.cardListContent}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={CARD_WIDTH + CARD_GAP}
+            decelerationRate="fast"
+            contentContainerStyle={s.cardList}
+          >
+            {visiblePlans.map((plan, i) => (
+              <SculpturalCard
+                key={plan.id}
+                plan={plan}
+                index={i}
+                onContinue={() => {
+                  if (Platform.OS !== 'android') return;
+                  logger.info('paywall', 'continue pressed', { planId: plan.id });
+                  presentCheckoutSheet(plan.id);
+                }}
+              />
+            ))}
+            <View style={{ width: CARD_INSET }} />
+          </ScrollView>
+        </View>
+
+        {error ? (
+          <Animated.View entering={FadeInDown.duration(280)} style={s.errorBox}>
+            <Ionicons name="alert-circle-outline" size={16} color={C.error} />
+            <Text style={s.errorText}>{error}</Text>
+          </Animated.View>
+        ) : null}
+
+        {Platform.OS !== 'android' ? (
+          <Animated.View entering={FadeInDown.duration(450).delay(340)} style={s.iosNotice}>
             <Ionicons name="phone-portrait-outline" size={16} color={C.onSurfaceVariant} />
-            <Text style={styles.iosNoticeText}>
+            <Text style={s.iosNoticeText}>
               UPI AutoPay is currently Android-only. Subscribe from an Android device.
             </Text>
           </Animated.View>
-        )}
+        ) : null}
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
+        <View style={{ height: 32 }} />
+      </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.surface },
-  center: { alignItems: 'center', justifyContent: 'center' },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 120 },
-  backButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+function formatPaise(paise: number): string {
+  return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
 
-  hero: { marginBottom: 20, gap: 6 },
-  eyebrow: {
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.surface, marginTop: 50 },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  scrollContent: { paddingBottom: 48 },
+
+  appBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 4 : 0,
+    paddingBottom: 0,
+  },
+  appBarButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accessNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginHorizontal: 24,
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: R.xl,
+    backgroundColor: C.secondaryContainer,
+  },
+  accessNoticeTextWrap: { flex: 1, gap: 2 },
+  accessNoticeTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 15,
+    color: C.onSurface,
+  },
+  accessNoticeBody: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: C.onSurfaceVariant,
+  },
+
+  hero: {
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 8,
+    gap: 8,
+  },
+  heroEyebrow: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 11,
     color: C.secondary,
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
-  title: {
+  heroTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 30,
-    lineHeight: 36,
+    fontSize: 48,
+    lineHeight: 52,
     color: C.onSurface,
-    letterSpacing: -0.8,
+    letterSpacing: -1.5,
+    textAlign: 'center',
   },
-  subtitle: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 15,
-    lineHeight: 22,
-    color: C.onSurfaceVariant,
+  heroTitleAccent: {
+    fontFamily: 'PlusJakartaSans-Light',
+    fontStyle: 'italic',
+    color: C.primary,
+    fontSize: 48,
+    letterSpacing: -1,
   },
 
-  /* Toggle */
-  toggleWrap: {
-    flexDirection: 'row',
-    backgroundColor: C.surfaceContainer,
-    borderRadius: R.full,
-    padding: 4,
+  toggleRow: {
+    paddingHorizontal: 24,
+    alignItems: 'center',
     marginBottom: 24,
   },
-  toggleOption: {
-    flex: 1,
-    paddingVertical: 10,
+  toggleWrap: {
+    flexDirection: 'row',
+    backgroundColor: C.surfaceContainerHigh,
     borderRadius: R.full,
+    padding: 6,
+    position: 'relative',
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 0,
+  },
+  toggleIndicator: {
+    position: 'absolute',
+    top: 6,
+    bottom: 6,
+    left: 0,
+    width: 140,
+    borderRadius: R.full,
+    backgroundColor: C.surfaceContainerLowest,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  toggleOption: {
+    width: 140,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    zIndex: 1,
   },
-  toggleOptionActive: { backgroundColor: C.primary },
   toggleLabel: {
     fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 14,
-    color: C.onSurfaceVariant,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    color: C.outline,
   },
-  toggleLabelActive: { color: C.onPrimary },
+  toggleLabelActive: { color: C.onSurface },
   savingsPill: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: R.full,
     backgroundColor: C.secondaryContainer,
   },
-  savingsPillActive: { backgroundColor: C.secondary },
   savingsPillText: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 10,
+    fontSize: 9,
     color: C.onSecondaryContainer,
-  },
-  savingsPillTextActive: { color: C.onSecondary },
-
-  /* Plan cards */
-  cardsContainer: { gap: 16, marginBottom: 24 },
-  planCard: {
-    backgroundColor: C.surfaceContainerLowest,
-    borderRadius: R.xl,
-    padding: 22,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-    elevation: 2,
-    position: 'relative',
-  },
-  planCardSelected: {
-    borderColor: C.primary,
-    shadowColor: C.primary,
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 4,
-  },
-  recommendedBadge: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: C.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: R.full,
-  },
-  recommendedBadgeText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 10,
-    color: C.onPrimary,
     letterSpacing: 0.4,
   },
-  planHeader: { marginBottom: 14 },
-  planTitleRow: {
+
+  cardListContent: {
+    paddingBottom: 24,
+    paddingTop: 12,
+  },
+  cardList: {
+    paddingLeft: CARD_INSET,
+    paddingRight: 16,
+    alignItems: 'center',
+  },
+
+  cardShadow: {
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  card: {
+    borderRadius: 40,
+    overflow: 'hidden',
+    minHeight: 460,
+    position: 'relative',
+    backgroundColor: C.surfaceContainer,
+  },
+
+  blob: {
+    position: 'absolute',
+    right: -48,
+    top: -48,
+    width: 192,
+    height: 192,
+    borderRadius: 96,
+    backgroundColor: C.surfaceContainerLowest,
+    opacity: 0.5,
+  },
+
+  cardBody: {
+    padding: 28,
+    zIndex: 2,
+  },
+
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.surfaceContainerLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    gap: 16,
+    marginBottom: 24,
   },
-  planName: {
-    fontFamily: 'PlusJakartaSans-Bold',
+
+  cardHeaderBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  cardTitle: {
+    fontFamily: 'PlusJakartaSans-Light',
+    fontWeight: '300',
     fontSize: 22,
+    lineHeight: 28,
+    marginBottom: 6,
     color: C.onSurface,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
-  radioOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: C.outlineVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOuterActive: { borderColor: C.primary },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: C.primary,
-  },
-  planTagline: {
+
+  cardTagline: {
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 13,
-    color: C.onSurfaceVariant,
     lineHeight: 18,
+    color: C.onSurfaceVariant,
   },
-  priceRow: { marginBottom: 16 },
-  featureList: { gap: 8 },
+
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginBottom: 28,
+  },
+  priceValue: {
+    fontFamily: 'PlusJakartaSans-Light',
+    fontSize: 48,
+    lineHeight: 52,
+    color: C.onSurface,
+    letterSpacing: -1.5,
+    fontVariant: ['tabular-nums'],
+  },
+  priceUnit: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 12,
+    color: C.onSurfaceVariant,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+
+  features: {
+    gap: 12,
+    marginBottom: 28,
+  },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+  },
+  featureBullet: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: C.surfaceContainerLow,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   featureText: {
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 13,
-    color: C.onSurface,
     lineHeight: 18,
+    color: C.onSurface,
     flex: 1,
   },
 
-  /* CTA */
-  ctaButton: {
+  cardCta: {
+    height: 52,
     borderRadius: R.full,
-    overflow: 'hidden',
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  ctaGradient: {
-    height: 56,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     paddingHorizontal: 24,
+    backgroundColor: C.primary,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 6,
   },
-  ctaText: {
+  cardCtaText: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 15,
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
     color: C.onPrimary,
-    letterSpacing: 0.1,
-  },
-  ctaLegalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 12,
-  },
-  ctaLegal: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 11,
-    color: C.onSurfaceVariant,
   },
 
-  /* Error */
   errorBox: {
+    marginHorizontal: 24,
     marginTop: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -550,15 +704,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   errorText: {
+    flex: 1,
     fontFamily: 'PlusJakartaSans-Medium',
     fontSize: 13,
     color: C.onErrorContainer,
-    flex: 1,
   },
 
-  /* iOS */
   iosNotice: {
-    marginTop: 20,
+    marginHorizontal: 24,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,

@@ -14,6 +14,8 @@ export interface OnboardingState {
   selected_role: OnboardingRole | null;
   onboarding_step: OnboardingStep;
   onboarding_completed: boolean;
+  /** Server-side reality check: a pairs row exists for this user (pending|active). */
+  has_active_pair?: boolean;
 }
 
 export async function getOnboardingState(): Promise<OnboardingState> {
@@ -25,6 +27,7 @@ export async function getOnboardingState(): Promise<OnboardingState> {
       selected_role: null,
       onboarding_step: 'role_selection',
       onboarding_completed: false,
+      has_active_pair: false,
     };
   }
   return (data as { data: OnboardingState }).data;

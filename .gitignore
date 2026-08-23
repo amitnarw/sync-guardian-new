@@ -7,6 +7,7 @@
 firebase-service-account.json
 supabase_status.json
 secrets/
+opencode.json
 
 # Build artifacts
 node_modules/

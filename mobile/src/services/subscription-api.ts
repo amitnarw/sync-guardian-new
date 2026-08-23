@@ -33,6 +33,10 @@ export interface SubscriptionRow {
 export interface SubscriptionStateResponse {
   hasAccess: boolean;
   reason: 'trial' | 'subscription' | 'none';
+  /** True when the caller is a child device; access mirrors the paired parent. */
+  is_child?: boolean;
+  /** Parent user who manages this child's access (children only). */
+  managed_by_parent_user_id?: string | null;
   trial: {
     status: string;
     started_at: string | null;

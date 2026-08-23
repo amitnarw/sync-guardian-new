@@ -1,14 +1,54 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { AuthColors as C, AuthFonts, AuthRadius as R } from '@/constants/auth-theme';
+import Animated, {
+  Easing,
+  FadeInDown,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import {
+  AuthColors as C,
+  AuthFonts,
+  AuthRadius as R,
+} from '@/constants/auth-theme';
+import { useAuthStore } from '@/hooks/use-auth-store';
 import { useSubscriptionStore } from '@/hooks/use-subscription-store';
 import { useAppModal } from '@/hooks/use-app-modal';
-import { cancelSubscription, listPlans, formatPaise, type Plan } from '@/services/subscription-api';
+import {
+  cancelSubscription,
+  formatPaise,
+  listPlans,
+  type Plan,
+} from '@/services/subscription-api';
 
 type ManageOrigin = 'settings' | 'plans' | undefined;
+
+const FEATURES_BY_TIER: Record<'tier_a' | 'tier_b', { title: string; sub: string }[]> = {
+  tier_a: [
+    { title: 'Real-time mirror', sub: 'Notifications appear instantly on your device.' },
+    { title: '30-day history', sub: 'Scroll through every mirror, last 30 days.' },
+    { title: 'Cancel anytime', sub: 'UPI AutoPay pauses with a single tap.' },
+  ],
+  tier_b: [
+    { title: 'Up to 4 devices', sub: 'Monitor every child in your household.' },
+    { title: 'Priority push', sub: 'Lower-latency delivery during quiet hours.' },
+    { title: 'Granular controls', sub: 'Per-app filtering and quiet windows.' },
+  ],
+};
 
 export default function ManageSubscriptionScreen() {
   const { from } = useLocalSearchParams<{ from?: string }>();
@@ -19,8 +59,17 @@ export default function ManageSubscriptionScreen() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [cancelling, setCancelling] = useState(false);
 
+  // Defense-in-depth: children never see billing screens. Their access is
+  // managed by the paired parent and surfaced on the child home screen.
+  const userRole = useAuthStore((s) => s.userRole);
   useEffect(() => {
-    listPlans().then(setPlans).catch(() => {});
+    if (userRole === 'child') {
+      router.replace('/(child)/home');
+    }
+  }, [userRole]);
+
+  useEffect(() => {
+    listPlans().then(setPlans).catch(() => undefined);
   }, []);
 
   const activePlan = plans.find((p) => p.id === subscription?.plan_id) ?? null;
@@ -55,6 +104,11 @@ export default function ManageSubscriptionScreen() {
     });
   };
 
+  const handleChangePlan = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    router.push('/(paywall)/plans');
+  };
+
   const handleClose = () => {
     if (origin === 'settings') {
       if (router.canGoBack()) router.back();
@@ -66,146 +120,233 @@ export default function ManageSubscriptionScreen() {
 
   const formatDate = (iso: string | null) => {
     if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(iso).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
   };
 
-  if (loading && !subscription) {
+  const trialActive = reason === 'trial' && trialDaysRemaining != null && trialDaysRemaining > 0;
+
+  if (loading && !subscription && !trialActive) {
     return (
-      <View style={[s.container, s.center]}>
+      <SafeAreaView style={[s.root, s.center]} edges={['top', 'bottom']}>
         <ActivityIndicator color={C.primary} size="large" />
-      </View>
+      </SafeAreaView>
     );
   }
 
-  const statusLabel: Record<string, string> = {
-    pending: 'Pending',
-    active: 'Active',
-    paused: 'Paused',
-    expired: 'Expired',
-    cancelled: 'Cancelled',
-    revoked: 'Cancelled',
-  };
-
-  const headerTitle = subscription ? 'Manage subscription' : 'Subscription';
+  const features = activePlan ? FEATURES_BY_TIER[activePlan.tier] ?? [] : [];
 
   return (
-    <View style={s.container}>
-      {/* CONTEXTUAL HEADER */}
-      <View style={s.header}>
-        {origin === 'settings' ? (
-          <TouchableOpacity onPress={handleClose} style={s.headerButton} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back">
-            <Ionicons name="chevron-back" size={24} color={C.onSurface} />
-          </TouchableOpacity>
-        ) : (
-          <View style={s.headerSpacer} />
-        )}
-        <Text style={s.headerTitle}>{headerTitle}</Text>
-        {origin !== 'settings' ? (
-          <TouchableOpacity onPress={handleClose} style={s.headerPill} hitSlop={6} accessibilityRole="button" accessibilityLabel="Done">
-            <Text style={s.headerPillText}>Done</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={s.headerSpacer} />
-        )}
-      </View>
+    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
+      <AppBar origin={origin} onClose={handleClose} />
 
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        {reason === 'trial' && trialDaysRemaining != null && trialDaysRemaining > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400)} style={s.trialBanner}>
-            <Ionicons name="hourglass-outline" size={18} color={C.onTertiaryContainer} />
-            <Text style={s.trialBannerText}>
-              {trialDaysRemaining} {trialDaysRemaining === 1 ? 'day' : 'days'} left in your free trial
-            </Text>
-          </Animated.View>
+        <Animated.View entering={FadeInDown.duration(500)} style={s.heroSection}>
+          <Text style={s.heroEyebrow}>Subscription</Text>
+          <Text style={s.heroTitle}>
+            Manage Your{'\n'}
+            <Text style={s.heroTitleAccent}>Journey</Text>
+          </Text>
+          <Text style={s.heroSubtitle}>
+            Review your current plan, explore benefits, and update your billing preferences in one
+            mindful space.
+          </Text>
+        </Animated.View>
+
+        {trialActive ? (
+          <Animated.View
+            entering={FadeInDown.duration(450).delay(40)}
+            style={s.heroBlob}
+            pointerEvents="none"
+          />
         ) : null}
 
         {subscription ? (
           <>
-            <Animated.View entering={FadeInDown.duration(400).delay(60)} style={s.card}>
-              <View style={s.cardHeader}>
-                <Text style={s.cardLabel}>Current plan</Text>
-                <View style={[s.statusPill, { backgroundColor: subscription.status === 'active' ? C.primaryContainer : C.surfaceContainer }]}>
-                  <Text style={[s.statusText, { color: subscription.status === 'active' ? C.onPrimaryContainer : C.onSurfaceVariant }]}>
-                    {statusLabel[subscription.status] ?? subscription.status}
+            <Animated.View entering={FadeInDown.duration(500).delay(80)} style={s.card}>
+              <View style={s.cardBlob} pointerEvents="none" />
+              <Animated.View entering={FadeInDown.duration(500).delay(150)}>
+                <View style={s.cardHeader}>
+                  <View style={s.cardIconWrap}>
+                    <Ionicons name="sparkles" size={24} color={C.primary} />
+                  </View>
+                  <View style={s.cardHeaderText}>
+                    <View style={s.premiumBadge}>
+                      <Text style={s.premiumBadgeText}>Premium</Text>
+                    </View>
+                    <Text style={s.planName}>
+                      {activePlan?.name ?? subscription.plan_id} Plan
+                    </Text>
+                  </View>
+                </View>
+              </Animated.View>
+
+              <Animated.View entering={FadeInDown.duration(500).delay(220)}>
+                <View style={s.priceRow}>
+                  <Text style={s.priceValue}>
+                    {activePlan ? formatPaise(activePlan.amount_paise) : '—'}
+                  </Text>
+                  <Text style={s.priceUnit}>
+                    /{activePlan?.frequency === 'monthly' ? 'mo' : 'yr'}
                   </Text>
                 </View>
-              </View>
+                <View style={s.renewalRow}>
+                  <Ionicons name="calendar-outline" size={16} color={C.onSurfaceVariant} />
+                  <Text style={s.renewalText}>
+                    {subscription.next_charge_at
+                      ? `Renews on ${formatDate(subscription.next_charge_at)}`
+                      : subscription.current_cycle_end
+                        ? `Current period ends ${formatDate(subscription.current_cycle_end)}`
+                        : 'Auto-debit scheduled'}
+                  </Text>
+                </View>
+              </Animated.View>
 
-              <Text style={s.planName}>{activePlan?.name ?? subscription.plan_id}</Text>
-              {activePlan ? (
-                <Text style={s.planPriceRow}>
-                  <Text style={s.planPrice}>{formatPaise(activePlan.amount_paise)}</Text>
-                  <Text style={s.planPeriod}>  ·  per {activePlan.frequency === 'monthly' ? 'month' : 'year'}</Text>
-                </Text>
+              {features.length > 0 ? (
+                <Animated.View
+                  entering={FadeInDown.duration(500).delay(300)}
+                  style={s.benefitsSection}
+                >
+                  <Text style={s.benefitsHeading}>Active Benefits</Text>
+                  {features.map((f, i) => (
+                    <View key={`${activePlan?.id}-${i}`} style={s.benefitRow}>
+                      <View style={s.benefitIcon}>
+                        <Ionicons name="checkmark" size={14} color={C.primary} />
+                      </View>
+                      <View style={s.benefitText}>
+                        <Text style={s.benefitTitle}>{f.title}</Text>
+                        <Text style={s.benefitSub}>{f.sub}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </Animated.View>
               ) : null}
 
-              <View style={s.divider} />
+              <View style={s.actionStack}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+                      () => undefined,
+                    );
+                    handleChangePlan();
+                  }}
+                  style={({ pressed }) => [
+                    s.primaryBtn,
+                    pressed && { transform: [{ scale: 0.97 }] },
+                  ]}
+                >
+                  <Text style={s.primaryBtnText}>Change Plan</Text>
+                  <Ionicons name="arrow-forward" size={16} color={C.onPrimary} />
+                </Pressable>
 
-              <DetailRow label="Next charge" value={formatDate(subscription.next_charge_at)} />
-              <DetailRow label="Current period ends" value={formatDate(subscription.current_cycle_end)} />
-              <DetailRow
-                label="Last charged"
-                value={subscription.last_charge_amount_paise ? formatPaise(subscription.last_charge_amount_paise) : '—'}
-              />
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+                      () => undefined,
+                    );
+                    handleClose();
+                  }}
+                  style={({ pressed }) => [
+                    s.secondaryBtn,
+                    pressed && { transform: [{ scale: 0.97 }] },
+                  ]}
+                >
+                  <Text style={s.secondaryBtnText}>View Billing History</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+                      () => undefined,
+                    );
+                    handleCancel();
+                  }}
+                  disabled={cancelling}
+                  style={({ pressed }) => [
+                    s.cancelBtn,
+                    pressed && { opacity: 0.7 },
+                    cancelling && { opacity: 0.5 },
+                  ]}
+                >
+                  <Text style={s.cancelBtnText}>Cancel Subscription</Text>
+                </Pressable>
+              </View>
             </Animated.View>
 
-            <Animated.View entering={FadeInDown.duration(400).delay(120)}>
-              <TouchableOpacity
-                onPress={handleCancel}
-                disabled={cancelling}
-                activeOpacity={0.85}
-                style={s.cancelBtn}
+            {trialActive ? (
+              <Animated.View
+                entering={FadeInDown.duration(450).delay(120)}
+                style={s.trialRibbon}
               >
-                {cancelling ? (
-                  <ActivityIndicator color={C.error} />
-                ) : (
-                  <Text style={s.cancelBtnText}>Cancel subscription</Text>
-                )}
-              </TouchableOpacity>
-              <Text style={s.cancelHint}>You will keep access until the end of the current period.</Text>
-            </Animated.View>
+                <Ionicons name="hourglass-outline" size={18} color={C.onTertiaryContainer} />
+                <Text style={s.trialRibbonText}>
+                  {trialDaysRemaining} {trialDaysRemaining === 1 ? 'day' : 'days'} left in your
+                  free trial
+                </Text>
+              </Animated.View>
+            ) : null}
           </>
         ) : (
-          <Animated.View entering={FadeInDown.duration(400)} style={s.noSub}>
-            <View style={s.noSubIconWrap}>
+          <Animated.View entering={FadeInDown.duration(450)} style={s.emptyWrap}>
+            <View style={s.emptyIconWrap}>
               <Ionicons name="card-outline" size={28} color={C.onSurfaceVariant} />
             </View>
-            <Text style={s.noSubTitle}>No active subscription</Text>
-            <Text style={s.noSubText}>Choose a plan to keep your monitoring running.</Text>
-            <TouchableOpacity onPress={() => router.push('/(paywall)/plans')} activeOpacity={0.85} style={s.viewPlansBtn}>
-              <Text style={s.viewPlansBtnText}>View plans</Text>
+            <Text style={s.emptyTitle}>
+              {trialActive ? 'You are on a free trial' : 'No active subscription'}
+            </Text>
+            <Text style={s.emptyText}>
+              {trialActive
+                ? `You have ${trialDaysRemaining ?? 0} day${trialDaysRemaining === 1 ? '' : 's'} left. Subscribe to keep monitoring uninterrupted.`
+                : 'Choose a plan to keep your monitoring running.'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(paywall)/plans')}
+              activeOpacity={0.85}
+              style={s.emptyCta}
+            >
+              <Text style={s.emptyCtaText}>
+                {trialActive ? 'View Plans' : 'View Plans'}
+              </Text>
+              <Ionicons name="arrow-forward" size={16} color={C.onPrimary} />
             </TouchableOpacity>
           </Animated.View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function AppBar({ origin, onClose }: { origin: ManageOrigin; onClose: () => void }) {
+  const showBack = origin === 'settings';
   return (
-    <View style={s.detailRow}>
-      <Text style={s.detailLabel}>{label}</Text>
-      <Text style={s.detailValue}>{value}</Text>
+    <View style={s.appBar}>
+      {showBack ? (
+        <TouchableOpacity onPress={onClose} hitSlop={10} style={s.appBarButton}>
+          <Ionicons name="chevron-back" size={22} color={C.onSurface} />
+        </TouchableOpacity>
+      ) : (
+        <View style={s.appBarButtonSpacer} />
+      )}
+      <Text style={s.appBarTitle}>Nurturing Atelier</Text>
+      {showBack ? (
+        <View style={s.appBarButtonSpacer} />
+      ) : (
+        <TouchableOpacity onPress={onClose} hitSlop={6} style={s.appBarPill}>
+          <Text style={s.appBarPillText}>Done</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: C.surface,
-  },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 48,
-  },
-  header: {
+  root: { flex: 1, backgroundColor: C.surface },
+  center: { alignItems: 'center', justifyContent: 'center' },
+
+  appBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -213,25 +354,20 @@ const s = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? 14 : 6,
     paddingBottom: 12,
   },
-  headerButton: {
+  appBarTitle: {
+    ...AuthFonts.titleMedium,
+    color: C.onSurface,
+    fontWeight: '700',
+  },
+  appBarButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerSpacer: {
-    width: 40,
-    height: 40,
-  },
-  headerTitle: {
-    ...AuthFonts.titleMedium,
-    color: C.onSurface,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
-  },
-  headerPill: {
+  appBarButtonSpacer: { width: 40, height: 40 },
+  appBarPill: {
     minWidth: 40,
     height: 40,
     paddingHorizontal: 14,
@@ -240,13 +376,239 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerPillText: {
+  appBarPillText: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 13,
     color: C.onPrimaryContainer,
     letterSpacing: 0.2,
   },
-  trialBanner: {
+
+  content: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+
+  heroSection: { marginBottom: 24, gap: 8, paddingTop: 8 },
+  heroEyebrow: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    color: C.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  heroTitle: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 52,
+    lineHeight: 56,
+    color: C.onBackground,
+    letterSpacing: -1.6,
+  },
+  heroTitleAccent: {
+    fontFamily: 'PlusJakartaSans-Light',
+    fontStyle: 'italic',
+    color: C.primary,
+    fontSize: 52,
+    letterSpacing: -1,
+  },
+  heroSubtitle: {
+    ...AuthFonts.bodyMedium,
+    fontSize: 16,
+    lineHeight: 24,
+    color: C.onSurfaceVariant,
+    marginTop: 4,
+    maxWidth: 320,
+  },
+
+  heroBlob: {
+    position: 'absolute',
+    top: 110,
+    right: -80,
+    width: 240,
+    height: 240,
+    borderRadius: 96,
+    backgroundColor: C.primaryContainer,
+    opacity: 0.2,
+  },
+
+  card: {
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 32,
+    padding: 28,
+    marginBottom: 24,
+    overflow: 'hidden',
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 32 },
+    shadowOpacity: 0.06,
+    shadowRadius: 64,
+    elevation: 4,
+  },
+  cardBlob: {
+    position: 'absolute',
+    top: -64,
+    left: -64,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    backgroundColor: C.primaryContainer,
+    opacity: 0.3,
+  },
+
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 24,
+  },
+  cardIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardHeaderText: { flex: 1, gap: 4 },
+  premiumBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: R.full,
+    backgroundColor: C.surfaceContainer,
+  },
+  premiumBadgeText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 11,
+    color: C.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  planName: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 22,
+    color: C.onBackground,
+    letterSpacing: -0.3,
+  },
+
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginBottom: 8,
+  },
+  priceValue: {
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 36,
+    color: C.onBackground,
+    letterSpacing: -0.6,
+    fontVariant: ['tabular-nums'],
+  },
+  priceUnit: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 18,
+    color: C.onSurfaceVariant,
+  },
+
+  renewalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 24,
+  },
+  renewalText: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    color: C.onSurfaceVariant,
+  },
+
+  benefitsSection: { marginBottom: 24 },
+  benefitsHeading: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 13,
+    color: C.onBackground,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  benefitIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(72,103,48,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  benefitText: { flex: 1 },
+  benefitTitle: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 15,
+    color: C.onBackground,
+    marginBottom: 2,
+  },
+  benefitSub: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 13,
+    color: C.onSurfaceVariant,
+    lineHeight: 18,
+  },
+
+  actionStack: { gap: 12, marginTop: 8 },
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: R.full,
+    backgroundColor: C.primary,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  primaryBtnText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 14,
+    color: C.onPrimary,
+    letterSpacing: 0.1,
+  },
+  secondaryBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: R.full,
+    backgroundColor: C.surfaceContainerHigh,
+  },
+  secondaryBtnText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 14,
+    color: C.onSurface,
+    letterSpacing: 0.1,
+  },
+  cancelBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  cancelBtnText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 11,
+    color: C.onSurfaceVariant,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+
+  trialRibbon: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -254,142 +616,59 @@ const s = StyleSheet.create({
     borderRadius: R.full,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginBottom: 20,
     alignSelf: 'flex-start',
+    marginTop: 8,
   },
-  trialBannerText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 13,
+  trialRibbonText: {
+    ...AuthFonts.labelLarge,
     color: C.onTertiaryContainer,
-    flex: 1,
   },
-  card: {
-    backgroundColor: C.surfaceContainerLowest,
-    borderRadius: R.xl,
-    padding: 22,
-    marginBottom: 20,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardLabel: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: C.onSurfaceVariant,
-  },
-  statusPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: R.full,
-  },
-  statusText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  planName: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 22,
-    color: C.onSurface,
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  planPriceRow: {
-    marginBottom: 12,
-  },
-  planPrice: {
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontSize: 28,
-    color: C.onSurface,
-    letterSpacing: -0.5,
-    fontVariant: ['tabular-nums'],
-  },
-  planPeriod: {
-    ...AuthFonts.bodyMedium,
-    color: C.onSurfaceVariant,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: C.surfaceContainerHigh,
-    marginVertical: 14,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  detailLabel: {
-    ...AuthFonts.bodySmall,
-    color: C.onSurfaceVariant,
-  },
-  detailValue: {
-    ...AuthFonts.bodyMedium,
-    color: C.onSurface,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-  },
-  cancelBtn: {
-    height: 52,
-    borderRadius: R.full,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  cancelBtnText: {
-    ...AuthFonts.titleSmall,
-    color: C.error,
-    fontWeight: '700',
-  },
-  cancelHint: {
-    ...AuthFonts.labelMedium,
-    color: C.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  noSub: {
+
+  emptyWrap: {
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 56,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
   },
-  noSubIconWrap: {
+  emptyIconWrap: {
     width: 56,
     height: 56,
     borderRadius: 28,
     backgroundColor: C.surfaceContainer,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  noSubTitle: {
+  emptyTitle: {
     ...AuthFonts.titleMedium,
     color: C.onSurface,
     fontWeight: '700',
-  },
-  noSubText: {
-    ...AuthFonts.bodySmall,
-    color: C.onSurfaceVariant,
     textAlign: 'center',
   },
-  viewPlansBtn: {
+  emptyText: {
+    ...AuthFonts.bodyMedium,
+    color: C.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyCta: {
     marginTop: 16,
     paddingHorizontal: 24,
-    height: 48,
+    paddingVertical: 14,
     borderRadius: R.full,
     backgroundColor: C.primary,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
   },
-  viewPlansBtnText: {
+  emptyCtaText: {
     ...AuthFonts.titleSmall,
     color: C.onPrimary,
     fontWeight: '700',
   },
 });
+
+void Easing;
+void useAnimatedStyle;
+void withRepeat;
+void withTiming;

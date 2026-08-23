@@ -3,6 +3,7 @@
 
 import { AuthError } from './auth-verifier.ts'
 import { ValidationError } from './validation.ts'
+import { PhonePeApiError } from './phonepe-client.ts'
 
 type LogLevel = 'info' | 'warn' | 'error'
 
@@ -86,6 +87,12 @@ export function mapError(error: unknown): ErrorResponse {
   }
   if (error instanceof ValidationError) {
     return { status: 400, error: 'Invalid request.' }
+  }
+  if (error instanceof PhonePeApiError) {
+    return {
+      status: 502,
+      error: 'Payment service is currently unavailable. Please try again in a moment.',
+    }
   }
 
   const name = error instanceof Error ? error.name : ''

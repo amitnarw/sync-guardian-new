@@ -56,19 +56,43 @@ serve(async (req) => {
 
     if (error) throw new Error(error.message)
 
+    // Advance onboarding for both users. A transient failure here would leave
+    // the rows stuck at a pre-pairing step while the pair is already active —
+    // which used to funnel paired users back into /pairing on every launch —
+    // so retry a few times and escalate to error logging if all attempts fail.
+    const upsertOnboardingWithRetry = async (
+      userId: string,
+      updates: Parameters<typeof upsertOnboardingState>[1],
+      attempts = 3,
+    ): Promise<void> => {
+      let lastErr: unknown
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+          await upsertOnboardingState(userId, updates)
+          return
+        } catch (err) {
+          lastErr = err
+          if (attempt < attempts) {
+            await new Promise((resolve) => setTimeout(resolve, 150 * attempt))
+          }
+        }
+      }
+      throw lastErr
+    }
+
     try {
       const pair = data as any
-      await upsertOnboardingState(user.id, {
+      await upsertOnboardingWithRetry(user.id, {
         selected_role: 'parent',
         onboarding_step: 'app_selection',
       })
       if (pair?.child_user_id) {
-        await upsertOnboardingState(pair.child_user_id, {
+        await upsertOnboardingWithRetry(pair.child_user_id, {
           onboarding_step: 'app_selection',
         })
       }
     } catch (obErr) {
-      logger.warn('claim-pairing-token', 'onboarding upsert failed', { error: String(obErr) })
+      logger.error('claim-pairing-token', 'onboarding upsert failed after retries', obErr instanceof Error ? obErr.message : String(obErr))
     }
 
     try {
