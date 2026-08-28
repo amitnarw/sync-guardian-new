@@ -77,8 +77,8 @@ export const SOURCE_APP_THEMES: Record<string, SourceAppTheme> = {
   'com.facebook.katana': {
     accent: '#1877F2',
     accentSoft: '#d4e3fb',
-    isChat: false,
-    bubbleText: '#ffffff',
+    isChat: true,
+    bubbleText: '#050505',
     label: 'Facebook',
   },
   'com.instagram.android': {

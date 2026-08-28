@@ -56,10 +56,25 @@ serve(async (req) => {
       )
     }
 
+    // `!isOwner` guard above already short-circuits when `deviceIds` is
+    // empty (an authenticated user with no devices cannot own the pair).
+    // The defensive scoping below also requires a non-empty array, so
+    // belt-and-suspenders: refuse to proceed if either side is empty.
+    if (deviceIds.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No devices registered for this user' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 },
+      )
+    }
+
     const { error: updateError } = await adminClient
       .from('pairs')
       .update({ status: 'revoked' })
       .eq('id', pairId)
+      // Defense in depth: even though we verified ownership above, scope
+      // the mutation to pairs where the caller is one of the device owners
+      // so a forged payload can't revoke an unrelated pair.
+      .or(`parent_device_id.in.(${deviceIds.join(',')}),child_device_id.in.(${deviceIds.join(',')})`)
 
     if (updateError) throw updateError
 

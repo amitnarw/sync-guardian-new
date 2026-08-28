@@ -84,10 +84,29 @@ serve(async (req) => {
 
     if (!result.success && result.unregisteredToken) {
       logger.warn('ping-child', 'clearing stale push token', { childDeviceId })
-      await adminClient
-        .from('devices')
-        .update({ push_token: null })
-        .eq('id', childDeviceId)
+      // Defense in depth: scope the token clear to the same pair we
+      // verified above. The pair's parent_device_id is owned by the
+      // caller, so a forged child_device_id cannot trigger this UPDATE.
+      // If we can't re-confirm the pair exists and is active (e.g. it
+      // was revoked between the ownership check and now), skip the
+      // UPDATE entirely — better to leave a stale token than to wipe
+      // a valid one through a chained query that may have misfired.
+      const { data: livePair } = await adminClient
+        .from('pairs')
+        .select('id')
+        .eq('parent_device_id', pairData.parent_device_id)
+        .eq('child_device_id', childDeviceId)
+        .in('status', ['active', 'pending'])
+        .limit(1)
+        .maybeSingle()
+      if (livePair) {
+        await adminClient
+          .from('devices')
+          .update({ push_token: null })
+          .eq('id', childDeviceId)
+      } else {
+        logger.warn('ping-child', 'pair no longer live, skipping token clear', { childDeviceId })
+      }
     }
 
     return new Response(

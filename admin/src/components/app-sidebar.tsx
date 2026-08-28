@@ -7,6 +7,7 @@ import {
   Bell,
   FileText,
   Filter,
+  Gift,
   History,
   Hourglass,
   IdCard,
@@ -97,6 +98,18 @@ export function AppSidebar() {
                   <Link href="/">
                     <LayoutDashboard />
                     <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/billing" || pathname.startsWith("/billing/")}
+                  className="rounded-full data-[active=true]:bg-[#c9eea9] data-[active=true]:text-[#0b2000]"
+                >
+                  <Link href="/billing">
+                    <Gift />
+                    <span>Billing Control</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

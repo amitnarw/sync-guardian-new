@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { StyleSheet, View, Dimensions, Text, TouchableOpacity, BackHandler, RefreshControl, Platform } from 'react-native';
+import { StyleSheet, View, Dimensions, Text, BackHandler, RefreshControl, Platform } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -139,8 +140,15 @@ export default function ChildHome() {
     };
   }, []);
 
+  const isFocused = useIsFocused();
   useEffect(() => {
+    if (!isFocused) return;
+
     const backAction = () => {
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
       showModal({
         title: 'Exit App',
         message: 'Are you sure you want to exit?',
@@ -154,7 +162,7 @@ export default function ChildHome() {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [showModal]);
+  }, [isFocused, showModal]);
 
   // Fetch pair state + subscribe to all changes on this pair row
   useEffect(() => {
@@ -496,64 +504,10 @@ export default function ChildHome() {
               </View>
             </View>
 
-            <DiagnosticPanel />
             <View style={s.bottomSpacer} />
           </EdgeFadeScrollView>
       </BlurTargetView>
     </ThemedView>
-  );
-}
-
-// ============================================================
-// DIAGNOSTIC PANEL (collapsible - shows capture/ingest status)
-// ============================================================
-function DiagnosticPanel() {
-  const {
-    lastCaptureAt,
-    lastCapturePackage,
-    lastIngestAt,
-    lastIngestError,
-    lastIngestDropped,
-  } = useAuthStore();
-  const [expanded, setExpanded] = useState(false);
-
-  if (!lastCaptureAt && !lastIngestAt && !lastIngestError && !lastIngestDropped) {
-    return null;
-  }
-
-  const captureTime = lastCaptureAt ? new Date(lastCaptureAt).toLocaleTimeString() : '-';
-  const ingestTime = lastIngestAt ? new Date(lastIngestAt).toLocaleTimeString() : '-';
-
-  return (
-    <TouchableOpacity onPress={() => setExpanded(!expanded)} activeOpacity={0.7} style={s.diagPanel}>
-      <View style={s.diagHeader}>
-        <Ionicons name="pulse-outline" size={16} color={C.primary} />
-        <Text style={s.diagTitle}>
-          {lastCaptureAt ? 'Capture active' : 'No capture yet'}
-        </Text>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={C.onSurfaceVariant} />
-      </View>
-      {expanded && (
-        <View style={s.diagBody}>
-          <Text style={s.diagLine}>
-            Last capture: {captureTime}{lastCapturePackage ? ` (${lastCapturePackage})` : ''}
-          </Text>
-          <Text style={s.diagLine}>
-            Last ingested: {ingestTime}
-          </Text>
-          {lastIngestError && (
-            <Text style={s.diagError}>Error: {lastIngestError}</Text>
-          )}
-          {lastIngestDropped && (
-            <Text style={s.diagWarn}>Dropped by server: {lastIngestDropped}</Text>
-          )}
-          <Text style={s.diagHint}>
-            Tip: Keep app open/backgrounded (don&apos;t force-close).{'\n'}
-            WhatsApp must be backgrounded when msg arrives.
-          </Text>
-        </View>
-      )}
-    </TouchableOpacity>
   );
 }
 
@@ -772,54 +726,6 @@ const s = StyleSheet.create({
 
   bottomSpacer: {
     height: 130,
-  },
-
-  /* ---------- Diagnostic Panel ---------- */
-  diagPanel: {
-    marginTop: 16,
-    backgroundColor: C.surfaceContainerLow,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: C.outlineVariant,
-  },
-  diagHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  diagTitle: {
-    flex: 1,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    color: C.onSurface,
-  },
-  diagBody: {
-    marginTop: 10,
-    gap: 6,
-  },
-  diagLine: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 12,
-    color: C.onSurfaceVariant,
-  },
-  diagError: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 12,
-    color: C.error,
-  },
-  diagWarn: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 12,
-    color: C.secondary,
-  },
-  diagHint: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 11,
-    color: C.onSurfaceVariant,
-    lineHeight: 16,
-    marginTop: 4,
-    opacity: 0.7,
   },
 
   waitingBody: {

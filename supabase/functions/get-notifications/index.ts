@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.192.0/http/server.ts"
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { verifyAuth } from '../_shared/auth-verifier.ts'
 import { getAdminClient } from '../_shared/supabase-admin.ts'
-import { isValidUUID } from '../_shared/validation.ts'
+import { isValidUUID, isValidISODate } from '../_shared/validation.ts'
 import { decryptNotification } from '../_shared/notification-crypto.ts'
 import { logger, mapError } from '../_shared/logger.ts'
 
@@ -17,7 +17,7 @@ serve(async (req) => {
     const adminClient = getAdminClient()
     const body = await req.json()
 
-    const { limit = 50, before, since, ids, pair_id } = body as Record<string, unknown>
+    const { limit = 50, before, before_id, since, ids, pair_id, pair_ids } = body as Record<string, unknown>
 
     // Resolve the user's own pair(s) - always verify ownership
     const { data: userPairs } = await adminClient
@@ -30,7 +30,15 @@ serve(async (req) => {
     const userPairIds = new Set((userPairs ?? []).map(p => p.id))
 
     let pairIds: string[] = []
-    if (pair_id && isValidUUID(pair_id)) {
+    if (pair_ids && Array.isArray(pair_ids)) {
+      // Explicit subset request (used for "select specific children" from the mobile UI).
+      // Every requested id MUST be owned by the caller — silently filter rather than error.
+      const requested = (pair_ids as unknown[]).filter((v): v is string => typeof v === 'string' && isValidUUID(v))
+      pairIds = requested.filter((id) => userPairIds.has(id))
+      // If the caller requested non-empty but we resolved none, it means none of the
+      // requested ids belong to them — return an empty result rather than leaking anyone.
+      if (requested.length > 0 && pairIds.length === 0) pairIds = []
+    } else if (pair_id && isValidUUID(pair_id)) {
       const targetPair = (userPairs ?? []).find(p => p.id === pair_id)
       if (targetPair) {
         // Retrieve all pairs (active, pending, revoked) between the same parent and child
@@ -66,16 +74,31 @@ serve(async (req) => {
       .in('pair_id', pairIds)
 
     if (ids && Array.isArray(ids)) {
-      query = query.in('id', ids.filter(isValidUUID))
+      // Always scope requested IDs to the caller's own pairs so a user
+      // cannot fetch another pair's notifications by guessing IDs.
+      query = query
+        .in('id', ids.filter(isValidUUID))
+        .in('pair_id', pairIds)
     } else {
-      if (since) {
-        query = query.gte('notification_posted_at', since as string)
+      if (since && isValidISODate(since)) {
+        query = query.gte('notification_posted_at', since)
       }
-      if (before) {
-        query = query.lt('notification_posted_at', before as string)
+      if (before && isValidISODate(before)) {
+        // Composite cursor: rows strictly before (before, before_id) in the
+        // (notification_posted_at DESC, id DESC) ordering. This prevents
+        // rows that share the same timestamp as `before` from being skipped
+        // or duplicated when paginating.
+        if (before_id && isValidUUID(before_id)) {
+          query = query.or(
+            `notification_posted_at.lt.${before},and(notification_posted_at.eq.${before},id.lt.${before_id})`,
+          )
+        } else {
+          query = query.lt('notification_posted_at', before)
+        }
       }
       query = query
         .order('notification_posted_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(queryLimit)
     }
 

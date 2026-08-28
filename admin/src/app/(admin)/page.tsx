@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import {
   Bell,
+  Gift,
   Hourglass,
   Link2,
   QrCode,
@@ -45,6 +46,8 @@ interface DashboardStats {
   };
   totalNotifications: number;
   trialsActive: number;
+  trialsExpiringSoon: number;
+  giftedActive: number;
   tokensActive: number;
   plansActive: number;
 }
@@ -157,9 +160,16 @@ export default function DashboardPage() {
           sub={`${stats.subscriptions.cancelled} cancelled · ${stats.subscriptions.expired} expired`}
         />
         <StatCard
-          title="Pending Subs"
-          value={stats.subscriptions.pending}
+          title="Gifted Subs"
+          value={stats.giftedActive}
+          icon={Gift}
+          sub="Admin-granted"
+        />
+        <StatCard
+          title="Trials expiring soon"
+          value={stats.trialsExpiringSoon}
           icon={Hourglass}
+          sub="Next 3 days"
         />
         <StatCard
           title="Unconsumed Tokens"

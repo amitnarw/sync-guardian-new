@@ -230,6 +230,14 @@ export const flushBuffer = async () => {
             if (retry <= 5) remaining.push({ ...n, _retryCount: retry });
           }
           logger.info('Flush batch re-buffered: pair inactive');
+        } else if (data && (data as any).reason === 'no_access') {
+          // Parent's trial/subscription has lapsed. Terminal drop — do not
+          // re-buffer. Once renewed, new notifications resume; these ones
+          // are intentionally lost (per product decision: stop capture
+          // entirely while access is expired).
+          logger.info(
+            `Flush batch dropped: parent has no active access (${batch.length} item(s))`,
+          );
         } else {
           // Track sent notification keys
           for (const n of batch) {

@@ -138,6 +138,15 @@ serve(async (req) => {
     try {
       const msg = error instanceof Error ? error.message : ''
       const lower = msg.toLowerCase()
+      if (lower.includes('parent_child_limit_reached')) {
+        return new Response(
+          JSON.stringify({
+            error: 'PARENT_CHILD_LIMIT_REACHED',
+            message: 'You\'ve reached the connected child devices limit on your current plan.',
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 402 },
+        )
+      }
       if (lower.includes('expired') || (lower.includes('invalid') && lower.includes('pair'))) {
         return new Response(
           JSON.stringify({ error: 'Invalid or expired pairing code.' }),

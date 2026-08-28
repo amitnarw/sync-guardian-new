@@ -8,8 +8,10 @@ import { logger } from '@/services/logger'
 
 export function usePairStatusGuard(role: 'parent' | 'child') {
   const pairId = useAuthStore((s) => s.pairId)
+  const deviceId = useAuthStore((s) => s.deviceId)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const clearPair = useAuthStore((s) => s.clearPair)
+  const markPairRevoked = useAuthStore((s) => s.markPairRevoked)
   const { showModal } = useAppModal()
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const redirectingRef = useRef(false)
@@ -30,9 +32,21 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
         icon: 'warning',
         primaryButton: 'Okay',
       })
+      markPairRevoked()
     }
-  }, [role, clearPair, showModal])
+  }, [role, clearPair, showModal, markPairRevoked])
 
+  // Allow the parent disconnect modal to surface again the next time a
+  // different child's status changes.
+  const lastShownPairRef = useRef<string | null>(null)
+  const showRevokedModal = useCallback(
+    (pairIdValue: string) => {
+      if (lastShownPairRef.current === pairIdValue && shownRef.current) return;
+      lastShownPairRef.current = pairIdValue;
+      handleRevoked();
+    },
+    [handleRevoked],
+  )
   // When the child has no pairId but is authenticated, redirect to pairing.
   // Handles cold-restart after revocation (persisted pairId=null) and the
   // case where FCM clears pairId while the app is backgrounded.
@@ -44,7 +58,73 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
     router.replace('/pairing')
   }, [pairId, isAuthenticated, role])
 
+  // Parents: watch every active/pending pair that belongs to this parent
+  // device. Only a transition INTO `revoked` (UPDATE) or a DELETE triggers
+  // a refresh/disconnect modal; active/pending transitions do not.
+  // Children: continue watching the single pairId (their own pairing).
   useEffect(() => {
+    if (role === 'parent') {
+      if (!isValidUUID(deviceId)) return
+
+      const validate = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('pairs')
+            .select('id, status')
+            .eq('parent_device_id', deviceId)
+            .eq('status', 'revoked')
+          if (error) return
+          if (data && data.length > 0) {
+            const latest = data[data.length - 1]
+            showRevokedModal(latest.id)
+            markPairRevoked()
+          }
+        } catch (err) {
+          logger.warn('usePairStatusGuard: parent validate error', err)
+        }
+      }
+      validate()
+
+      const channel = supabase
+        .channel(`pairs_parent_${deviceId}_${Math.random().toString(36).slice(2)}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'pairs',
+            filter: `parent_device_id=eq.${deviceId}`,
+          },
+          (payload) => {
+            const eventType = (payload as any).eventType
+            const newRow = payload.new as any
+            const oldRow = payload.old as any
+            if (eventType === 'DELETE') {
+              if (oldRow?.id) showRevokedModal(oldRow.id)
+              markPairRevoked()
+              return
+            }
+            if (newRow?.status === 'revoked' && oldRow?.status !== 'revoked') {
+              showRevokedModal(newRow.id)
+            }
+          },
+        )
+        .subscribe()
+
+      channelRef.current = channel
+
+      return () => {
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current)
+          channelRef.current = null
+        }
+        // Reset modal state so the next mount can surface disconnects
+        // again, even for the same pair.
+        shownRef.current = false
+        lastShownPairRef.current = null
+      }
+    }
+
     if (!isValidUUID(pairId)) return
 
     const validate = async () => {
@@ -68,12 +148,17 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'pairs',
           filter: `id=eq.${pairId}`,
         },
         (payload) => {
+          const eventType = (payload as any).eventType
+          if (eventType === 'DELETE') {
+            handleRevoked()
+            return
+          }
           const newStatus = (payload.new as any)?.status
           if (newStatus === 'revoked') {
             handleRevoked()
@@ -86,12 +171,13 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
 
     return () => {
       shownRef.current = false
+      lastShownPairRef.current = null
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
     }
-  }, [pairId, handleRevoked])
+  }, [pairId, deviceId, role, handleRevoked, markPairRevoked, showRevokedModal])
 
   // Reset the redirect guard when the pairing screen re-mounts with a valid
   // pairId (user re-paired successfully).

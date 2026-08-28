@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, View, TouchableOpacity, Text, BackHandler, RefreshControl } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withSpring } from 'react-native-reanimated';
@@ -14,10 +15,14 @@ import { useSetupStatus } from '@/hooks/use-setup-status';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useSubscriptionStore } from '@/hooks/use-subscription-store';
 import { supabase } from '@/lib/supabase';
-import { isValidUUID } from '@/lib/uuid';
 import { AppIcon } from '@/components/app-icon';
 import { AuthRadius } from '@/constants/auth-theme';
+import { logger } from '@/services/logger';
 import { HomeSkeleton } from '@/components/skeletons/home-skeleton';
+import { ChildSelector } from '@/components/ui/child-selector';
+import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
+import { fetchParentNotificationsPaginated } from '@/services/notifications-service';
+import type { RawNotification } from '@/services/notifications-service';
 
 // ============================================================
 // EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
@@ -315,17 +320,56 @@ function getGreeting(): string {
 }
 
 export default function HomeScreen() {
-  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isOnline, isLoading, isRefreshing, refresh } = usePairData();
+  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isOnline, isLoading, isRefreshing, refresh, allChildren } = usePairData();
   const { showModal } = useAppModal();
   const { loading: setupLoading, hasPair, setupComplete, incompletePairId } = useSetupStatus();
+  const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
+  const selectedChildId = useAuthStore((s) => s.selectedChildId);
+  const parentDeviceId = useAuthStore((s) => s.deviceId);
 
+  const [aggregateNotifications, setAggregateNotifications] = React.useState<RawNotification[]>([]);
+  const [aggregateLoading, setAggregateLoading] = React.useState(false);
+
+  const isAllChildren = !selectedChildId;
+  const showMultiSelector = allChildren.length > 1;
   const childName = childNameFromPair || 'Child';
-  const groupedApps = groupNotificationsByApp(notifications);
-  const uniqueAppCount = groupedApps.length;
-  const todayCount = countTodayNotifications(notifications);
 
+  // Single child: use PairDataContext's already-loaded notifications.
+  // All children: fetch aggregate across all parent pairs so today count,
+  // most-active apps and app variety span every connected device.
+  const effectiveNotifications = isAllChildren ? aggregateNotifications : notifications;
+  const effectiveLoading = isAllChildren ? (isLoading || aggregateLoading) : isLoading;
+
+  const groupedApps = React.useMemo(
+    () => groupNotificationsByApp(effectiveNotifications),
+    [effectiveNotifications],
+  );
+  const uniqueAppCount = groupedApps.length;
+  const todayCount = useMemo(
+    () => countTodayNotifications(effectiveNotifications),
+    [effectiveNotifications],
+  );
+
+  const heroDescription = (() => {
+    if (allChildren.length === 0) return childNameFromPair ? `Connecting to ${childName}...` : '';
+    if (isAllChildren) {
+      if (allChildren.length === 1) {
+        return `You're keeping an eye on ${childName}. They're ${isOnline ? 'online' : 'away'} right now.`;
+      }
+      return `You're keeping an eye on all ${allChildren.length} connected children.`;
+    }
+    return `You're keeping an eye on ${childName}. They're ${isOnline ? 'online' : 'away'} right now.`;
+  })();
+
+  const isFocused = useIsFocused();
   React.useEffect(() => {
+    if (!isFocused) return;
+
     const backAction = () => {
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
       showModal({
         title: 'Exit App',
         message: 'Are you sure you want to exit?',
@@ -339,29 +383,138 @@ export default function HomeScreen() {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [showModal]);
+  }, [isFocused, showModal]);
 
-  // Auto-ping the child device once on mount to flush any buffered notifications.
-  const autoPingDone = React.useRef(false);
-  const pairId = useAuthStore((s) => s.pairId);
+  const allChildrenKey = React.useMemo(
+    () => allChildren.map((c) => c.pairId).join(','),
+    [allChildren],
+  );
+
+  const loadAggregate = React.useCallback(async () => {
+    if (!parentDeviceId) return;
+    setAggregateLoading(true);
+    try {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      const todayStartIso = d.toISOString();
+      const result = await fetchParentNotificationsPaginated({
+        parentDeviceId,
+        selectedChildId: null,
+        since: todayStartIso,
+        maxPages: 4,
+      });
+      setAggregateNotifications(result.notifications as RawNotification[]);
+      // Only stamp the freshness timestamp after a successful fetch so the
+      // "Updated X ago" label accurately reflects visible data.
+      setAggregateLastRefreshedAt(new Date());
+    } catch {
+      setAggregateNotifications([]);
+      // Leave the previous timestamp in place (or null on first failure).
+    } finally {
+      setAggregateLoading(false);
+    }
+  }, [parentDeviceId]);
 
   React.useEffect(() => {
-    if (!isValidUUID(pairId) || autoPingDone.current) return;
-    autoPingDone.current = true;
-    (async () => {
-      await supabase.auth.getSession().catch(() => { });
-      const { data: pair } = await supabase
-        .from('pairs')
-        .select('child_device_id')
-        .eq('id', pairId)
-        .maybeSingle();
-      if (pair?.child_device_id) {
-        await supabase.functions
-          .invoke('ping-child', { body: { child_device_id: pair.child_device_id } })
-          .catch(() => { });
-      }
-    })();
-  }, [pairId]);
+    if (!isAllChildren) return;
+    loadAggregate();
+  }, [isAllChildren, loadAggregate, selectedChildId, allChildrenKey]);
+
+  // -----------------------------------------------------------------------
+  // Header refresh + 5-minute polling for aggregate stats
+  //
+  // The header has a refresh button beside the profile image (see
+  // components/app-header.tsx). Home registers a refresh function with the
+  // HeaderRefreshContext so that button refreshes both PairDataContext and
+  // the aggregate stats. A 5-minute polling interval keeps the aggregate
+  // card fresh while the user lingers on Home.
+  // -----------------------------------------------------------------------
+  const [aggregateLastRefreshedAt, setAggregateLastRefreshedAt] = React.useState<Date | null>(null);
+  const handleRefresh = React.useCallback(async () => {
+    await Promise.all([refresh(), loadAggregate()]);
+  }, [refresh, loadAggregate]);
+  useRegisterHeaderRefresh(handleRefresh);
+
+  React.useEffect(() => {
+    if (!isAllChildren) return;
+    const AGGREGATE_POLL_MS = 5 * 60 * 1000;
+    const interval = setInterval(() => {
+      loadAggregate();
+    }, AGGREGATE_POLL_MS);
+    return () => clearInterval(interval);
+  }, [isAllChildren, loadAggregate]);
+
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 30 * 1000);
+    return () => clearInterval(tick);
+  }, []);
+  const aggregateFreshnessLabel = React.useMemo(() => {
+    if (!aggregateLastRefreshedAt) return null;
+    const diffMs = now - aggregateLastRefreshedAt.getTime();
+    if (diffMs < 0) return 'just now';
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes === 1) return '1 min ago';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  }, [aggregateLastRefreshedAt, now]);
+
+  // Auto-ping every active child once on mount to flush any buffered
+  // notifications. Tracked per-device-id so navigating between tabs does not
+  // re-ping the same children within the session. Done-set is cleared when
+  // the signed-in user changes.
+  const userId = useAuthStore((s) => s.userId);
+  const autoPingDoneRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    autoPingDoneRef.current = new Set();
+  }, [userId]);
+  const onlineChildIdsKey = React.useMemo(
+    () =>
+      allChildren
+        .filter((c) => c.isOnline)
+        .map((c) => c.childDeviceId)
+        .sort()
+        .join(','),
+    [allChildren],
+  );
+
+  React.useEffect(() => {
+    if (!isFocused) return;
+    const onlineIds = allChildren.filter((c) => c.isOnline).map((c) => c.childDeviceId);
+    if (onlineIds.length === 0) return;
+
+    const fresh = onlineIds.filter((id) => !autoPingDoneRef.current.has(id));
+    if (fresh.length === 0) return;
+
+    const PING_TIMEOUT_MS = 8000;
+    const done = autoPingDoneRef.current;
+
+    void Promise.all(
+      fresh.map((childDeviceId) =>
+        supabase.auth
+          .getSession()
+          .catch(() => null)
+          .then(() =>
+            Promise.race([
+              supabase.functions.invoke('ping-child', { body: { child_device_id: childDeviceId } }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('ping timeout')), PING_TIMEOUT_MS)),
+            ]),
+          )
+          .then((result: any) => {
+            if (result?.error) {
+              logger.warn('home auto-ping error', result.error);
+              return;
+            }
+            done.add(childDeviceId);
+          })
+          .catch((err) => {
+            logger.warn('home auto-ping failure', err);
+          }),
+      ),
+    );
+  }, [isFocused, onlineChildIdsKey, allChildren]);
 
   const blurTargetRef = React.useRef<View>(null);
   const scale = useSharedValue(1);
@@ -559,15 +712,26 @@ export default function HomeScreen() {
         >
           {/* ========== HERO SECTION (v2) ========== */}
           <View style={s.heroSection}>
-            {/* Text block */}
             <View style={s.heroTextBlock}>
               <Text style={s.flowLabel}>{getGreeting()}</Text>
-              <Text style={s.heroTitle}>
-                Welcome back
-              </Text>
-              <Text style={s.heroDescription}>
-                You&apos;re keeping an eye on {childName}. They&apos;re {isOnline ? 'online' : 'away'} right now.
-              </Text>
+              <Text style={s.heroTitle}>Welcome back</Text>
+              <Text style={s.heroDescription}>{heroDescription}</Text>
+              {showMultiSelector && (
+                <View style={s.heroChildSelector}>
+                  <ChildSelector
+                    options={allChildren.map((c) => ({
+                      pairId: c.pairId,
+                      childDeviceId: c.childDeviceId,
+                      displayName: c.displayName,
+                      isOnline: c.isOnline,
+                    }))}
+                    selectedPairId={selectedChildId}
+                    onSelect={setSelectedChildId}
+                    showAllOption
+                    allLabel={`All ${allChildren.length} children`}
+                  />
+                </View>
+              )}
               <View style={s.heroButtons}>
                 <TouchableOpacity style={s.primaryBtn} onPress={() => router.push('/(tabs)/activity')}>
                   <Text style={s.primaryBtnText}>View Activity</Text>
@@ -621,27 +785,64 @@ export default function HomeScreen() {
           </View>
 
           {/* ========== MONITORING HEALTH CARD ========== */}
-          {isLoading ? (
-            <HomeSkeleton />
-          ) : (
-            <MonitoringHealthCard
-              childDevice={childDevice}
-              isOnline={isOnline}
-              todayCount={todayCount}
-              latestNotification={latestNotification}
-            />
+          {isAllChildren && aggregateFreshnessLabel && (
+            <View style={s.freshnessRow}>
+              <Text style={s.freshnessText}>Updated {aggregateFreshnessLabel}</Text>
+            </View>
           )}
+          {effectiveLoading ? (
+            <HomeSkeleton />
+          ) : (() => {
+            // Aggregate child device info across all children in "All children"
+            // mode so the health card reflects the union (most recent sync,
+            // any push token configured) rather than always appearing as
+            // "Not configured / Never".
+            const aggregateChildDevice = isAllChildren
+              ? allChildren.reduce<{ last_seen_at: string | null; push_token: string | null } | null>(
+                  (acc, c) => {
+                    const candidates = [c.lastSeenAt, acc?.last_seen_at ?? null].filter(
+                      (v): v is string => !!v,
+                    );
+                    const latest =
+                      candidates.length === 0
+                        ? null
+                        : candidates.reduce((a, b) =>
+                            new Date(a).getTime() > new Date(b).getTime() ? a : b,
+                          );
+                    const pushToken = c.pushToken ?? acc?.push_token ?? null;
+                    return {
+                      last_seen_at: latest,
+                      push_token: pushToken,
+                    };
+                  },
+                  null,
+                )
+              : childDevice;
+
+            return (
+              <MonitoringHealthCard
+                childDevice={aggregateChildDevice}
+                isOnline={isAllChildren ? allChildren.some((c) => c.isOnline) : isOnline}
+                todayCount={todayCount}
+                latestNotification={
+                  isAllChildren && aggregateNotifications.length > 0
+                    ? aggregateNotifications[0]
+                    : latestNotification
+                }
+              />
+            );
+          })()}
 
           {/* ========== MOST ACTIVE APPS (live) ========== */}
           <View style={s.appsSection}>
             <View style={s.appsHeader}>
-              <Text style={s.appsTitle}>Most active apps</Text>
+              <Text style={s.appsTitle}>{isAllChildren ? 'Most active apps (all children)' : 'Most active apps'}</Text>
               <TouchableOpacity onPress={() => router.push('/(tabs)/activity')}>
                 <Text style={s.viewAll}>View all</Text>
               </TouchableOpacity>
             </View>
             <View style={s.appsList}>
-              {groupNotificationsByApp(notifications).slice(0, 3).map((app, i) => (
+              {groupedApps.slice(0, 3).map((app) => (
                 <View key={app.name} style={s.appItem}>
                   <View style={s.appIconBox}>
                     <AppIcon iconBase64={app.icon} size={28} fallbackSize={16} />
@@ -657,7 +858,7 @@ export default function HomeScreen() {
                   </View>
                 </View>
               ))}
-              {!isLoading && notifications.length === 0 && (
+              {!effectiveLoading && effectiveNotifications.length === 0 && (
                 <View style={{ padding: 24, alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline }}>No notifications yet</Text>
                 </View>
@@ -677,7 +878,9 @@ export default function HomeScreen() {
             </Text>
             <Text style={s.insightsDesc}>
               {uniqueAppCount > 0
-                ? `${childName} used ${uniqueAppCount} different app${uniqueAppCount !== 1 ? 's' : ''} today`
+                ? selectedChildId
+                  ? `${childName} used ${uniqueAppCount} different app${uniqueAppCount !== 1 ? 's' : ''} today`
+                  : `Your children used ${uniqueAppCount} different app${uniqueAppCount !== 1 ? 's' : ''} today`
                 : 'App diversity will appear here once the child device is active.'}
             </Text>
             <TouchableOpacity style={s.insightsCta} onPress={() => router.push('/(tabs)/insights')}>
@@ -784,6 +987,10 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 8,
+  },
+  heroChildSelector: {
+    marginTop: 4,
+    flexDirection: 'row',
   },
   primaryBtn: {
     backgroundColor: C.primary,
@@ -903,6 +1110,18 @@ const s = StyleSheet.create({
     borderRadius: 5,
   },
 
+
+  /* ---------- Freshness indicator ---------- */
+  freshnessRow: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 6,
+    paddingBottom: 6,
+  },
+  freshnessText: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 11,
+    color: C.onSurfaceVariant,
+  },
 
   /* ---------- Monitoring Health Section ---------- */
   healthSection: {

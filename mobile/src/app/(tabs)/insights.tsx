@@ -9,12 +9,11 @@ import { InsightsEmptyState } from '@/components/insights-empty-state';
 import { AppIcon } from '@/components/app-icon';
 import { useInsightsData, type TimeWindow, type InsightsNotification } from '@/hooks/use-insights-data';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { usePairData } from '@/hooks/use-pair-data';
 import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
 import { InsightsSkeleton } from '@/components/skeletons/insights-skeleton';
+import { ChildSelector } from '@/components/ui/child-selector';
 
-// ============================================================
-// EXACT STITCH COLORS (from v3 HTML Tailwind config)
-// ============================================================
 const C = {
   primary: '#44674d',
   primaryContainer: '#c5eccc',
@@ -40,12 +39,10 @@ const C = {
   white: '#ffffff',
 } as const;
 
-// ============================================================
-// INSIGHTS COMPUTATION HELPERS
-// ============================================================
-interface Bucket { label: string; count: number; }
-
-
+interface Bucket {
+  label: string;
+  count: number;
+}
 
 function getPeakWindows(notifications: InsightsNotification[]): Bucket[] {
   const b = [
@@ -68,26 +65,45 @@ function getPeakWindows(notifications: InsightsNotification[]): Bucket[] {
   return b;
 }
 
-function getTopApps(notifications: InsightsNotification[], limit = 5): { name: string; count: number; icon: string | null; package: string }[] {
+function getTopApps(
+  notifications: InsightsNotification[],
+  limit = 5,
+): { name: string; count: number; icon: string | null; package: string }[] {
   const groups: Record<string, { name: string; count: number; icon: string | null; package: string }> = {};
   for (const n of notifications) {
     const pkg = n.source_package?.trim() || 'unknown';
-    if (!groups[pkg]) groups[pkg] = { name: n.source_app_name?.trim() || pkg, count: 0, icon: n.app_icon_base64, package: pkg };
+    if (!groups[pkg]) {
+      groups[pkg] = { name: n.source_app_name?.trim() || pkg, count: 0, icon: n.app_icon_base64, package: pkg };
+    }
     groups[pkg].count++;
   }
-  return Object.values(groups).sort((a, b) => b.count - a.count).slice(0, limit);
+  return Object.values(groups)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
 }
 
-function generateNarrative(notifications: InsightsNotification[], window: TimeWindow): string {
+function generateNarrative(
+  notifications: InsightsNotification[],
+  window: TimeWindow,
+  childLabel: string | null,
+): string {
   if (notifications.length === 0) return '';
   const top = getTopApps(notifications, 1);
   const name = top.length > 0 ? top[0].name : 'apps';
   const total = notifications.length;
-  const period = window === 'today' ? 'today' : window === 'week' ? 'this week' : window === 'month' ? 'this month' : 'this year';
+  const period =
+    window === 'today'
+      ? 'today'
+      : window === 'week'
+        ? 'this week'
+        : window === 'month'
+          ? 'this month'
+          : 'this year';
   const peaks = getPeakWindows(notifications);
-  const topPeak = peaks.reduce((a, b) => a.count > b.count ? a : b, peaks[0]);
+  const topPeak = peaks.reduce((a, b) => (a.count > b.count ? a : b), peaks[0]);
   const peakLabel = topPeak.count > 1 ? ` Peak hours: ${topPeak.label}.` : '';
-  return `${total} notification${total !== 1 ? 's' : ''} ${period}. Most from ${name}.${peakLabel}`;
+  const subject = childLabel ? `${childLabel}'s activity` : 'Activity across children';
+  return `${total} notification${total !== 1 ? 's' : ''} ${period}. Most from ${name}.${peakLabel} (${subject}).`;
 }
 
 function formatTimeAgo(timestamp: string): string {
@@ -111,81 +127,6 @@ function formatLatestSignal(notifications: InsightsNotification[]): string {
   return 'Unknown notification';
 }
 
-// ============================================================
-// TOTAL USAGE GRAPH HELPERS
-// ============================================================
-function getUsageData(window: TimeWindow) {
-  switch (window) {
-    case 'today':
-      return {
-        time: '4h 12m',
-        trend: '+18% from yesterday',
-        trendColor: '#a0412d', // C.secondary
-        subtitle: 'Active device time today',
-        barWidth: 42,
-        bars: [
-          { label: '08', height: '25%', color: '#44674d' },
-          { label: '12', height: '60%', color: '#44674d' },
-          { label: '16', height: '90%', color: '#44674d' },
-          { label: '20', height: '45%', color: '#44674d' },
-          { label: '24', height: '20%', color: '#a0412d' },
-        ]
-      };
-    case 'week':
-      return {
-        time: '24h 45m',
-        trend: '+5% from last week',
-        trendColor: '#a0412d', // C.secondary
-        subtitle: 'Active device time this week',
-        barWidth: 32,
-        bars: [
-          { label: 'M', height: '55%', color: '#44674d' },
-          { label: 'T', height: '75%', color: '#44674d' },
-          { label: 'W', height: '95%', color: '#44674d' },
-          { label: 'T', height: '55%', color: '#44674d' },
-          { label: 'F', height: '30%', color: '#a0412d' },
-          { label: 'S', height: '70%', color: '#44674d' },
-          { label: 'S', height: '40%', color: '#44674d' },
-        ]
-      };
-    case 'month':
-      return {
-        time: '98h 15m',
-        trend: '-2% from last month',
-        trendColor: '#645e53', // C.onSurfaceVariant
-        subtitle: 'Active device time this month',
-        barWidth: 52,
-        bars: [
-          { label: 'W1', height: '50%', color: '#44674d' },
-          { label: 'W2', height: '75%', color: '#44674d' },
-          { label: 'W3', height: '90%', color: '#44674d' },
-          { label: 'W4', height: '35%', color: '#a0412d' },
-        ]
-      };
-    case 'year':
-      return {
-        time: '1120h 30m',
-        trend: '+12% from last year',
-        trendColor: '#a0412d', // C.secondary
-        subtitle: 'Active device time this year',
-        barWidth: 18,
-        bars: [
-          { label: 'J', height: '45%', color: '#44674d' },
-          { label: 'F', height: '35%', color: '#44674d' },
-          { label: 'M', height: '60%', color: '#44674d' },
-          { label: 'A', height: '70%', color: '#44674d' },
-          { label: 'M', height: '85%', color: '#44674d' },
-          { label: 'J', height: '90%', color: '#44674d' },
-          { label: 'J', height: '80%', color: '#44674d' },
-          { label: 'A', height: '70%', color: '#44674d' },
-          { label: 'S', height: '60%', color: '#44674d' },
-          { label: 'O', height: '75%', color: '#44674d' },
-          { label: 'N', height: '80%', color: '#44674d' },
-          { label: 'D', height: '95%', color: '#a0412d' },
-        ]
-      };
-  }
-}
 function getBezierPath(points: { x: number; y: number }[]): { strokePath: string; fillPath: string } {
   if (points.length === 0) return { strokePath: '', fillPath: '' };
 
@@ -208,19 +149,30 @@ function getBezierPath(points: { x: number; y: number }[]): { strokePath: string
 }
 
 export default function InsightsScreen() {
-  const { notifications, isLoading, isRefreshing, error, window, setWindow, refresh } = useInsightsData();
+  const { notifications, isLoading, isRefreshing, error, window, setWindow, refresh, perChildBreakdown } =
+    useInsightsData();
   useRegisterHeaderRefresh(refresh);
-  const { pairId } = useAuthStore();
+  const selectedChildId = useAuthStore((s) => s.selectedChildId);
+  const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
+  const { allChildren } = usePairData();
+
+  const showMultiSelector = allChildren.length > 1;
+  const isAll = !selectedChildId;
+  const selectedChildObj = !isAll
+    ? allChildren.find((c) => c.pairId === selectedChildId) ?? null
+    : null;
+  const childLabel = selectedChildObj?.displayName ?? null;
 
   const topApps = React.useMemo(() => getTopApps(notifications), [notifications]);
-  const narrative = React.useMemo(() => generateNarrative(notifications, window), [notifications, window]);
-  const usageData = React.useMemo(() => getUsageData(window), [window]);
+  const narrative = React.useMemo(
+    () => generateNarrative(notifications, window, childLabel),
+    [notifications, window, childLabel],
+  );
 
   const peakPoints = React.useMemo(() => {
     const data = getPeakWindows(notifications);
-    const maxVal = Math.max(...data.map(b => b.count), 1);
+    const maxVal = Math.max(...data.map((b) => b.count), 1);
     const W = 388;
-
     return data.map((bucket, i) => {
       const x = (i * W) / 5;
       const y = 105 - (bucket.count / maxVal) * 90;
@@ -232,212 +184,197 @@ export default function InsightsScreen() {
 
   return (
     <ThemedView style={s.container}>
-        <EdgeFadeScrollView
-          contentContainerStyle={s.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
-          }
-        >
-          {isLoading && !isRefreshing ? (
-            <InsightsSkeleton />
-          ) : error ? (
-            <View style={s.centerState}>
-              <Text style={s.emptyTitle}>Unable to load insights</Text>
-              <Text style={s.emptyText}>{error}</Text>
-              <TouchableOpacity style={s.retryBtn} onPress={refresh} activeOpacity={0.7}>
-                <Text style={s.retryBtnText}>Retry</Text>
-              </TouchableOpacity>
+      <EdgeFadeScrollView
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
+        }
+      >
+        {isLoading && !isRefreshing ? (
+          <InsightsSkeleton />
+        ) : error ? (
+          <View style={s.centerState}>
+            <Text style={s.emptyTitle}>Unable to load insights</Text>
+            <Text style={s.emptyText}>{error}</Text>
+            <TouchableOpacity style={s.retryBtn} onPress={refresh} activeOpacity={0.7}>
+              <Text style={s.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : notifications.length === 0 ? (
+          <InsightsEmptyState hasPair={allChildren.length > 0} />
+        ) : (
+          <>
+            <View style={s.heroSection}>
+              <Text style={s.heroTitle}>Insights</Text>
+              <Text style={s.heroDescription}>
+                {isAll
+                  ? 'See when and how your connected devices are used.'
+                  : `See when and how ${childLabel ?? 'this child'}'s device is used.`}
+              </Text>
             </View>
-          ) : notifications.length === 0 ? (
-            <InsightsEmptyState hasPair={!!pairId} />
-          ) : (
-            <>
-              {/* ========== HERO HEADING ========== */}
-              <View style={s.heroSection}>
-                <Text style={s.heroTitle}>Insights</Text>
-                <Text style={s.heroDescription}>
-                  See when and how the connected device is used.
-                </Text>
-              </View>
 
-              {/* Window Selector */}
-              <View style={s.windowSelectorRow}>
-                {(['today', 'week', 'month', 'year'] as TimeWindow[]).map((w) => (
-                  <TouchableOpacity
-                    key={w}
-                    style={[s.windowPill, window === w && s.windowPillActive]}
-                    onPress={() => setWindow(w)}
-                    activeOpacity={0.7}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: window === w }}
-                  >
-                    <Text style={[s.windowPillText, window === w && s.windowPillTextActive]}>
-                      {w.charAt(0).toUpperCase() + w.slice(1)}
+            {showMultiSelector && (
+              <View style={s.selectorRow}>
+                <ChildSelector
+                  options={allChildren.map((c) => ({
+                    pairId: c.pairId,
+                    childDeviceId: c.childDeviceId,
+                    displayName: c.displayName,
+                    isOnline: c.isOnline,
+                  }))}
+                  selectedPairId={selectedChildId}
+                  onSelect={setSelectedChildId}
+                  showAllOption
+                  allLabel={`All ${allChildren.length} children`}
+                />
+              </View>
+            )}
+
+            <View style={s.windowSelectorRow}>
+              {(['today', 'week', 'month', 'year'] as TimeWindow[]).map((w) => (
+                <TouchableOpacity
+                  key={w}
+                  style={[s.windowPill, window === w && s.windowPillActive]}
+                  onPress={() => setWindow(w)}
+                  activeOpacity={0.7}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: window === w }}
+                >
+                  <Text style={[s.windowPillText, window === w && s.windowPillTextActive]}>
+                    {w.charAt(0).toUpperCase() + w.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={s.pulseCard}>
+              <Text style={s.pulseLabel}>
+                {isAll ? 'Across all children' : `${childLabel ?? 'this child'}'s activity`}
+              </Text>
+              <Text style={s.pulseText}>{narrative}</Text>
+            </View>
+
+            <View style={s.peakCard}>
+              <Text style={s.peakTitle}>Peak Hours</Text>
+              <View style={s.chartWrapper}>
+                <View style={s.peakYAxis}>
+                  <Text style={s.peakYLabel}>High</Text>
+                  <Text style={s.peakYLabel}>Med</Text>
+                  <Text style={s.peakYLabel}>Low</Text>
+                </View>
+                <Svg width="100%" height={120} viewBox="0 0 388 120">
+                  <Defs>
+                    <LinearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0%" stopColor={C.primary} stopOpacity={0.15} />
+                      <Stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                    </LinearGradient>
+                    <LinearGradient id="strokeGrad" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0%" stopColor={C.primary} stopOpacity={1.0} />
+                      <Stop offset="70%" stopColor={C.primary} stopOpacity={0.5} />
+                      <Stop offset="100%" stopColor={C.primary} stopOpacity={0.1} />
+                    </LinearGradient>
+                  </Defs>
+                  <Path d={paths.fillPath} fill="url(#fillGrad)" />
+                  <Path d={paths.strokePath} fill="none" stroke="url(#strokeGrad)" strokeWidth={3} />
+                </Svg>
+              </View>
+              <View style={s.peakXAxisRow}>
+                {peakPoints.map((p, i) => {
+                  const shortLabel = p.label
+                    .replace('12-4AM', '12a')
+                    .replace('4-8AM', '4a')
+                    .replace('8AM-12PM', '8a')
+                    .replace('12-4PM', '12p')
+                    .replace('4-8PM', '4p')
+                    .replace('8PM-12AM', '8p');
+                  return (
+                    <Text key={i} style={s.peakXAxisLabel}>
+                      {shortLabel}
                     </Text>
-                  </TouchableOpacity>
-                ))}
+                  );
+                })}
               </View>
+            </View>
 
-              {/* Pulse Narrative */}
-              <View style={s.pulseCard}>
-                <Text style={s.pulseLabel}>Activity Overview</Text>
-                <Text style={s.pulseText}>{narrative}</Text>
-              </View>
-
-              {/* Total Usage Card */}
-              <View style={s.usageCard}>
-                <View style={s.usageHeader}>
-                  <View style={s.usageHeaderLeft}>
-                    <View>
-                      <Text style={s.usageTitle}>Total Usage</Text>
-                      <Text style={s.usageSubtitle}>{usageData.subtitle}</Text>
-                    </View>
-                  </View>
-                  <View style={s.usageHeaderRight}>
-                    <Text style={s.usageTimeText}>{usageData.time}</Text>
-                    <Text style={[s.usageTrendText, { color: usageData.trendColor }]}>{usageData.trend}</Text>
-                  </View>
-                </View>
-
-                {/* Usage Graph */}
-                <View style={s.graphContainer}>
-                  <View style={s.barsContainer}>
-                    {usageData.bars.map((bar, i) => (
-                      <View key={i} style={s.pillColumn}>
-                        {/* Pill Background */}
-                        <View style={[s.pillBg, { width: usageData.barWidth }]}>
-                          {/* Pill Fill */}
-                          <View
-                            style={[
-                              s.pillFill,
-                              {
-                                height: bar.height as any,
-                                backgroundColor: bar.color,
-                              }
-                            ]}
-                          />
-                        </View>
-                        {/* Matching Color Label */}
-                        <Text style={[s.barLabel, { color: bar.color }]}>
-                          {bar.label}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              </View>
-
-              {/* Peak Activity Windows */}
-              <View style={s.peakCard}>
-                <Text style={s.peakTitle}>Peak Hours</Text>
-
-                <View style={s.chartWrapper}>
-                  {/* Y-Axis Legend overlay */}
-                  <View style={s.peakYAxis}>
-                    <Text style={s.peakYLabel}>High</Text>
-                    <Text style={s.peakYLabel}>Med</Text>
-                    <Text style={s.peakYLabel}>Low</Text>
-                  </View>
-
-                  <Svg width="100%" height={120} viewBox="0 0 388 120">
-                    <Defs>
-                      <LinearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0%" stopColor={C.primary} stopOpacity={0.15} />
-                        <Stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
-                      </LinearGradient>
-                      <LinearGradient id="strokeGrad" x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0%" stopColor={C.primary} stopOpacity={1.0} />
-                        <Stop offset="70%" stopColor={C.primary} stopOpacity={0.5} />
-                        <Stop offset="100%" stopColor={C.primary} stopOpacity={0.1} />
-                      </LinearGradient>
-                    </Defs>
-
-                    {/* Area path */}
-                    <Path
-                      d={paths.fillPath}
-                      fill="url(#fillGrad)"
-                    />
-
-                    {/* Stroke path */}
-                    <Path
-                      d={paths.strokePath}
-                      fill="none"
-                      stroke="url(#strokeGrad)"
-                      strokeWidth={3}
-                    />
-                  </Svg>
-                </View>
-
-                {/* Graph Legends (Positioned below graph) */}
-                <View style={s.peakXAxisRow}>
-                  {peakPoints.map((p, i) => {
-                    const shortLabel = p.label
-                      .replace('12-4AM', '12a')
-                      .replace('4-8AM', '4a')
-                      .replace('8AM-12PM', '8a')
-                      .replace('12-4PM', '12p')
-                      .replace('4-8PM', '4p')
-                      .replace('8PM-12AM', '8p');
-                    return (
-                      <Text key={i} style={s.peakXAxisLabel}>
-                        {shortLabel}
-                      </Text>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* App Insights */}
-              <View style={s.appInsightsCard}>
-                <Text style={s.appInsightsTitle}>App Insights</Text>
-                {topApps.length > 0 ? topApps.map((app, i) => {
+            <View style={s.appInsightsCard}>
+              <Text style={s.appInsightsTitle}>
+                {isAll ? 'Top Apps (all children)' : `Top Apps (${childLabel ?? 'this child'})`}
+              </Text>
+              {topApps.length > 0 ? (
+                topApps.map((app, i) => {
                   const maxCount = topApps[0].count;
                   const barWidth = Math.max((app.count / maxCount) * 100, 2);
                   return (
                     <View key={app.package + i} style={s.appInsightsItem}>
                       <AppIcon iconBase64={app.icon} size={40} fallbackSize={20} />
-                      <Text style={s.appInsightsName} numberOfLines={1} ellipsizeMode="tail">{app.name}</Text>
+                      <Text style={s.appInsightsName} numberOfLines={1} ellipsizeMode="tail">
+                        {app.name}
+                      </Text>
                       <View style={s.appInsightsBarBg}>
                         <View style={[s.appInsightsBarFill, { width: `${barWidth}%` }]} />
                       </View>
                       <Text style={s.appInsightsCount}>{app.count}</Text>
                     </View>
                   );
-                }) : null}
-              </View>
+                })
+              ) : (
+                <Text style={s.emptyText}>No app activity in this window.</Text>
+              )}
+            </View>
 
-              {/* Latest Notification */}
-              <View style={s.latestCard}>
-                <AppIcon iconBase64={notifications[0]?.app_icon_base64} size={40} fallbackSize={20} />
-                <View style={s.latestTextWrap}>
-                  <Text style={s.latestLabel}>Latest Notification</Text>
-                  <Text style={s.latestTitle} numberOfLines={1}>
-                    {formatLatestSignal(notifications)}
-                  </Text>
-                </View>
-                <Text style={s.latestTimeAgo}>
-                  {formatTimeAgo(notifications[0]?.notification_posted_at || '')}
+            {isAll && perChildBreakdown.length > 0 && (
+              <View style={s.perChildCard}>
+                <Text style={s.appInsightsTitle}>Notifications per child</Text>
+                {perChildBreakdown
+                  .sort((a, b) => b.count - a.count)
+                  .map((entry) => {
+                    const max = Math.max(...perChildBreakdown.map((e) => e.count), 1);
+                    const barWidth = Math.max((entry.count / max) * 100, 4);
+                    return (
+                      <View key={entry.pairId} style={s.appInsightsItem}>
+                        <View style={s.perChildAvatar}>
+                          <Ionicons name="person-outline" size={16} color={C.primary} />
+                        </View>
+                        <Text style={s.appInsightsName} numberOfLines={1} ellipsizeMode="tail">
+                          {entry.displayName || 'Child Device'}
+                        </Text>
+                        <View style={s.appInsightsBarBg}>
+                          <View style={[s.appInsightsBarFill, { width: `${barWidth}%` }]} />
+                        </View>
+                        <Text style={s.appInsightsCount}>{entry.count}</Text>
+                      </View>
+                    );
+                  })}
+              </View>
+            )}
+
+            <View style={s.latestCard}>
+              <AppIcon iconBase64={notifications[0]?.app_icon_base64} size={40} fallbackSize={20} />
+              <View style={s.latestTextWrap}>
+                <Text style={s.latestLabel}>Latest Notification</Text>
+                <Text style={s.latestTitle} numberOfLines={1}>
+                  {formatLatestSignal(notifications)}
                 </Text>
               </View>
+              <Text style={s.latestTimeAgo}>
+                {formatTimeAgo(notifications[0]?.notification_posted_at || '')}
+              </Text>
+            </View>
 
-              <View style={s.encryptBadge}>
-                <Ionicons name="shield-checkmark" size={14} color={C.primary} />
-                <Text style={s.encryptBadgeText}>All notification contents are securely encrypted at rest</Text>
-              </View>
-            </>
-          )}
+            <View style={s.encryptBadge}>
+              <Ionicons name="shield-checkmark" size={14} color={C.primary} />
+              <Text style={s.encryptBadgeText}>All notification contents are securely encrypted at rest</Text>
+            </View>
+          </>
+        )}
 
-          {/* Spacer to avoid bottom custom tab bar overlay */}
-          <View style={s.bottomSpacer} />
-        </EdgeFadeScrollView>
+        <View style={s.bottomSpacer} />
+      </EdgeFadeScrollView>
     </ThemedView>
   );
 }
 
-// ============================================================
-// STYLES - mapped precisely from Stitch Tailwind
-// ============================================================
 const s = StyleSheet.create({
   container: {
     flex: 1,
@@ -448,7 +385,6 @@ const s = StyleSheet.create({
     paddingTop: 8,
   },
 
-  /* ---------- Hero Section ---------- */
   heroSection: {
     marginBottom: 24,
     gap: 12,
@@ -473,7 +409,10 @@ const s = StyleSheet.create({
     maxWidth: 320,
   },
 
-  /* ---------- Window Selector ---------- */
+  selectorRow: {
+    marginBottom: 16,
+  },
+
   windowSelectorRow: {
     flexDirection: 'row',
     gap: 8,
@@ -498,7 +437,6 @@ const s = StyleSheet.create({
     color: C.white,
   },
 
-  /* ---------- Pulse Narrative Card ---------- */
   pulseCard: {
     backgroundColor: C.surfaceContainerLowest,
     borderRadius: 32,
@@ -520,7 +458,6 @@ const s = StyleSheet.create({
     color: C.onSurface,
   },
 
-  /* ---------- Peak Hours Card ---------- */
   peakCard: {
     backgroundColor: C.surfaceContainerLowest,
     borderRadius: 32,
@@ -572,7 +509,6 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
 
-  /* ---------- App Insights Card ---------- */
   appInsightsCard: {
     backgroundColor: C.surfaceContainerLowest,
     borderRadius: 32,
@@ -628,7 +564,21 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
 
-  /* ---------- Latest Notification Card ---------- */
+  perChildCard: {
+    backgroundColor: C.surfaceContainerLowest,
+    borderRadius: 32,
+    padding: 24,
+    marginBottom: 16,
+  },
+  perChildAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   latestCard: {
     backgroundColor: C.surfaceContainerLow,
     borderRadius: 24,
@@ -683,84 +633,6 @@ const s = StyleSheet.create({
     color: C.primary,
   },
 
-  /* ---------- Total Usage Card ---------- */
-  usageCard: {
-    backgroundColor: C.surfaceContainerLowest,
-    borderRadius: 32,
-    padding: 24,
-    marginBottom: 16,
-  },
-  usageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  usageHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  usageTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 20,
-    color: C.onSurface,
-  },
-  usageSubtitle: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 13,
-    color: C.onSurfaceVariant,
-    marginTop: 2,
-  },
-  usageHeaderRight: {
-    alignItems: 'flex-end',
-  },
-  usageTimeText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 22,
-    color: C.primary,
-    lineHeight: 28,
-  },
-  usageTrendText: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 11,
-    color: C.secondary,
-    marginTop: 2,
-  },
-  graphContainer: {
-    minHeight: 180,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 16,
-  },
-  barsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingHorizontal: 8,
-  },
-  pillColumn: {
-    alignItems: 'center',
-  },
-  pillBg: {
-    height: 120,
-    backgroundColor: C.surfaceContainer,
-    borderRadius: 9999,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  pillFill: {
-    width: '100%',
-    borderRadius: 9999,
-  },
-  barLabel: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-
-  /* ---------- Loading / Empty / Error ---------- */
   centerState: {
     paddingVertical: 80,
     alignItems: 'center',
@@ -779,12 +651,6 @@ const s = StyleSheet.create({
     color: C.onSurfaceVariant,
     textAlign: 'center',
   },
-  errorText: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 14,
-    color: C.error,
-    textAlign: 'center',
-  },
   retryBtn: {
     marginTop: 16,
     backgroundColor: C.primary,
@@ -798,7 +664,6 @@ const s = StyleSheet.create({
     color: C.white,
   },
 
-  /* ---------- Spacer ---------- */
   bottomSpacer: {
     height: 130,
   },

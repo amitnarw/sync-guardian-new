@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, AppStateStatus } from 'react-native';
 import { getMySubscription } from '@/services/subscription-api';
 import type { SubscriptionRow } from '@/services/subscription-api';
 
@@ -90,3 +91,19 @@ export const useSubscriptionStore = create<SubscriptionState>()(
     },
   ),
 );
+
+// Refresh subscription state whenever the app comes to the foreground so the
+// notification listener's hard gate stays current without per-notification
+// network calls. Without this the gate could stay stale for hours after the
+// parent's trial/subscription expires.
+let foregroundRefreshRegistered = false;
+function registerForegroundRefresh(): void {
+  if (foregroundRefreshRegistered) return;
+  foregroundRefreshRegistered = true;
+  AppState.addEventListener('change', (state: AppStateStatus) => {
+    if (state === 'active') {
+      useSubscriptionStore.getState().refresh().catch(() => {});
+    }
+  });
+}
+registerForegroundRefresh();

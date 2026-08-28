@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, TouchableOpacity, BackHandler } from 'react-native';
 import { AuthColors, AuthFonts, AuthRadius } from '@/constants/auth-theme';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -35,10 +35,25 @@ export default function PairingScreen() {
 
   const { showModal } = useAppModal();
 
-  const handleBack = () => {
-    setUserRole(null);
-    router.replace('/role-selection');
-  };
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (userRole === 'parent') {
+      router.replace('/(tabs)/settings');
+    } else {
+      setUserRole(null);
+      router.replace('/role-selection');
+    }
+  }, [userRole, setUserRole]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
 
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600);
@@ -231,6 +246,21 @@ export default function PairingScreen() {
 
       if (error) throw error;
 
+      if (data?.error === 'PARENT_CHILD_LIMIT_REACHED' || data?.message?.toLowerCase().includes('reached the connected child devices limit')) {
+        showModal({
+          title: 'Plan limit reached',
+          message:
+            'You\'ve reached the number of connected child devices on your current plan. Upgrade to add more children.',
+          icon: 'warning',
+          primaryButton: 'View Plans',
+          onPrimaryPress: () => router.push('/(paywall)/plans'),
+          secondaryButton: 'Close',
+        });
+        setScanned(false);
+        setIsVerifying(false);
+        return;
+      }
+
       if (!isValidUUID(data?.data?.parent_device_id) || !isValidUUID(data?.data?.id)) {
         throw new Error('Pairing response contained invalid device identifiers. Please try scanning again.');
       }
@@ -243,15 +273,50 @@ export default function PairingScreen() {
     } catch (err: unknown) {
       let msg = 'Pairing failed.';
       let statusInfo = '';
+      let resolvedStatus = 0;
 
       if (err instanceof FunctionsHttpError) {
+        resolvedStatus = err.context.status;
         statusInfo = ` (status ${err.context.status})`;
         try {
           const body = await err.context.text();
           const parsed = JSON.parse(body);
           msg = parsed.error || msg;
+          if (
+            (parsed.error === 'PARENT_CHILD_LIMIT_REACHED') ||
+            (typeof parsed.message === 'string' &&
+              parsed.message.toLowerCase().includes('connected child devices limit'))
+          ) {
+            showModal({
+              title: 'Plan limit reached',
+              message:
+                "You've reached the number of connected child devices on your current plan. Upgrade to add more children.",
+              icon: 'warning',
+              primaryButton: 'View Plans',
+              onPrimaryPress: () => router.push('/(paywall)/plans'),
+              secondaryButton: 'Close',
+            });
+            setScanned(false);
+            setIsVerifying(false);
+            return;
+          }
         } catch {
           msg = `Server returned an error${statusInfo}. Please try again.`;
+        }
+
+        if (resolvedStatus === 402 && msg === 'Pairing failed.') {
+          showModal({
+            title: 'Plan limit reached',
+            message:
+              "You've reached the number of connected child devices on your current plan. Upgrade to add more children.",
+            icon: 'warning',
+            primaryButton: 'View Plans',
+            onPrimaryPress: () => router.push('/(paywall)/plans'),
+            secondaryButton: 'Close',
+          });
+          setScanned(false);
+          setIsVerifying(false);
+          return;
         }
       } else if (err instanceof Error) {
         msg = err.message;

@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { StyleSheet, View, Text, RefreshControl, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Dimensions } from 'react-native';
+import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
+import { StyleSheet, View, Text, RefreshControl, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
@@ -11,10 +11,10 @@ import { NotificationSourceCard } from '@/components/notification-source-card';
 import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
 import { ActivitySkeleton } from '@/components/skeletons/activity-skeleton';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { ChildSelector } from '@/components/ui/child-selector';
+import { useAuthStore } from '@/hooks/use-auth-store';
+import { fetchParentNotifications, fetchMoreNotificationsOlderThan, type AggregatedNotification, type ChildRef, type MoreNotificationsCursor } from '@/services/notifications-service';
 
-// ============================================================
-// EXACT STITCH COLORS (from HTML Tailwind config)
-// ============================================================
 const C = {
   primary: '#44674d',
   primaryContainer: '#c5eccc',
@@ -41,28 +41,130 @@ const C = {
   primaryDeep: '#2f4a37',
 } as const;
 
+type Group = {
+  child: ChildRef | null;
+  items: AggregatedNotification[];
+};
+
 export default function ActivityScreen() {
-  const { notifications, isLoading, isRefreshing, error, refresh } = usePairData();
-  useRegisterHeaderRefresh(refresh);
-  const [firstIconY, setFirstIconY] = React.useState<number | null>(null);
-  const [lastIconY, setLastIconY] = React.useState<number | null>(null);
+  const { allChildren, refresh, isRefreshing: pairIsRefreshing } = usePairData();
+  const selectedChildId = useAuthStore((s) => s.selectedChildId);
+  const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
+  const deviceId = useAuthStore((s) => s.deviceId);
 
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [selectedPackage, setSelectedPackage] = React.useState<string | null>(null);
-  const [dateRange, setDateRange] = React.useState<'all' | 'custom'>('all');
-  const [showAppSelector, setShowAppSelector] = React.useState(false);
-  const [showDateSelector, setShowDateSelector] = React.useState(false);
+  const [aggregated, setAggregated] = useState<AggregatedNotification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<MoreNotificationsCursor | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Floating Dropdown positioning refs & coordinates
+  const allChildrenKey = allChildren.map((c) => c.pairId).join(',');
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const load = useCallback(
+    async (isRefresh = false) => {
+      if (!deviceId) return;
+      if (isRefresh) setIsRefreshing(true);
+      else setIsLoading(true);
+      setError(null);
+      try {
+        const result = await fetchParentNotifications({
+          parentDeviceId: deviceId,
+          selectedChildId,
+          limit: 50,
+        });
+        setAggregated(result.notifications);
+        setHasMore(result.notifications.length >= 50);
+        setNextCursor(
+          result.notifications.length >= 50 && result.notifications.length > 0
+            ? {
+                before: result.notifications[result.notifications.length - 1].notification_posted_at,
+                beforeId: result.notifications[result.notifications.length - 1].id,
+              }
+            : null,
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load activity');
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [deviceId, selectedChildId],
+  );
+
+  useEffect(() => {
+    load(false);
+  }, [load, allChildrenKey]);
+
+  const loadMoreRequestIdRef = useRef(0);
+  const loadMore = useCallback(async () => {
+    if (!deviceId || aggregated.length === 0 || isLoadingMore || !hasMore || !nextCursor) return;
+    const requestId = ++loadMoreRequestIdRef.current;
+    const expectedSelection = selectedChildId;
+    setIsLoadingMore(true);
+    try {
+      const result = await fetchMoreNotificationsOlderThan({
+        parentDeviceId: deviceId,
+        selectedChildId: expectedSelection,
+        cursor: nextCursor,
+      });
+      // Discard stale result if the user switched selection while the
+      // request was in flight.
+      if (requestId !== loadMoreRequestIdRef.current) return;
+      if (!mountedRef.current) return;
+      const currentSelection = useAuthStore.getState().selectedChildId;
+      if (currentSelection !== expectedSelection) return;
+      if (result.notifications.length === 0) {
+        setHasMore(false);
+        setNextCursor(null);
+      } else {
+        setAggregated((prev) => [...prev, ...result.notifications]);
+        setHasMore(result.hasMore);
+        setNextCursor(result.nextCursor);
+      }
+    } catch {
+      if (requestId === loadMoreRequestIdRef.current && mountedRef.current) {
+        setHasMore(false);
+        setNextCursor(null);
+      }
+    } finally {
+      if (requestId === loadMoreRequestIdRef.current && mountedRef.current) {
+        setIsLoadingMore(false);
+      }
+    }
+  }, [aggregated, deviceId, selectedChildId, isLoadingMore, hasMore, nextCursor]);
+
+  const doRefresh = useCallback(async () => {
+    await Promise.all([load(true), refresh()]);
+  }, [load, refresh]);
+  useRegisterHeaderRefresh(doRefresh);
+
+  const [firstIconY, setFirstIconY] = useState<number | null>(null);
+  const [lastIconY, setLastIconY] = useState<number | null>(null);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<'all' | 'custom'>('all');
+  const [showAppSelector, setShowAppSelector] = useState(false);
+  const [showDateSelector, setShowDateSelector] = useState(false);
+
   const appButtonRef = useRef<View>(null);
   const dateButtonRef = useRef<View>(null);
-  const [appDropdownTop, setAppDropdownTop] = React.useState(0);
-  const [appDropdownRight, setAppDropdownRight] = React.useState(0);
-  // Custom Calendar Range Picker states
-  const [customStartDate, setCustomStartDate] = React.useState<Date | null>(null);
-  const [customEndDate, setCustomEndDate] = React.useState<Date | null>(null);
-  const [customStartTime, setCustomStartTime] = React.useState('00:00');
-  const [customEndTime, setCustomEndTime] = React.useState('23:59');
+  const [appDropdownTop, setAppDropdownTop] = useState(0);
+  const [appDropdownRight, setAppDropdownRight] = useState(0);
+  const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
+  const [customStartTime, setCustomStartTime] = useState('00:00');
+  const [customEndTime, setCustomEndTime] = useState('23:59');
 
   const openAppDropdown = () => {
     appButtonRef.current?.measureInWindow((x, y, width, height) => {
@@ -79,9 +181,9 @@ export default function ActivityScreen() {
     setShowAppSelector(false);
   };
 
-  const uniqueApps = React.useMemo(() => {
+  const uniqueApps = useMemo(() => {
     const appsMap = new Map<string, { name: string; icon: string | null }>();
-    for (const n of notifications) {
+    for (const n of aggregated) {
       const pkg = n.source_package;
       if (pkg) {
         appsMap.set(pkg, {
@@ -95,50 +197,105 @@ export default function ActivityScreen() {
       name: data.name,
       icon: data.icon,
     }));
-  }, [notifications]);
+  }, [aggregated]);
 
-  const filteredNotifications = React.useMemo(() => {
-    return notifications.filter((n) => {
-      const matchesApp = !selectedPackage || n.source_package === selectedPackage;
+  const filters = useMemo(
+    () => ({
+      searchQuery,
+      selectedPackage,
+      dateRange,
+      customStartDate,
+      customEndDate,
+      customStartTime,
+      customEndTime,
+    }),
+    [
+      searchQuery,
+      selectedPackage,
+      dateRange,
+      customStartDate,
+      customEndDate,
+      customStartTime,
+      customEndTime,
+    ],
+  );
+
+  const passesFilters = useCallback(
+    (n: AggregatedNotification) => {
+      const matchesApp = !filters.selectedPackage || n.source_package === filters.selectedPackage;
       const matchesSearch =
-        !searchQuery ||
-        (n.notification_title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (n.notification_body || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (n.source_app_name || '').toLowerCase().includes(searchQuery.toLowerCase());
+        !filters.searchQuery ||
+        (n.notification_title || '').toLowerCase().includes(filters.searchQuery.toLowerCase()) ||
+        (n.notification_body || '').toLowerCase().includes(filters.searchQuery.toLowerCase()) ||
+        (n.source_app_name || '').toLowerCase().includes(filters.searchQuery.toLowerCase());
 
       let matchesDate = true;
-      if (dateRange === 'custom') {
+      if (filters.dateRange === 'custom') {
         const postedDate = new Date(n.notification_posted_at);
-
-        let startBound = null;
-        if (customStartDate) {
-          startBound = new Date(customStartDate);
-          const [sh, sm] = customStartTime.split(':').map(Number);
+        let startBound: Date | null = null;
+        if (filters.customStartDate) {
+          startBound = new Date(filters.customStartDate);
+          const [sh, sm] = filters.customStartTime.split(':').map(Number);
           startBound.setHours(isNaN(sh) ? 0 : sh, isNaN(sm) ? 0 : sm, 0, 0);
         }
-
-        let endBound = null;
-        if (customEndDate) {
-          endBound = new Date(customEndDate);
-          const [eh, em] = customEndTime.split(':').map(Number);
+        let endBound: Date | null = null;
+        if (filters.customEndDate) {
+          endBound = new Date(filters.customEndDate);
+          const [eh, em] = filters.customEndTime.split(':').map(Number);
           endBound.setHours(isNaN(eh) ? 23 : eh, isNaN(em) ? 59 : em, 59, 999);
-        } else if (customStartDate) {
-          endBound = new Date(customStartDate);
-          const [eh, em] = customEndTime.split(':').map(Number);
+        } else if (filters.customStartDate) {
+          endBound = new Date(filters.customStartDate);
+          const [eh, em] = filters.customEndTime.split(':').map(Number);
           endBound.setHours(isNaN(eh) ? 23 : eh, isNaN(em) ? 59 : em, 59, 999);
         }
-
-        if (startBound && postedDate < startBound) {
-          matchesDate = false;
-        }
-        if (endBound && postedDate > endBound) {
-          matchesDate = false;
-        }
+        if (startBound && postedDate < startBound) matchesDate = false;
+        if (endBound && postedDate > endBound) matchesDate = false;
       }
-
       return matchesApp && matchesSearch && matchesDate;
-    });
-  }, [notifications, selectedPackage, searchQuery, dateRange, customStartDate, customEndDate, customStartTime, customEndTime]);
+    },
+    [filters],
+  );
+
+  const filtered = useMemo(() => aggregated.filter(passesFilters), [aggregated, passesFilters]);
+
+  const isAllMode = !selectedChildId;
+  const groups: Group[] = useMemo(() => {
+    if (!isAllMode) {
+      return [{ child: null, items: filtered }];
+    }
+    const byChild = new Map<string, Group>();
+    for (const n of filtered) {
+      const key = n.pair_id;
+      let entry = byChild.get(key);
+      if (!entry) {
+        entry = { child: n.child, items: [] };
+        byChild.set(key, entry);
+      }
+      entry.items.push(n);
+    }
+    return allChildren
+      .map((c) => byChild.get(c.pairId))
+      .filter((g): g is Group => !!g);
+  }, [filtered, isAllMode, allChildren]);
+
+  const showMultiSelector = allChildren.length > 1;
+  const selectedChild = useMemo(
+    () => allChildren.find((c) => c.pairId === selectedChildId) ?? null,
+    [allChildren, selectedChildId],
+  );
+  const heroDescription = (() => {
+    if (allChildren.length === 0) {
+      return 'Pair a child device to start mirroring notifications.';
+    }
+    if (selectedChild) {
+      const name = selectedChild.displayName || 'this child';
+      return `Every notification mirrored from ${name}, in one timeline.`;
+    }
+    if (isAllMode) {
+      return `Every notification mirrored from your ${allChildren.length} connected devices, in one timeline.`;
+    }
+    return 'Every notification mirrored from your connected devices, in one timeline.';
+  })();
 
   return (
     <ThemedView style={s.container}>
@@ -146,10 +303,9 @@ export default function ActivityScreen() {
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
+          <RefreshControl refreshing={isRefreshing || pairIsRefreshing} onRefresh={doRefresh} colors={[C.primary]} tintColor={C.primary} />
         }
       >
-        {/* ========== PREMIUM HERO ========== */}
         <View style={s.heroSection}>
           <LinearGradient
             colors={[C.primaryDeep, C.primary]}
@@ -175,9 +331,23 @@ export default function ActivityScreen() {
 
           <View style={s.heroContent}>
             <Text style={s.heroTitle}>Activity</Text>
-            <Text style={s.heroDescription}>
-              Every notification mirrored from the connected device, in one timeline.
-            </Text>
+            <Text style={s.heroDescription}>{heroDescription}</Text>
+            {showMultiSelector && (
+              <View style={s.heroSelectorWrap}>
+                <ChildSelector
+                  options={allChildren.map((c) => ({
+                    pairId: c.pairId,
+                    childDeviceId: c.childDeviceId,
+                    displayName: c.displayName,
+                    isOnline: c.isOnline,
+                  }))}
+                  selectedPairId={selectedChildId}
+                  onSelect={setSelectedChildId}
+                  showAllOption
+                  allLabel={`All ${allChildren.length} children`}
+                />
+              </View>
+            )}
           </View>
         </View>
 
@@ -186,14 +356,19 @@ export default function ActivityScreen() {
           <Text style={s.encryptBadgeText}>All notification contents are securely encrypted at rest</Text>
         </View>
 
-        {/* ========== TIMELINE FEED ========== */}
         <Text style={s.sectionTitle}>Recent Activity</Text>
 
-        {/* ========== SEARCH & FILTER SECTION ========== */}
-        {!isLoading && notifications.length > 0 && (
+        {!isLoading && aggregated.length > 0 && showMultiSelector === false && selectedChild && (
+          <View style={s.singleChildHint}>
+            <Text style={s.singleChildHintText}>
+              Showing {selectedChild.displayName || 'this child'}. Pair more devices from Settings to view together.
+            </Text>
+          </View>
+        )}
+
+        {!isLoading && aggregated.length > 0 && (
           <View style={{ zIndex: 100, position: 'relative' }}>
             <View style={s.filterBarContainer}>
-              {/* Search Bar */}
               <View style={s.searchBar}>
                 <Ionicons name="search-outline" size={18} color={C.onSurfaceVariant} style={s.searchIcon} />
                 <TextInput
@@ -212,7 +387,6 @@ export default function ActivityScreen() {
                 )}
               </View>
 
-              {/* App Filter Button */}
               <TouchableOpacity
                 ref={appButtonRef}
                 style={[s.filterTriggerBtn, selectedPackage && s.filterTriggerBtnActive]}
@@ -222,7 +396,6 @@ export default function ActivityScreen() {
                 <Ionicons name="apps-outline" size={20} color={selectedPackage ? C.white : C.primary} />
               </TouchableOpacity>
 
-              {/* Date Filter Button */}
               <TouchableOpacity
                 ref={dateButtonRef}
                 style={[s.filterTriggerBtn, dateRange !== 'all' && s.filterTriggerBtnActive]}
@@ -233,7 +406,6 @@ export default function ActivityScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* App Selector Dropdown Modal */}
             <Modal
               visible={showAppSelector}
               transparent
@@ -272,7 +444,6 @@ export default function ActivityScreen() {
               </Pressable>
             </Modal>
 
-            {/* Date & Time Selector Modal */}
             <DateRangePicker
               visible={showDateSelector}
               onClose={() => setShowDateSelector(false)}
@@ -302,16 +473,18 @@ export default function ActivityScreen() {
 
         {isLoading ? (
           <ActivitySkeleton />
-        ) : error && notifications.length === 0 ? (
+        ) : error && aggregated.length === 0 ? (
           <View style={{ padding: 32, alignItems: 'center' }}>
             <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
           </View>
-        ) : notifications.length === 0 ? (
+        ) : aggregated.length === 0 ? (
           <View style={{ padding: 32, alignItems: 'center' }}>
             <Ionicons name="notifications-off-outline" size={40} color={C.outline} />
-            <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>No notifications yet</Text>
+            <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.outline, marginTop: 12 }}>
+              {allChildren.length === 0 ? 'No device paired yet' : 'No notifications yet'}
+            </Text>
           </View>
-        ) : filteredNotifications.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <View style={{ padding: 48, alignItems: 'center' }}>
             <Ionicons name="search-outline" size={40} color={C.outline} />
             <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 15, color: C.outline, marginTop: 12, textAlign: 'center' }}>
@@ -334,74 +507,254 @@ export default function ActivityScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={s.timelineContainer}>
-            <View style={[
-              s.timelineLine,
-              firstIconY !== null && lastIconY !== null ? {
-                top: firstIconY,
-                bottom: undefined,
-                height: lastIconY - firstIconY,
-              } : {
-                top: 26,
-                bottom: 26,
-              }
-            ]} />
-
-            {filteredNotifications.map((n, idx) => {
-              const isToday = new Date(n.notification_posted_at).toDateString() === new Date().toDateString();
-              const isYesterday = new Date(n.notification_posted_at).toDateString() === new Date(Date.now() - 86400000).toDateString();
-              const showDateMarker = idx === 0 || (
-                new Date(n.notification_posted_at).toDateString() !== new Date(filteredNotifications[idx - 1].notification_posted_at).toDateString()
-              );
-              const timeStr = new Date(n.notification_posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-              return (
-                <React.Fragment key={n.id}>
-                  {showDateMarker && (
-                    <View style={[s.dateMarkerRow, idx > 0 ? { marginTop: 10 } : undefined]}>
-                      <View style={[s.dateMarkerPill, !isToday ? s.dateMarkerPillYesterday : undefined]}>
-                        <Text style={[s.dateMarkerText, !isToday ? { color: C.onSurfaceVariant } : undefined]}>
-                          {isToday ? 'Today' : isYesterday ? 'Yesterday' : new Date(n.notification_posted_at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-                        </Text>
-                      </View>
-                    </View>
+          <View>
+            {groups.map((group) => (
+              <ChildGroupSection
+                key={group.child?.pairId ?? 'single'}
+                group={group}
+                firstIconY={group === groups[0] ? firstIconY : null}
+                lastIconY={group === groups[groups.length - 1] ? lastIconY : null}
+                setFirstIconY={group === groups[0] ? setFirstIconY : () => undefined}
+                setLastIconY={group === groups[groups.length - 1] ? setLastIconY : () => undefined}
+                isFirstGroup={group === groups[0]}
+                isLastGroup={group === groups[groups.length - 1]}
+              />
+            ))}
+            {hasMore && aggregated.length >= 50 && (
+              <View style={s.loadMoreWrap}>
+                <TouchableOpacity
+                  onPress={loadMore}
+                  disabled={isLoadingMore}
+                  activeOpacity={0.7}
+                  style={s.loadMoreBtn}
+                >
+                  {isLoadingMore ? (
+                    <ActivityIndicator size="small" color={C.primary} />
+                  ) : (
+                    <Text style={s.loadMoreText}>Load older activity</Text>
                   )}
-                  <View
-                    style={s.activityRow}
-                    onLayout={
-                      idx === 0
-                        ? (e) => setFirstIconY(e.nativeEvent.layout.y + 26)
-                        : idx === notifications.length - 1
-                          ? (e) => setLastIconY(e.nativeEvent.layout.y + 26)
-                          : undefined
-                    }
-                  >
-                    <View style={s.iconNodeWrap}>
-                      <AppIcon iconBase64={n.app_icon_base64} size={44} fallbackSize={18} />
-                    </View>
-                    <View style={s.activityCardWrap}>
-                      <View style={s.timeBadgePill}>
-                        <Text style={s.timeBadgeText}>{timeStr}</Text>
-                      </View>
-                      <NotificationSourceCard notification={n} />
-                    </View>
-                  </View>
-                </React.Fragment>
-              );
-            })}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
-        {/* Bottom padding spacing */}
         <View style={s.bottomSpacer} />
       </EdgeFadeScrollView>
     </ThemedView>
   );
 }
 
-// ============================================================
-// STYLES - mapped precisely from Stitch Tailwinds
-// ============================================================
+interface ChildGroupSectionProps {
+  group: Group;
+  firstIconY: number | null;
+  lastIconY: number | null;
+  setFirstIconY: (y: number | null) => void;
+  setLastIconY: (y: number | null) => void;
+  isFirstGroup: boolean;
+  isLastGroup: boolean;
+}
+
+function ChildGroupSection({
+  group,
+  firstIconY,
+  lastIconY,
+  setFirstIconY,
+  setLastIconY,
+  isFirstGroup,
+  isLastGroup,
+}: ChildGroupSectionProps) {
+  const { child, items } = group;
+  return (
+    <View>
+      {child && (
+        <View style={s.childGroupHeader}>
+          <View style={s.childGroupAvatar}>
+            <Ionicons name="person-outline" size={16} color={C.primary} />
+            <View
+              style={[
+                s.childGroupOnlineDot,
+                { backgroundColor: child.isOnline ? '#31A24C' : C.outline },
+              ]}
+            />
+          </View>
+          <View style={s.childGroupText}>
+            <Text style={s.childGroupName}>{child.displayName || 'Child Device'}</Text>
+            <Text style={s.childGroupSub}>
+              {child.isOnline
+                ? 'Online'
+                : child.lastSeenAt
+                  ? `Last seen ${new Date(child.lastSeenAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
+                  : 'Offline'}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <View style={stylesLocal.timelineContainer}>
+        <View
+          style={[
+            stylesLocal.timelineLine,
+            isFirstGroup && firstIconY !== null && isLastGroup && lastIconY !== null
+              ? { top: firstIconY, height: lastIconY - firstIconY }
+              : isFirstGroup && firstIconY !== null && !isLastGroup
+                ? { top: firstIconY, height: undefined, bottom: 26 }
+                : !isFirstGroup && isLastGroup && lastIconY !== null
+                  ? { top: 26, bottom: undefined, height: lastIconY }
+                  : { top: 26, bottom: 26 },
+          ]}
+        />
+
+        {items.map((n, idx) => {
+          const isToday = new Date(n.notification_posted_at).toDateString() === new Date().toDateString();
+          const isYesterday =
+            new Date(n.notification_posted_at).toDateString() === new Date(Date.now() - 86400000).toDateString();
+          const showDateMarker =
+            idx === 0 ||
+            new Date(n.notification_posted_at).toDateString() !==
+              new Date(items[idx - 1].notification_posted_at).toDateString();
+          const isFirstInList = isFirstGroup && idx === 0;
+          const isLastInList = isLastGroup && idx === items.length - 1;
+          const isFacebook =
+            n.source_package &&
+            (n.source_package.includes('facebook') || n.source_package.includes('orca'));
+
+          return (
+            <React.Fragment key={n.id}>
+              {showDateMarker && (
+                <View style={[stylesLocal.dateMarkerRow, idx > 0 ? { marginTop: 10 } : undefined]}>
+                  <View
+                    style={[
+                      stylesLocal.dateMarkerPill,
+                      !isToday ? stylesLocal.dateMarkerPillYesterday : undefined,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        stylesLocal.dateMarkerText,
+                        !isToday ? { color: C.onSurfaceVariant } : undefined,
+                      ]}
+                    >
+                      {isToday
+                        ? 'Today'
+                        : isYesterday
+                          ? 'Yesterday'
+                          : new Date(n.notification_posted_at).toLocaleDateString([], {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              <View
+                style={stylesLocal.activityRow}
+                onLayout={(e) => {
+                  if (isFirstInList) setFirstIconY(e.nativeEvent.layout.y + 22);
+                  if (isLastInList) setLastIconY(e.nativeEvent.layout.y + 22);
+                }}
+              >
+                <View style={stylesLocal.iconNodeWrap}>
+                  <AppIcon iconBase64={n.app_icon_base64} size={44} fallbackSize={18} />
+                  {isFacebook && <View style={stylesLocal.onlineBadgeDot} />}
+                </View>
+                <View style={stylesLocal.activityCardWrap}>
+                  <NotificationSourceCard notification={n} />
+                </View>
+              </View>
+            </React.Fragment>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const stylesLocal = StyleSheet.create({
+  timelineContainer: {
+    position: 'relative',
+    marginLeft: 8,
+    paddingLeft: 24,
+  },
+  timelineLine: {
+    position: 'absolute',
+    left: 2,
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: C.surfaceContainerHigh,
+    zIndex: 0,
+  },
+  dateMarkerRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginLeft: -44,
+    marginBottom: 24,
+    zIndex: 2,
+  },
+  dateMarkerPill: {
+    backgroundColor: 'rgba(255, 248, 240, 0.75)',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    borderRadius: 9999,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 32,
+  },
+  dateMarkerPillYesterday: {
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+  },
+  dateMarkerText: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: C.onSurface,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    position: 'relative',
+    alignItems: 'flex-start',
+  },
+  iconNodeWrap: {
+    position: 'absolute',
+    left: -44,
+    top: 0,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: C.surfaceContainerLowest,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+  },
+  onlineBadgeDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#31A24C',
+    borderWidth: 2.5,
+    borderColor: C.surfaceContainerLowest,
+    zIndex: 4,
+  },
+  activityCardWrap: {
+    flex: 1,
+    marginLeft: 6,
+  },
+});
+
 const s = StyleSheet.create({
   container: {
     flex: 1,
@@ -426,8 +779,6 @@ const s = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 12,
     height: 48,
-    borderWidth: 1,
-    borderColor: 'rgba(68, 103, 77, 0.12)',
   },
   searchIcon: {
     marginRight: 8,
@@ -449,31 +800,10 @@ const s = StyleSheet.create({
     backgroundColor: C.surfaceContainerLowest,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(68, 103, 77, 0.12)',
   },
   filterTriggerBtnActive: {
     backgroundColor: C.primary,
-    borderColor: C.primary,
   },
-  profileWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: C.surfaceContainerLowest,
-    backgroundColor: C.surfaceContainerHighest,
-    overflow: 'hidden',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-  },
-  profileAvatar: {
-    width: '100%',
-    height: '100%',
-  },
-  /* ---------- Premium Hero ---------- */
   heroSection: {
     position: 'relative',
     paddingVertical: 36,
@@ -503,7 +833,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
   },
-
+  heroSelectorWrap: {
+    marginTop: 4,
+  },
   heroTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
     fontSize: 38,
@@ -539,158 +871,85 @@ const s = StyleSheet.create({
     fontSize: 11,
     color: C.primary,
   },
-
-  /* ---------- Timeline Feed ---------- */
-  timelineContainer: {
-    position: 'relative',
-    marginLeft: 8,
-    paddingLeft: 24,
-  },
-  timelineLine: {
-    position: 'absolute',
-    left: 2,
-    top: 0,
-    bottom: 0,
-    width: 2,
-    backgroundColor: C.surfaceContainerHigh,
-    zIndex: 0,
-  },
-  dateMarkerRow: {
+  childGroupHeader: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginLeft: -44,
-    marginBottom: 24,
-    zIndex: 2,
-  },
-  dateMarkerPill: {
-    backgroundColor: 'rgba(255, 248, 240, 0.75)',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    borderRadius: 9999,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 32,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-  },
-  dateMarkerPillYesterday: {
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-  },
-  dateMarkerText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.onSurface,
-  },
-
-  /* Activity Row */
-  activityRow: {
-    flexDirection: 'row',
-    marginBottom: 25,
-    position: 'relative',
-  },
-  activityRowYesterday: {
-    opacity: 0.7,
-    marginBottom: 24,
-  },
-  iconNodeWrap: {
-    position: 'absolute',
-    left: -44,
-    top: 4,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: C.surfaceContainerLowest,
-    justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-  },
-  iconNodeInner: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /* Activity Card */
-  activityCardWrap: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  timeBadgePill: {
-    alignSelf: 'flex-end',
-    backgroundColor: C.surfaceContainerLow,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 9999,
-    marginBottom: 4,
-  },
-  timeBadgeText: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 12,
-    lineHeight: 16,
-    color: C.onSurfaceVariant,
-  },
-
-  /* Remote Illustration */
-  illustrationWrapper: {
+    gap: 12,
+    marginHorizontal: 16,
     marginTop: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    height: 120,
-    backgroundColor: C.surfaceContainerLow,
+    marginBottom: 8,
   },
-  illustrationImage: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.85,
-  },
-
-  /* Minimal activity card */
-  activityCardMinimal: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingLeft: 8,
-  },
-  cardHeaderMinimal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  childGroupAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.primaryContainer,
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'center',
+    position: 'relative',
   },
-  cardTitleMinimal: {
+  childGroupOnlineDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: C.surface,
+  },
+  childGroupText: {
+    flex: 1,
+  },
+  childGroupName: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 15,
     color: C.onSurface,
   },
-  timeTextMinimal: {
+  childGroupSub: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 11,
+    color: C.onSurfaceVariant,
+    marginTop: 2,
+  },
+  singleChildHint: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: C.surfaceContainerLow,
+    borderRadius: 16,
+  },
+  singleChildHintText: {
     fontFamily: 'PlusJakartaSans-Medium',
     fontSize: 12,
     color: C.onSurfaceVariant,
+    lineHeight: 18,
   },
-  cardDescMinimal: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.onSurfaceVariant,
-  },
-
-  /* Bottom Spacer */
   bottomSpacer: {
     height: 120,
   },
 
-  /* ---------- Dropdowns & Modals ---------- */
+  loadMoreWrap: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  loadMoreBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 9999,
+    backgroundColor: C.surfaceContainerLowest,
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  loadMoreText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    color: C.primary,
+  },
+
   dropdownOverlay: {
     flex: 1,
     backgroundColor: 'rgba(54, 50, 40, 0.15)',
@@ -700,8 +959,6 @@ const s = StyleSheet.create({
     backgroundColor: C.surface,
     borderRadius: 24,
     padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(68, 103, 77, 0.12)',
     shadowColor: '#363228',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,

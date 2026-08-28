@@ -27,6 +27,18 @@ serve(async (req) => {
       )
     }
 
+    // Complimentary admin-granted subscriptions have no PhonePe mandate to
+    // cancel; route them through the admin panel only.
+    if (subscription.source === 'gift') {
+      return new Response(
+        JSON.stringify({
+          error:
+            'This subscription was granted by support and cannot be cancelled from the app. Please contact support.',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 },
+      )
+    }
+
     // Ask PhonePe to cancel the mandate, but allow local cancellation to
     // proceed even if the remote call fails (e.g. sandbox credentials not
     // configured yet) so the app is never left locked.
@@ -43,10 +55,15 @@ serve(async (req) => {
     }
 
     const now = new Date().toISOString()
+    // Scope by both id AND user_id. The earlier select already filters by
+    // user_id, but service_role bypasses RLS — so a forged request could
+    // (in theory) name a subscription id owned by someone else. Adding the
+    // user_id guard makes the mutation atomic and ownership-checked.
     const { error: updateError } = await adminClient
       .from('subscriptions')
-      .update({ status: 'revoked', error_message: null })
+      .update({ status: 'revoked', revoked_at: now, error_message: null })
       .eq('id', subscription.id)
+      .eq('user_id', user.id)
     if (updateError) throw updateError
 
     await adminClient.from('subscription_events').insert({

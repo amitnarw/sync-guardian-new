@@ -11,6 +11,7 @@ import { usePermissionStatus } from '@/hooks/use-permission-status';
 import { PermissionStatusRow } from '@/components/permission-status-row';
 import { NotifListenerRequestModal } from '@/components/notif-listener-request-modal';
 import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
+import { NotificationDiagnosticPanel } from '@/components/notification-diagnostic-panel';
 import * as NotificationAccess from 'notification-access';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
@@ -251,6 +252,9 @@ export default function ChildSettingsScreen() {
 
             {/* ========== PERMISSIONS SECTION ========== */}
             <PermissionsSection />
+
+            {/* ========== DIAGNOSTIC PANEL ========== */}
+            <NotificationDiagnosticPanel />
 
             {/* ========== REVOKED BANNER ========== */}
             {pairStatus === 'revoked' && (

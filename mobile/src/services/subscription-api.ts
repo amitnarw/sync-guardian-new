@@ -19,7 +19,7 @@ export interface SubscriptionRow {
   id: string;
   user_id: string;
   plan_id: string;
-  status: 'pending' | 'active' | 'paused' | 'expired' | 'cancelled' | 'revoked';
+  status: 'pending' | 'active' | 'expired' | 'cancelled' | 'revoked';
   merchant_order_id: string | null;
   merchant_subscription_id: string | null;
   phonepe_order_id: string | null;

@@ -6,15 +6,15 @@ import { sendParentPush } from '../_shared/fcm.ts'
 import { isValidUUID, isValidString, sanitizeString, requireBody } from '../_shared/validation.ts'
 import { logger, mapError } from '../_shared/logger.ts'
 import { encryptNotification } from '../_shared/notification-crypto.ts'
+import { userHasAccess } from '../_shared/subscription-access.ts'
 
-function deterministicKey(n: Record<string, unknown>): string {
+async function deterministicKey(n: Record<string, unknown>): Promise<string> {
   const raw = `${n.source_package || ''}|${n.notification_posted_at || ''}|${n.notification_title || ''}|${n.notification_body || ''}`
   const encoder = new TextEncoder()
   const data = encoder.encode(raw)
-  return crypto.subtle.digest('SHA-256', data).then(hash => {
-    const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
-    return `auto_${hex.slice(0, 32)}`
-  })
+  const hash = await crypto.subtle.digest('SHA-256', data)
+  const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return `auto_${hex.slice(0, 32)}`
 }
 
 interface NotificationRow {
@@ -85,7 +85,7 @@ serve(async (req) => {
 
     const { data: pairData } = await adminClient
       .from('pairs')
-      .select('parent_device_id, child_device_id, status')
+      .select('parent_device_id, child_device_id, parent_user_id, status')
       .eq('id', pairId)
       .eq('child_device_id', childDeviceId)
       .single()
@@ -93,6 +93,22 @@ serve(async (req) => {
     if (!pairData || pairData.status !== 'active') {
       return new Response(
         JSON.stringify({ data: [], count: 0, dropped: rawNotifications.length, reason: 'pair_inactive' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+      )
+    }
+
+    // Gate: the paired parent must currently have access (active subscription
+    // or live trial). When access has lapsed we silently drop the batch and do
+    // not write to the DB or send FCM push. The client treats this reason as
+    // a terminal drop in its local buffer.
+    const parentHasAccess = await userHasAccess(pairData.parent_user_id as string)
+    if (!parentHasAccess) {
+      logger.info('ingest-child-notification', 'dropping batch: parent has no active access', {
+        pairId,
+        childDeviceId,
+      })
+      return new Response(
+        JSON.stringify({ data: [], count: 0, dropped: rawNotifications.length, reason: 'no_access' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
       )
     }
@@ -186,7 +202,14 @@ serve(async (req) => {
         }
 
         const pushToken = parentDevice.push_token
-        if (pushToken) {
+        // Track FCM delivery success per notification id so push_delivery_logs
+        // can record the actual outcome instead of relying on stale DB rows.
+        const deliveryResults = new Map<string, 'success' | 'pending' | 'failed'>()
+        if (!pushToken) {
+          // No push token; mark every notification as pending (it will be
+          // fetched on next app open).
+          for (const id of notificationIds) deliveryResults.set(id, 'pending')
+        } else {
           const batchCount = inserted.length
           if (batchCount >= 4) {
             const firstApp = rows[0]?.source_app_name || 'apps'
@@ -201,6 +224,9 @@ serve(async (req) => {
                 .from('mirrored_notifications')
                 .update({ delivery_mode: 'push' })
                 .in('id', notificationIds)
+              for (const id of notificationIds) deliveryResults.set(id, 'success')
+            } else {
+              for (const id of notificationIds) deliveryResults.set(id, 'failed')
             }
             if (result.unregisteredToken) {
               await adminClient
@@ -216,7 +242,11 @@ serve(async (req) => {
                   n.source_app_name || 'Notification',
                   n.notification_title.slice(0, 120) || '',
                 )
-                return { id: (inserted[idx] as any).id, success: sent.success }
+                return {
+                  id: (inserted[idx] as any).id as string,
+                  success: sent.success,
+                  unregisteredToken: !!sent.unregisteredToken,
+                }
               })
             )
 
@@ -228,7 +258,14 @@ serve(async (req) => {
                 .in('id', succeededIds)
             }
 
-            const hasUnregistered = results.some(r => !r.success)
+            for (const r of results) {
+              deliveryResults.set(r.id, r.success ? 'success' : 'failed')
+            }
+
+            // Only null the parent's push token when FCM explicitly reports
+            // it as unregistered. Transient errors (network, rate limit,
+            // offline device) must not wipe a valid token.
+            const hasUnregistered = results.some(r => r.unregisteredToken)
             if (hasUnregistered) {
               await adminClient
                 .from('devices')
@@ -238,20 +275,31 @@ serve(async (req) => {
           }
         }
 
-        // Log push delivery attempts to push_delivery_logs
-        if (pushToken) {
-          const logRows = inserted.map((n: any) => ({
-            notification_id: n.id,
+        // Log push delivery attempts to push_delivery_logs. Use the per-id
+        // deliveryResults map so the recorded status reflects what actually
+        // happened, not the stale `delivery_mode` from the upsert return.
+        // Skip entirely when the parent has no push token — we don't want
+        // the table to fill up with pending rows for parents who never
+        // registered for push.
+        if (notificationIds.length > 0 && pushToken) {
+          const attemptedAt = new Date().toISOString()
+          const logRows = notificationIds.map((id) => ({
+            notification_id: id,
             pair_id: pairId,
             device_id: parentDeviceId,
             delivery_mode: 'parent_push' as const,
-            status: (n as any).delivery_mode === 'push' ? 'success' as const : 'pending' as const,
-            attempted_at: new Date().toISOString(),
+            status: (deliveryResults.get(id) ?? 'pending') as 'success' | 'pending' | 'failed',
+            attempted_at: attemptedAt,
           }))
-          await adminClient.from('push_delivery_logs').insert(logRows).then(
-            () => {},
-            () => {},
-          )
+          await adminClient
+            .from('push_delivery_logs')
+            .insert(logRows)
+            .then(
+              () => {},
+              (err) => {
+                logger.warn('ingest-child-notification', 'push_delivery_logs insert failed', err)
+              },
+            )
         }
       } catch (pushErr) {
         logger.warn('ingest-child-notification', 'push delivery error (non-fatal)', pushErr)

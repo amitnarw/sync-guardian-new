@@ -118,6 +118,8 @@ serve(async (req) => {
     // Mark the pair's initial setup as completed so the child device can
     // leave its "waiting for parent" state. An empty changes array means the
     // parent skipped app selection (no monitorable apps on the child device).
+    // Scope by parent_user_id for defense in depth: the earlier query already
+    // filtered to caller-owned pairs, but the mutation should also enforce it.
     const { error: updatePairErr } = await adminClient
       .from('pairs')
       .update({
@@ -125,6 +127,7 @@ serve(async (req) => {
         parent_skipped_app_selection: changes.length === 0,
       })
       .eq('id', pair.id)
+      .eq('parent_user_id', user.id)
 
     if (updatePairErr) throw updatePairErr
 

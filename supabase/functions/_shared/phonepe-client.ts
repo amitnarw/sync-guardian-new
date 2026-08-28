@@ -298,16 +298,63 @@ export async function cancelPhonePeSubscription(merchantSubscriptionId: string):
 // PhonePe signs webhook payloads with the Checksum Secret Key:
 //   signature = base64( HMAC-SHA256( secret, rawBody ) )
 // and sends it in the `X-VERIFY` header. Verify against PHONEPE_WEBHOOK_SECRET.
+//
+// Security policy:
+//   - Production (PHONEPE_ENV=production): secret MUST be configured.
+//     A missing secret in production is treated as a 401 so a misconfigured
+//     deployment cannot accidentally accept forgeries.
+//   - Sandbox / local dev: secret may be missing, but ONLY when
+//     ALLOW_UNVERIFIED_WEBHOOKS=true is set explicitly. This forces the
+//     developer to opt in to insecure mode and surfaces the bypass in
+//     infrastructure config rather than code.
 // ------------------------------------------------------------------
+
+// Constant-time string comparison. We can't trust JS's `===` to be
+// constant-time across V8/SpiderMonkey implementations, and HMAC
+// verification SHOULD compare signatures in constant time to avoid
+// timing oracles. Both inputs must be strings of equal length for the
+// comparison to be meaningful; otherwise we short-circuit on length.
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return diff === 0
+}
+
 export async function verifyWebhookSignature(
   rawBody: string,
   xVerifyHeader: string | null,
 ): Promise<boolean> {
+  const env = (Deno.env.get('PHONEPE_ENV') ?? 'sandbox').toLowerCase()
+  const isProduction = env === 'production'
   const secret = Deno.env.get('PHONEPE_WEBHOOK_SECRET')
+  const allowUnverified =
+    Deno.env.get('ALLOW_UNVERIFIED_WEBHOOKS') === 'true'
+
   if (!secret) {
-    logger.warn('phonepe-client', 'PHONEPE_WEBHOOK_SECRET not configured, skipping verification')
+    if (isProduction) {
+      logger.error(
+        'phonepe-client',
+        'PHONEPE_WEBHOOK_SECRET not configured in production; rejecting',
+      )
+      return false
+    }
+    if (!allowUnverified) {
+      logger.error(
+        'phonepe-client',
+        'PHONEPE_WEBHOOK_SECRET not configured and ALLOW_UNVERIFIED_WEBHOOKS not set; rejecting',
+      )
+      return false
+    }
+    logger.warn(
+      'phonepe-client',
+      'PHONEPE_WEBHOOK_SECRET not configured; ALLOW_UNVERIFIED_WEBHOOKS=true set, skipping verification',
+    )
     return true
   }
+
   if (!xVerifyHeader) return false
 
   const enc = new TextEncoder()
@@ -320,7 +367,7 @@ export async function verifyWebhookSignature(
   )
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(rawBody))
   const expected = btoa(String.fromCharCode(...new Uint8Array(sig)))
-  return expected === xVerifyHeader
+  return constantTimeEqual(expected, xVerifyHeader)
 }
 
 export { PhonePeApiError, IS_SANDBOX }

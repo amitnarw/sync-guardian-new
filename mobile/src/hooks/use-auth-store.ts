@@ -24,6 +24,14 @@ interface AuthState {
   deviceId: string | null;
   setDeviceId: (deviceId: string | null) => void;
 
+  /**
+   * Currently selected child pair id for the parent UI. null = "all children".
+   * Tracked across Activity / Insights / Home so the parent can switch children
+   * without losing the selection, then returns to "all" by default.
+   */
+  selectedChildId: string | null;
+  setSelectedChildId: (childId: string | null) => void;
+
   fcmToken: string | null;
   setFcmToken: (fcmToken: string | null) => void;
 
@@ -87,6 +95,9 @@ export const useAuthStore = create<AuthState>()(
       deviceId: null,
       setDeviceId: (deviceId) => set({ deviceId: isValidUUID(deviceId) ? deviceId : null }),
 
+      selectedChildId: null,
+      setSelectedChildId: (selectedChildId) => set({ selectedChildId: isValidUUID(selectedChildId) ? selectedChildId : null }),
+
       fcmToken: null,
       setFcmToken: (fcmToken) => set({ fcmToken }),
 
@@ -118,7 +129,7 @@ export const useAuthStore = create<AuthState>()(
       })),
       clearSyncDeviceError: () => set({ syncDeviceErrorCount: 0, syncDeviceError: null }),
 
-      clearPair: () => set({ pairId: null, deviceId: null }),
+      clearPair: () => set({ pairId: null, deviceId: null, selectedChildId: null }),
 
       lastCaptureAt: null,
       lastCapturePackage: null,
@@ -139,6 +150,7 @@ export const useAuthStore = create<AuthState>()(
           email: null,
           pairId: null,
           deviceId: null,
+          selectedChildId: null,
           fcmToken: null,
           fcmRequestedOnce: false,
           userId: null,
@@ -169,6 +181,7 @@ export const useAuthStore = create<AuthState>()(
         email: state.email,
         pairId: state.pairId,
         deviceId: state.deviceId,
+        selectedChildId: state.selectedChildId,
         fcmToken: state.fcmToken,
         fcmRequestedOnce: state.fcmRequestedOnce,
         profileImage: state.profileImage,

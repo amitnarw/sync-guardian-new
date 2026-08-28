@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path } from 'react-native-svg';
 import { getSourceTheme, type SourceAppTheme } from '@/constants/source-app-themes';
 
 const C = {
@@ -10,92 +11,30 @@ const C = {
   surfaceContainerLowest: '#ffffff',
 } as const;
 
-const CHAT = {
-  bubbleBg: '#D9FDD3',
-  textTitle: '#111B21',
-  textBody: '#303030',
-  textMeta: '#667781',
-  checkMark: '#53BDEB',
-} as const;
-
-const MESSENGER = {
-  bubbleBg: '#FFFFFF',
-  textTitle: '#000000',
-  textBody: '#000000',
-  textMeta: '#65676B',
-  shadow: '#000000',
-} as const;
-
-const DISCORD = {
-  bg: '#2F3136',
-  textUsername: '#FFFFFF',
-  textBody: '#DCDDDE',
-  textMeta: '#72767D',
-} as const;
-
-const LINKEDIN = {
-  bg: '#FFFFFF',
-  textName: '#000000E6',
-  textBody: '#000000E6',
-  textMeta: '#00000099',
-  verifiedBg: '#0A66C2',
-  border: '#E0DFDC',
-} as const;
+const WHATSAPP_PACKAGES = new Set([
+  'com.whatsapp',
+  'com.whatsapp.w4b',
+]);
 
 const MESSENGER_PACKAGES = new Set([
   'com.facebook.orca',
   'com.facebook.katana',
+  'com.facebook.lite',
 ]);
 
 const DISCORD_PACKAGES = new Set(['com.discord']);
 
 const LINKEDIN_PACKAGES = new Set(['com.linkedin.android']);
 
-const TELEGRAM = {
-  bg: '#FFFFFF',
-  senderName: '#A394E0',
-  textBody: '#000000',
-  textMeta: '#999999',
-  mentionColor: '#1A73E8',
-  shadow: '#000000',
-} as const;
-
 const TELEGRAM_PACKAGES = new Set(['org.telegram.messenger', 'org.telegram.plus', 'org.telegram.beta']);
 
-const REDDIT = {
-  bg: '#1A1A1B',
-  textUsername: '#D7DADC',
-  textBody: '#D7DADC',
-  textMeta: '#818384',
-  actionIcon: '#D7DADC',
-  border: '#343536',
-} as const;
-
 const REDDIT_PACKAGES = new Set(['com.reddit.frontpage']);
-
-const IMESSAGE = {
-  bubbleBg: '#FFFFFF',
-  textName: '#007AFF',
-  textBody: '#000000',
-  textMeta: '#8E8E93',
-  shadow: '#000000',
-} as const;
 
 const IMESSAGE_PACKAGES = new Set([
   'com.google.android.apps.messaging',
   'com.android.mms',
   'com.samsung.android.messaging',
 ]);
-
-const X_TWITTER = {
-  bg: '#000000',
-  textName: '#E7E9EA',
-  textMeta: '#71767B',
-  textBody: '#E7E9EA',
-  verifiedBg: '#1D9BF0',
-  actionIcon: '#71767B',
-  border: '#2F3336',
-} as const;
 
 const X_TWITTER_PACKAGES = new Set([
   'com.twitter.android',
@@ -113,9 +52,57 @@ interface NotificationSourceCardProps {
   };
 }
 
+// WhatsApp Tail (Standard size)
+function BubbleTailWhatsApp({ color = '#D9FDD3' }: { color?: string }) {
+  return (
+    <View style={tailStyles.tailWhatsApp} pointerEvents="none">
+      <Svg width={9} height={13} viewBox="0 0 9 13">
+        <Path
+          d="M9 0 H0 C3 2, 6 6, 9 13 Z"
+          fill={color}
+        />
+      </Svg>
+    </View>
+  );
+}
+
+// Telegram Tail (Smaller size, same shape as WhatsApp)
+function BubbleTailTelegram({ color = '#FFFFFF' }: { color?: string }) {
+  return (
+    <View style={tailStyles.tailTelegram} pointerEvents="none">
+      <Svg width={6} height={9} viewBox="0 0 6 9">
+        <Path
+          d="M6 0 H0 C2 1.5, 4 4.5, 6 9 Z"
+          fill={color}
+        />
+      </Svg>
+    </View>
+  );
+}
+
+const tailStyles = StyleSheet.create({
+  tailWhatsApp: {
+    position: 'absolute',
+    top: 0,
+    left: -8,
+    width: 9,
+    height: 13,
+    zIndex: 2,
+  },
+  tailTelegram: {
+    position: 'absolute',
+    top: 0,
+    left: -5.5,
+    width: 6,
+    height: 9,
+    zIndex: 2,
+  },
+});
+
 export const NotificationSourceCard = React.memo(function NotificationSourceCard({
   notification,
 }: NotificationSourceCardProps) {
+  const pkg = notification.source_package ?? '';
   const theme = getSourceTheme(notification.source_package);
   const title = notification.notification_title || '(no title)';
   const body = notification.notification_body || '';
@@ -123,144 +110,90 @@ export const NotificationSourceCard = React.memo(function NotificationSourceCard
     ? new Date(notification.notification_posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null;
 
+  if (WHATSAPP_PACKAGES.has(pkg)) {
+    return <WhatsAppCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+  }
+  if (MESSENGER_PACKAGES.has(pkg)) {
+    return <FacebookMessengerCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+  }
+  if (TELEGRAM_PACKAGES.has(pkg)) {
+    return <TelegramCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+  }
+  if (DISCORD_PACKAGES.has(pkg)) {
+    return <DiscordCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+  }
+  if (X_TWITTER_PACKAGES.has(pkg)) {
+    return <XTwitterCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+  }
+  if (REDDIT_PACKAGES.has(pkg)) {
+    return <RedditCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+  }
+  if (LINKEDIN_PACKAGES.has(pkg)) {
+    return <LinkedInCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+  }
+  if (IMESSAGE_PACKAGES.has(pkg)) {
+    return <IMessageCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+  }
   if (theme.isChat) {
-    if (DISCORD_PACKAGES.has(notification.source_package ?? '')) {
-      return <DiscordCard title={title} body={body} theme={theme} timeStr={timeStr} />;
-    }
-    if (TELEGRAM_PACKAGES.has(notification.source_package ?? '')) {
-      return <TelegramCard title={title} body={body} theme={theme} timeStr={timeStr} />;
-    }
-    if (X_TWITTER_PACKAGES.has(notification.source_package ?? '')) {
-      return <XTwitterCard title={title} body={body} theme={theme} timeStr={timeStr} />;
-    }
-    if (REDDIT_PACKAGES.has(notification.source_package ?? '')) {
-      return <RedditCard title={title} body={body} theme={theme} timeStr={timeStr} />;
-    }
-    if (LINKEDIN_PACKAGES.has(notification.source_package ?? '')) {
-      return <LinkedInCard title={title} body={body} theme={theme} timeStr={timeStr} />;
-    }
-    if (MESSENGER_PACKAGES.has(notification.source_package ?? '')) {
-      return <MessengerCard title={title} body={body} theme={theme} timeStr={timeStr} />;
-    }
-    if (IMESSAGE_PACKAGES.has(notification.source_package ?? '')) {
-      return <IMessageCard title={title} body={body} theme={theme} timeStr={timeStr} />;
-    }
-    return <ChatCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+    return <WhatsAppCard title={title} body={body} theme={theme} timeStr={timeStr} />;
   }
 
   return <MediaCard title={title} body={body} theme={theme} timeStr={timeStr} />;
 });
 
-/* ───────────────────────────────────────────────────────────────
-   Chat card — WhatsApp / iMessage / Telegram style
-   Bubble IS the card. Pale green background. No wrapper.
-   ─────────────────────────────────────────────────────────────── */
-function ChatCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
+// WhatsApp Card - Standard WhatsApp tail on left, pale green bubble, time + blue checks
+function WhatsAppCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
+  const displayText = body || title;
+  const showSender = body && title && title !== 'WhatsApp' && title !== 'WhatsApp Business';
+
   return (
-    <View style={chatStyles.bubble}>
-      <View style={chatStyles.header}>
-        <View style={[chatStyles.appDot, { backgroundColor: theme.accent }]} />
-        <Text style={chatStyles.senderName} numberOfLines={1}>{title}</Text>
-      </View>
-      {body ? (
-        <Text style={chatStyles.body} numberOfLines={6}>{body}</Text>
-      ) : null}
-      <View style={chatStyles.footer}>
-        {timeStr && <Text style={chatStyles.time}>{timeStr}</Text>}
-        <Ionicons name="checkmark-done" size={14} color={CHAT.checkMark} />
-      </View>
-    </View>
-  );
-}
-
-/* ───────────────────────────────────────────────────────────────
-   Messenger card — Facebook Messenger style
-   White bubble, rounded corners, subtle shadow, sender name above.
-   ─────────────────────────────────────────────────────────────── */
-function MessengerCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
-  return (
-    <View style={messengerStyles.container}>
-      {/* Sender name above bubble */}
-      <View style={messengerStyles.senderRow}>
-        <View style={[messengerStyles.appDot, { backgroundColor: theme.accent }]} />
-        <Text style={messengerStyles.senderName} numberOfLines={1}>{title}</Text>
-      </View>
-
-      {/* White bubble with message */}
-      <View style={messengerStyles.bubble}>
-        <Text style={messengerStyles.body} numberOfLines={6}>{body}</Text>
-      </View>
-
-      {/* Footer: time + delivery status */}
-      <View style={messengerStyles.footer}>
-        {timeStr && <Text style={messengerStyles.time}>{timeStr}</Text>}
-        <Ionicons name="checkmark-done" size={13} color={theme.accent} />
-      </View>
-    </View>
-  );
-}
-
-/* ───────────────────────────────────────────────────────────────
-   iMessage card — white bubble, avatar, cyan sender name inside
-   ─────────────────────────────────────────────────────────────── */
-function IMessageCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
-  const initial = (title?.[0] ?? '?').toUpperCase();
-  return (
-    <View style={imessageStyles.container}>
-      <View style={[imessageStyles.avatar, { backgroundColor: theme.accent }]}>
-        <Text style={imessageStyles.avatarText}>{initial}</Text>
-      </View>
-
-      <View style={imessageStyles.bubble}>
-        <Text style={[imessageStyles.senderName, { color: theme.accent }]} numberOfLines={1}>
-          {title}
-        </Text>
-        {body ? (
-          <View style={imessageStyles.bodyRow}>
-            <Text style={imessageStyles.body} numberOfLines={6}>{body}</Text>
-            {timeStr && <Text style={imessageStyles.time}>{timeStr}</Text>}
-          </View>
+    <View style={whatsappStyles.container}>
+      <BubbleTailWhatsApp color="#D9FDD3" />
+      <View style={whatsappStyles.bubble}>
+        {showSender ? (
+          <Text style={whatsappStyles.senderName} numberOfLines={1}>{title}</Text>
         ) : null}
+        <Text style={whatsappStyles.body} numberOfLines={12}>{displayText}</Text>
+        <View style={whatsappStyles.footer}>
+          {timeStr && <Text style={whatsappStyles.time}>{timeStr}</Text>}
+          <Ionicons name="checkmark-done" size={15} color="#53BDEB" style={whatsappStyles.checkMark} />
+        </View>
       </View>
     </View>
   );
 }
 
-/* ───────────────────────────────────────────────────────────────
-   Discord card — dark background, circular avatar with initial
-   ─────────────────────────────────────────────────────────────── */
-function DiscordCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
-  const initial = (title?.[0] ?? '?').toUpperCase();
+// Facebook Messenger Card - Image 1 style (Vibrant blue pill bubble with 4px top-left corner, no SVG tail, white text, meta below)
+function FacebookMessengerCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
+  const displayText = body || title;
+  const showSender = body && title && title !== 'Facebook' && title !== 'Messenger';
+
   return (
-    <View style={discordStyles.card}>
-      <View style={discordStyles.row}>
-        <View style={[discordStyles.avatar, { backgroundColor: theme.accent }]}>
-          <Text style={discordStyles.avatarText}>{initial}</Text>
-        </View>
-        <View style={discordStyles.content}>
-          <View style={discordStyles.header}>
-            <Text style={discordStyles.senderName} numberOfLines={1}>{title}</Text>
-            {timeStr && <Text style={discordStyles.time}>{timeStr}</Text>}
-          </View>
-          {body ? <Text style={discordStyles.body} numberOfLines={6}>{body}</Text> : null}
-        </View>
+    <View style={fbMessengerStyles.container}>
+      <View style={fbMessengerStyles.bubble}>
+        {showSender ? (
+          <Text style={fbMessengerStyles.senderName} numberOfLines={1}>{title}</Text>
+        ) : null}
+        <Text style={fbMessengerStyles.body} numberOfLines={12}>{displayText}</Text>
       </View>
+      {timeStr ? (
+        <Text style={fbMessengerStyles.metaText}>
+          {`Message sent ${timeStr}`}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
-/* ───────────────────────────────────────────────────────────────
-   Telegram card — white bubble, avatar, light purple sender name, @mentions in blue
-   ─────────────────────────────────────────────────────────────── */
+// Telegram Card - Smaller WhatsApp-style tail, white bubble, violet sender, cyan mentions
 function TelegramCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
-  const initial = (title?.[0] ?? '?').toUpperCase();
   const renderBody = () => {
     if (!body) return null;
-    const parts = body.split(/(@\w+)/g);
+    const parts = body.split(/(@\w+|#\w+|https?:\/\/[^\s]+)/g);
     return (
-      <Text style={telegramStyles.body} numberOfLines={6}>
+      <Text style={telegramStyles.body} numberOfLines={12}>
         {parts.map((part, i) =>
-          part.startsWith('@') ? (
+          part.startsWith('@') || part.startsWith('#') || part.startsWith('http') ? (
             <Text key={i} style={telegramStyles.mention}>{part}</Text>
           ) : (
             <Text key={i}>{part}</Text>
@@ -271,10 +204,7 @@ function TelegramCard({ title, body, theme, timeStr }: { title: string; body: st
   };
   return (
     <View style={telegramStyles.container}>
-      <View style={[telegramStyles.avatar, { backgroundColor: theme.accentSoft }]}>
-        <Text style={[telegramStyles.avatarText, { color: theme.accent }]}>{initial}</Text>
-      </View>
-
+      <BubbleTailTelegram color="#FFFFFF" />
       <View style={telegramStyles.bubble}>
         <Text style={telegramStyles.senderName} numberOfLines={1}>{title}</Text>
         {renderBody()}
@@ -286,18 +216,42 @@ function TelegramCard({ title, body, theme, timeStr }: { title: string; body: st
   );
 }
 
-/* ───────────────────────────────────────────────────────────────
-   X / Twitter card — black bg, avatar, verified badge, action bar
-   ─────────────────────────────────────────────────────────────── */
+// iMessage Card
+function IMessageCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
+  return (
+    <View style={imessageStyles.container}>
+      <View style={imessageStyles.bubble}>
+        <Text style={[imessageStyles.senderName, { color: theme.accent }]} numberOfLines={1}>
+          {title}
+        </Text>
+        {body ? (
+          <Text style={imessageStyles.body} numberOfLines={12}>{body}</Text>
+        ) : null}
+        {timeStr && <Text style={imessageStyles.time}>{timeStr}</Text>}
+      </View>
+    </View>
+  );
+}
+
+// Discord Card
+function DiscordCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
+  return (
+    <View style={discordStyles.card}>
+      <View style={discordStyles.header}>
+        <Text style={discordStyles.senderName} numberOfLines={1}>{title}</Text>
+        {timeStr && <Text style={discordStyles.time}>{timeStr}</Text>}
+      </View>
+      {body ? <Text style={discordStyles.body} numberOfLines={12}>{body}</Text> : null}
+    </View>
+  );
+}
+
+// X / Twitter Card
 function XTwitterCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
-  const initial = (title?.[0] ?? '?').toUpperCase();
   return (
     <View style={xTwitterStyles.card}>
       <View style={xTwitterStyles.header}>
         <View style={xTwitterStyles.headerLeft}>
-          <View style={[xTwitterStyles.avatar, { backgroundColor: theme.accent }]}>
-            <Text style={xTwitterStyles.avatarText}>{initial}</Text>
-          </View>
           <View style={xTwitterStyles.headerText}>
             <View style={xTwitterStyles.nameRow}>
               <Text style={xTwitterStyles.senderName} numberOfLines={1}>{title}</Text>
@@ -309,158 +263,361 @@ function XTwitterCard({ title, body, theme, timeStr }: { title: string; body: st
           </View>
         </View>
         <Pressable hitSlop={8} onPress={() => {}}>
-          <Ionicons name="ellipsis-horizontal" size={16} color={X_TWITTER.actionIcon} />
+          <Ionicons name="ellipsis-horizontal" size={16} color="#71767B" />
         </Pressable>
       </View>
 
-      {body ? <Text style={xTwitterStyles.body} numberOfLines={6}>{body}</Text> : null}
+      {body ? <Text style={xTwitterStyles.body} numberOfLines={12}>{body}</Text> : null}
 
       <View style={xTwitterStyles.actionBar}>
         <View style={xTwitterStyles.actionItem}>
-          <Ionicons name="chatbubble-outline" size={14} color={X_TWITTER.actionIcon} />
+          <Ionicons name="chatbubble-outline" size={14} color="#71767B" />
           <Text style={xTwitterStyles.actionCount}>2</Text>
         </View>
         <View style={xTwitterStyles.actionItem}>
-          <Ionicons name="repeat-outline" size={14} color={X_TWITTER.actionIcon} />
+          <Ionicons name="repeat-outline" size={14} color="#71767B" />
           <Text style={xTwitterStyles.actionCount}>1</Text>
         </View>
         <View style={xTwitterStyles.actionItem}>
-          <Ionicons name="heart-outline" size={14} color={X_TWITTER.actionIcon} />
+          <Ionicons name="heart-outline" size={14} color="#71767B" />
           <Text style={xTwitterStyles.actionCount}>224</Text>
         </View>
         <View style={xTwitterStyles.actionItem}>
-          <Ionicons name="stats-chart-outline" size={14} color={X_TWITTER.actionIcon} />
+          <Ionicons name="stats-chart-outline" size={14} color="#71767B" />
           <Text style={xTwitterStyles.actionCount}>20k</Text>
-        </View>
-        <View style={xTwitterStyles.rightActions}>
-          <Pressable hitSlop={8} onPress={() => {}}>
-            <Ionicons name="bookmark-outline" size={14} color={X_TWITTER.actionIcon} />
-          </Pressable>
-          <Pressable hitSlop={8} onPress={() => {}}>
-            <Ionicons name="share-outline" size={14} color={X_TWITTER.actionIcon} />
-          </Pressable>
         </View>
       </View>
     </View>
   );
 }
 
-/* ───────────────────────────────────────────────────────────────
-   Reddit card — dark background, avatar, action bar
-   ─────────────────────────────────────────────────────────────── */
+// Reddit Card
 function RedditCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
-  const initial = (title?.[0] ?? '?').toUpperCase();
   return (
     <View style={redditStyles.card}>
       <View style={redditStyles.header}>
-        <View style={[redditStyles.avatar, { backgroundColor: theme.accent }]}>
-          <Text style={redditStyles.avatarText}>{initial}</Text>
-        </View>
         <View style={redditStyles.headerText}>
           <Text style={redditStyles.senderName} numberOfLines={1}>{title}</Text>
           {timeStr && <Text style={redditStyles.time}>{timeStr}</Text>}
         </View>
       </View>
 
-      {body ? <Text style={redditStyles.body} numberOfLines={6}>{body}</Text> : null}
+      {body ? <Text style={redditStyles.body} numberOfLines={12}>{body}</Text> : null}
 
       <View style={redditStyles.actionBar}>
         <View style={redditStyles.actionGroup}>
           <Pressable style={redditStyles.iconBtn} hitSlop={6} onPress={() => {}}>
-            <Ionicons name="arrow-up-outline" size={16} color={REDDIT.actionIcon} />
+            <Ionicons name="arrow-up-outline" size={16} color="#D7DADC" />
           </Pressable>
           <Text style={redditStyles.voteCount}>24</Text>
           <Pressable style={redditStyles.iconBtn} hitSlop={6} onPress={() => {}}>
-            <Ionicons name="arrow-down-outline" size={16} color={REDDIT.actionIcon} />
+            <Ionicons name="arrow-down-outline" size={16} color="#D7DADC" />
           </Pressable>
         </View>
         <Pressable style={redditStyles.actionItem} hitSlop={6} onPress={() => {}}>
-          <Ionicons name="chatbubble-outline" size={14} color={REDDIT.actionIcon} />
+          <Ionicons name="chatbubble-outline" size={14} color="#D7DADC" />
           <Text style={redditStyles.actionLabel}>Reply</Text>
         </Pressable>
         <Pressable style={redditStyles.actionItem} hitSlop={6} onPress={() => {}}>
-          <Ionicons name="trophy-outline" size={14} color={REDDIT.actionIcon} />
+          <Ionicons name="trophy-outline" size={14} color="#D7DADC" />
           <Text style={redditStyles.actionLabel}>Award</Text>
         </Pressable>
         <Pressable style={redditStyles.actionItem} hitSlop={6} onPress={() => {}}>
-          <Ionicons name="share-outline" size={14} color={REDDIT.actionIcon} />
+          <Ionicons name="share-outline" size={14} color="#D7DADC" />
           <Text style={redditStyles.actionLabel}>Share</Text>
         </Pressable>
-        <Pressable style={redditStyles.iconBtn} hitSlop={6} onPress={() => {}}>
-          <Ionicons name="ellipsis-horizontal" size={14} color={REDDIT.actionIcon} />
-        </Pressable>
       </View>
     </View>
   );
 }
 
-/* ───────────────────────────────────────────────────────────────
-   LinkedIn card — white card, avatar, verified badge, no bubble
-   ─────────────────────────────────────────────────────────────── */
+// LinkedIn Card
 function LinkedInCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
-  const initial = (title?.[0] ?? '?').toUpperCase();
   return (
     <View style={linkedInStyles.card}>
-      <View style={linkedInStyles.row}>
-        <View style={[linkedInStyles.avatar, { backgroundColor: theme.accentSoft }]}>
-          <Text style={[linkedInStyles.avatarText, { color: theme.accent }]}>{initial}</Text>
+      <View style={linkedInStyles.header}>
+        <Text style={linkedInStyles.senderName} numberOfLines={1}>{title}</Text>
+        <View style={linkedInStyles.verifiedBadge}>
+          <Ionicons name="checkmark" size={9} color="#FFFFFF" />
         </View>
-        <View style={linkedInStyles.content}>
-          <View style={linkedInStyles.header}>
-            <Text style={linkedInStyles.senderName} numberOfLines={1}>{title}</Text>
-            <View style={linkedInStyles.verifiedBadge}>
-              <Ionicons name="checkmark" size={9} color="#FFFFFF" />
-            </View>
-            {timeStr && <Text style={linkedInStyles.time}>{timeStr}</Text>}
-          </View>
-          {body ? <Text style={linkedInStyles.body} numberOfLines={6}>{body}</Text> : null}
-        </View>
+        {timeStr && <Text style={linkedInStyles.time}>{timeStr}</Text>}
       </View>
+      {body ? <Text style={linkedInStyles.body} numberOfLines={12}>{body}</Text> : null}
     </View>
   );
 }
 
-/* ───────────────────────────────────────────────────────────────
-   Media / social card — Instagram, X, YouTube, etc.
-   ─────────────────────────────────────────────────────────────── */
+// Media / Generic Card
 function MediaCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
   return (
     <View style={[mediaStyles.card, { borderTopColor: theme.accent }]}>
       <View style={[mediaStyles.accentStrip, { backgroundColor: theme.accent }]} />
       <View style={mediaStyles.inner}>
         <View style={mediaStyles.header}>
-          <View style={[mediaStyles.iconBadge, { backgroundColor: theme.accentSoft }]}>
-            <Ionicons name="logo-apple" size={14} color={theme.accent} />
-          </View>
-          <View style={mediaStyles.headerText}>
-            <Text style={[mediaStyles.appName, { color: theme.accent }]} numberOfLines={1}>
-              {theme.label}
-            </Text>
-            {timeStr && <Text style={mediaStyles.time}>{timeStr}</Text>}
-          </View>
+          <Text style={[mediaStyles.appName, { color: theme.accent }]} numberOfLines={1}>
+            {theme.label}
+          </Text>
+          {timeStr && <Text style={mediaStyles.time}>{timeStr}</Text>}
         </View>
         <Text style={mediaStyles.title} numberOfLines={2}>{title}</Text>
         {body ? (
-          <Text style={mediaStyles.body} numberOfLines={4}>{body}</Text>
+          <Text style={mediaStyles.body} numberOfLines={6}>{body}</Text>
         ) : null}
       </View>
     </View>
   );
 }
 
-/* ───────────────────────────────────────────────────────────────
-   Styles
-   ─────────────────────────────────────────────────────────────── */
+/* Styles */
 
-/* WhatsApp / Telegram / Messages */
-const chatStyles = StyleSheet.create({
+// WhatsApp Styles
+const whatsappStyles = StyleSheet.create({
+  container: {
+    alignSelf: 'flex-start',
+    position: 'relative',
+    maxWidth: '94%',
+    marginLeft: 6,
+  },
   bubble: {
-    marginLeft: 10,
-    backgroundColor: CHAT.bubbleBg,
-    borderRadius: 8,
+    backgroundColor: '#D9FDD3',
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 13,
+    paddingTop: 8,
+    paddingBottom: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1.5,
+    minWidth: 120,
+  },
+  senderName: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#075E54',
+    marginBottom: 2,
+  },
+  body: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14.5,
+    lineHeight: 20,
+    color: '#111B21',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 3,
+    marginTop: 2,
+    marginLeft: 12,
+  },
+  time: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 11,
+    color: '#667781',
+  },
+  checkMark: {
+    marginLeft: 1,
+  },
+});
+
+// Facebook / Messenger Styles - Pill shape with 4px top-left, vibrant blue, white text
+const fbMessengerStyles = StyleSheet.create({
+  container: {
+    alignSelf: 'flex-start',
+    maxWidth: '94%',
+    marginLeft: 6,
+  },
+  bubble: {
+    backgroundColor: '#0084FF',
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+    shadowColor: '#0084FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 2,
+    minWidth: 100,
+  },
+  senderName: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    color: '#E0F2FE',
+    marginBottom: 2,
+  },
+  body: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14.5,
+    lineHeight: 20,
+    color: '#FFFFFF',
+  },
+  metaText: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 11,
+    color: '#8A8D91',
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    marginLeft: 2,
+  },
+});
+
+// Telegram Styles - Smaller tail
+const telegramStyles = StyleSheet.create({
+  container: {
+    alignSelf: 'flex-start',
+    position: 'relative',
+    maxWidth: '94%',
+    marginLeft: 4,
+  },
+  bubble: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 13,
+    paddingTop: 8,
+    paddingBottom: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    minWidth: 120,
+  },
+  senderName: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13.5,
+    lineHeight: 18,
+    color: '#7064B8',
+    marginBottom: 2,
+  },
+  body: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14.5,
+    lineHeight: 20,
+    color: '#1E1E1E',
+  },
+  mention: {
+    color: '#2A92D0',
+    fontFamily: 'PlusJakartaSans-SemiBold',
+  },
+  time: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 11,
+    color: '#8E8E93',
+    alignSelf: 'flex-end',
+    marginTop: 2,
+    marginLeft: 12,
+  },
+});
+
+// iMessage Styles
+const imessageStyles = StyleSheet.create({
+  container: {
+    alignSelf: 'flex-start',
+    maxWidth: '94%',
+    marginLeft: 6,
+  },
+  bubble: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 13,
+    paddingTop: 8,
+    paddingBottom: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    minWidth: 120,
+  },
+  senderName: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13.5,
+    lineHeight: 18,
+    marginBottom: 2,
+  },
+  body: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14.5,
+    lineHeight: 20,
+    color: '#000000',
+  },
+  time: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 11,
+    color: '#8E8E93',
+    alignSelf: 'flex-end',
+    marginTop: 2,
+    marginLeft: 12,
+  },
+});
+
+// Discord Styles
+const discordStyles = StyleSheet.create({
+  card: {
+    marginLeft: 6,
+    backgroundColor: '#2F3136',
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingVertical: 10,
+    maxWidth: '94%',
+    alignSelf: 'flex-start',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 4,
+  },
+  senderName: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+    flexShrink: 1,
+  },
+  time: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 11,
+    color: '#72767D',
+    flexShrink: 0,
+  },
+  body: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#DCDDDE',
+  },
+});
+
+// LinkedIn Styles
+const linkedInStyles = StyleSheet.create({
+  card: {
+    marginLeft: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0DFDC',
+    padding: 12,
+    maxWidth: '94%',
+    alignSelf: 'flex-start',
   },
   header: {
     flexDirection: 'row',
@@ -468,111 +625,196 @@ const chatStyles = StyleSheet.create({
     gap: 6,
     marginBottom: 4,
   },
-  appDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    flexShrink: 0,
-  },
   senderName: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 15,
-    color: CHAT.textTitle,
-    flexShrink: 1,
+    fontSize: 13.5,
+    color: '#000000E6',
   },
-  body: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 15,
-    lineHeight: 20,
-    color: CHAT.textBody,
-  },
-  footer: {
-    flexDirection: 'row',
+  verifiedBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#0A66C2',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 4,
-    marginTop: 4,
+    justifyContent: 'center',
   },
   time: {
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 11,
-    color: CHAT.textMeta,
+    color: '#00000099',
+    marginLeft: 'auto',
+  },
+  body: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000E6',
   },
 });
 
-/* Facebook Messenger */
-const messengerStyles = StyleSheet.create({
-  container: {
-    marginLeft: 10,
+// Reddit Styles
+const redditStyles = StyleSheet.create({
+  card: {
+    marginLeft: 6,
+    backgroundColor: '#1A1A1B',
+    borderRadius: 12,
+    padding: 12,
+    maxWidth: '94%',
+    alignSelf: 'flex-start',
   },
-  senderRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-    paddingLeft: 4,
+    marginBottom: 6,
   },
-  appDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    flexShrink: 0,
+  headerText: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    flex: 1,
   },
   senderName: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 13,
-    color: MESSENGER.textTitle,
-    flexShrink: 1,
-  },
-  bubble: {
-    backgroundColor: MESSENGER.bubbleBg,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    shadowColor: MESSENGER.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  body: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 15,
-    lineHeight: 20,
-    color: MESSENGER.textBody,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 4,
-    marginTop: 4,
-    paddingRight: 4,
+    color: '#D7DADC',
   },
   time: {
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 11,
-    color: MESSENGER.textMeta,
+    color: '#818384',
+  },
+  body: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#D7DADC',
+    marginBottom: 8,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#343536',
+  },
+  actionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  iconBtn: {
+    padding: 2,
+    borderRadius: 4,
+  },
+  voteCount: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    color: '#D7DADC',
+    marginHorizontal: 2,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionLabel: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    color: '#D7DADC',
   },
 });
 
-/* Instagram / X / YouTube / LinkedIn / Snapchat */
+// X / Twitter Styles
+const xTwitterStyles = StyleSheet.create({
+  card: {
+    marginLeft: 6,
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    padding: 12,
+    maxWidth: '94%',
+    alignSelf: 'flex-start',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    flex: 1,
+    gap: 6,
+  },
+  headerText: {
+    flex: 1,
+    gap: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  senderName: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13.5,
+    color: '#E7E9EA',
+  },
+  verifiedBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  time: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 11,
+    color: '#71767B',
+  },
+  body: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#E7E9EA',
+    marginBottom: 8,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#2F3336',
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionCount: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    color: '#71767B',
+  },
+});
+
+// Media Card Styles
 const mediaStyles = StyleSheet.create({
   card: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 6,
     backgroundColor: C.surfaceContainerLowest,
     borderTopLeftRadius: 4,
-    borderTopRightRadius: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
     overflow: 'hidden',
     borderTopWidth: 3,
     shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
-    shadowRadius: 20,
+    shadowRadius: 16,
     elevation: 2,
   },
   accentStrip: {
@@ -580,24 +822,13 @@ const mediaStyles = StyleSheet.create({
     width: '100%',
   },
   inner: {
-    padding: 18,
+    padding: 14,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  iconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerText: {
-    flex: 1,
-    gap: 1,
+    justifyContent: 'space-between',
+    marginBottom: 6,
   },
   appName: {
     fontFamily: 'PlusJakartaSans-Bold',
@@ -612,424 +843,15 @@ const mediaStyles = StyleSheet.create({
   },
   title: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 20,
     color: C.onSurface,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   body: {
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 14,
     lineHeight: 20,
     color: C.onSurfaceVariant,
-  },
-});
-
-/* Discord */
-const discordStyles = StyleSheet.create({
-  card: {
-    marginLeft: 10,
-    backgroundColor: DISCORD.bg,
-    borderRadius: 12,
-    padding: 14,
-  },
-  row: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 17,
-    color: '#FFFFFF',
-  },
-  content: {
-    flex: 1,
-    gap: 4,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
-  },
-  senderName: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 15,
-    color: DISCORD.textUsername,
-    flexShrink: 1,
-  },
-  time: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 11,
-    color: DISCORD.textMeta,
-    flexShrink: 0,
-  },
-  body: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: DISCORD.textBody,
-  },
-});
-
-/* Telegram */
-const telegramStyles = StyleSheet.create({
-  container: {
-    marginLeft: 10,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
-  },
-  bubble: {
-    backgroundColor: TELEGRAM.bg,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    shadowColor: TELEGRAM.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 1,
-    maxWidth: '85%',
-  },
-  senderName: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    color: TELEGRAM.senderName,
-    marginBottom: 2,
-  },
-  body: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: TELEGRAM.textBody,
-  },
-  mention: {
-    color: TELEGRAM.mentionColor,
-    fontFamily: 'PlusJakartaSans-Bold',
-  },
-  time: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 11,
-    color: TELEGRAM.textMeta,
-    textAlign: 'right',
-    marginTop: 2,
-  },
-});
-
-/* iMessage */
-const imessageStyles = StyleSheet.create({
-  container: {
-    marginLeft: 10,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  bubble: {
-    backgroundColor: IMESSAGE.bubbleBg,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    shadowColor: IMESSAGE.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 1,
-    maxWidth: '85%',
-  },
-  senderName: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    marginBottom: 2,
-  },
-  bodyRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  body: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 15,
-    lineHeight: 20,
-    color: IMESSAGE.textBody,
-    flexShrink: 1,
-  },
-  time: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 11,
-    color: IMESSAGE.textMeta,
-    flexShrink: 0,
-    marginBottom: 1,
-  },
-});
-
-/* LinkedIn */
-const linkedInStyles = StyleSheet.create({
-  card: {
-    marginLeft: 10,
-    backgroundColor: LINKEDIN.bg,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: LINKEDIN.border,
-    padding: 14,
-  },
-  row: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 17,
-  },
-  content: {
-    flex: 1,
-    gap: 6,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  senderName: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
-    color: LINKEDIN.textName,
-  },
-  verifiedBadge: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: LINKEDIN.verifiedBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  time: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 11,
-    color: LINKEDIN.textMeta,
-    marginLeft: 'auto',
-  },
-  body: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: LINKEDIN.textBody,
-  },
-});
-
-/* Reddit */
-const redditStyles = StyleSheet.create({
-  card: {
-    marginLeft: 10,
-    backgroundColor: REDDIT.bg,
-    borderRadius: 12,
-    padding: 14,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  headerText: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    flex: 1,
-  },
-  senderName: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    color: REDDIT.textUsername,
-  },
-  time: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 11,
-    color: REDDIT.textMeta,
-  },
-  body: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: REDDIT.textBody,
-    marginLeft: 42,
-    marginBottom: 12,
-  },
-  actionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 18,
-    marginLeft: 42,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: REDDIT.border,
-  },
-  actionGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  iconBtn: {
-    padding: 4,
-    borderRadius: 6,
-  },
-  voteCount: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 12,
-    color: REDDIT.textUsername,
-    marginHorizontal: 2,
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionLabel: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 12,
-    color: REDDIT.actionIcon,
-  },
-});
-
-/* X / Twitter */
-const xTwitterStyles = StyleSheet.create({
-  card: {
-    marginLeft: 10,
-    backgroundColor: X_TWITTER.bg,
-    borderRadius: 12,
-    padding: 14,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    flex: 1,
-    gap: 10,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
-  headerText: {
-    flex: 1,
-    gap: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  senderName: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 14,
-    color: X_TWITTER.textName,
-  },
-  verifiedBadge: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  time: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 12,
-    color: X_TWITTER.textMeta,
-  },
-  body: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: X_TWITTER.textBody,
-    marginLeft: 46,
-    marginBottom: 12,
-  },
-  actionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginLeft: 46,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: X_TWITTER.border,
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionCount: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 12,
-    color: X_TWITTER.actionIcon,
-  },
-  rightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
   },
 });

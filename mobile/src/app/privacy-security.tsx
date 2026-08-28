@@ -51,20 +51,6 @@ export default function PrivacySecurityScreen() {
     });
   };
 
-  const handleRevokedAll = () => {
-    showModal({
-      title: 'Revoke all sessions',
-      message: 'This will remove all paired devices and their mirrored notification data.',
-      icon: 'warning',
-      primaryButton: 'Revoke',
-      primaryVariant: 'destructive',
-      secondaryButton: 'Cancel',
-      onPrimaryPress: () => {
-        router.push('/(tabs)/settings');
-      },
-    });
-  };
-
   const handleClearNotifications = () => {
     showModal({
       title: 'Clear local cache',
@@ -79,12 +65,19 @@ export default function PrivacySecurityScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
+      {/* Top Bar with back arrow and Centered Title (Matching Image 2) */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={10}
+          style={s.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Ionicons name="chevron-back" size={24} color={C.onSurface} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Privacy & Security</Text>
-        <View style={{ width: 24 }} />
+        <View style={s.headerRightSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
@@ -114,17 +107,9 @@ export default function PrivacySecurityScreen() {
           </Text>
         </View>
 
-        {/* Actions */}
+        {/* Legal & Policy Actions */}
         <View style={s.actionsSection}>
-          <TouchableOpacity style={s.actionCard} onPress={handleRevokedAll}>
-            <View style={s.actionLeft}>
-              <Ionicons name="shield-checkmark" size={20} color={C.primary} />
-              <Text style={s.actionText}>View Paired Devices</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={C.outline} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.actionCard} onPress={() => router.push('/(tabs)/legal-document?doc=privacy')}>
+          <TouchableOpacity style={s.actionCard} onPress={() => router.push('/legal-document?key=privacy')} activeOpacity={0.7}>
             <View style={s.actionLeft}>
               <Ionicons name="document-text" size={20} color={C.primary} />
               <Text style={s.actionText}>Privacy Policy</Text>
@@ -132,18 +117,10 @@ export default function PrivacySecurityScreen() {
             <Ionicons name="chevron-forward" size={16} color={C.outline} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={s.actionCard} onPress={() => router.push('/(tabs)/legal-document?doc=terms')}>
+          <TouchableOpacity style={s.actionCard} onPress={() => router.push('/legal-document?key=terms')} activeOpacity={0.7}>
             <View style={s.actionLeft}>
               <Ionicons name="document-text" size={20} color={C.primary} />
               <Text style={s.actionText}>Terms of Service</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={C.outline} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.actionCard} onPress={() => router.push('/(tabs)/legal-document?doc=licenses')}>
-            <View style={s.actionLeft}>
-              <Ionicons name="code-slash" size={20} color={C.primary} />
-              <Text style={s.actionText}>Open-Source Licenses</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={C.outline} />
           </TouchableOpacity>
@@ -153,7 +130,7 @@ export default function PrivacySecurityScreen() {
         <View style={s.dangerSection}>
           <Text style={s.dangerSectionTitle}>Danger Zone</Text>
 
-          <TouchableOpacity style={s.dangerCard} onPress={handleClearNotifications}>
+          <TouchableOpacity style={s.dangerCard} onPress={handleClearNotifications} activeOpacity={0.7}>
             <View style={s.actionLeft}>
               <Ionicons name="trash" size={20} color={C.secondary} />
               <View>
@@ -163,7 +140,7 @@ export default function PrivacySecurityScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={s.dangerCard} onPress={handleSignOutAll}>
+          <TouchableOpacity style={s.dangerCard} onPress={handleSignOutAll} activeOpacity={0.7}>
             <View style={s.actionLeft}>
               <Ionicons name="log-out" size={20} color={C.secondary} />
               <View>
@@ -182,9 +159,29 @@ export default function PrivacySecurityScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.surface },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
-  headerTitle: { fontFamily: 'PlusJakartaSans-Bold', fontSize: 18, color: C.onSurface },
-  scrollContent: { paddingHorizontal: 24, paddingBottom: 120, paddingTop: 12, gap: 16 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 18,
+    color: C.onSurface,
+    textAlign: 'center',
+    flex: 1,
+  },
+  headerRightSpacer: { width: 40 },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 8, gap: 16 },
 
   card: {
     backgroundColor: C.surfaceContainerLowest, borderRadius: 28, padding: 24,
@@ -206,7 +203,7 @@ const s = StyleSheet.create({
   actionLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   actionText: { fontFamily: 'PlusJakartaSans-SemiBold', fontSize: 14, color: C.onSurface },
 
-  dangerSection: { gap: 10, marginTop: 12 },
+  dangerSection: { gap: 10, marginTop: 8 },
   dangerSectionTitle: { fontFamily: 'PlusJakartaSans-ExtraBold', fontSize: 12, color: C.secondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   dangerCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -216,5 +213,5 @@ const s = StyleSheet.create({
   dangerText: { fontFamily: 'PlusJakartaSans-SemiBold', fontSize: 14, color: C.secondary },
   dangerDesc: { fontFamily: 'PlusJakartaSans-Regular', fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 },
 
-  footer: { fontFamily: 'PlusJakartaSans-Regular', fontSize: 12, color: C.outline, textAlign: 'center', marginTop: 20 },
+  footer: { fontFamily: 'PlusJakartaSans-Regular', fontSize: 12, color: C.outline, textAlign: 'center', marginTop: 16 },
 });

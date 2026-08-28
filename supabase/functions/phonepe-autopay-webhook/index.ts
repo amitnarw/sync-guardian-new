@@ -14,6 +14,56 @@ function addFrequency(planFrequency: string, from: Date): Date {
   return d
 }
 
+// Cap each idempotency-key component to avoid blowing past the ~2704-byte
+// B-tree index limit on adversarial / pathological payloads.
+const KEY_PART_MAX = 128
+
+function truncateKeyPart(value: string, max = KEY_PART_MAX): string {
+  if (!value) return value
+  return value.length > max ? value.slice(0, max) : value
+}
+
+// PhonePe V2 sometimes sends `timestamp` as a numeric Unix epoch (in
+// seconds or milliseconds), sometimes as an ISO 8601 string. Coerce all
+// of those to a valid TIMESTAMPTZ-compatible ISO string or null so the
+// `received_at` column never receives an unparseable value.
+function parsePhonePeTimestamp(raw: unknown): string | null {
+  if (raw == null) return null
+  if (typeof raw === 'number') {
+    // Heuristic: epochs beyond 10^12 are milliseconds, smaller are seconds.
+    const ms = raw > 1e12 ? raw : raw * 1000
+    const d = new Date(ms)
+    return isNaN(d.getTime()) ? null : d.toISOString()
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) return null
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+      const num = Number(trimmed)
+      const ms = num > 1e12 ? num : num * 1000
+      const d = new Date(ms)
+      return isNaN(d.getTime()) ? null : d.toISOString()
+    }
+    const d = new Date(trimmed)
+    return isNaN(d.getTime()) ? null : d.toISOString()
+  }
+  return null
+}
+
+// Canonical set of PhonePe V2 Autopay event types we currently handle.
+// Anything outside this list is logged but treated as a no-op so an
+// unknown event type cannot crash the webhook or leak an
+// inappropriately-mapped status.
+const HANDLED_EVENT_TYPES = new Set<string>([
+  'subscription.setup.order.completed',
+  'subscription.notification.completed',
+  'subscription.redemption.order.completed',
+  'subscription.paused',
+  'subscription.unpaused',
+  'subscription.revoked',
+  'subscription.cancelled',
+])
+
 serve(async (req) => {
   const corsResponse = handleCors(req)
   if (corsResponse) return corsResponse
@@ -21,8 +71,6 @@ serve(async (req) => {
   try {
     const rawBody = await req.text()
 
-    // Signature verification is best-effort: if PHONEPE_WEBHOOK_SECRET is not
-    // configured yet, accept the callback so sandbox testing isn't blocked.
     const xVerify = req.headers.get('X-VERIFY')
     const ok = await verifyWebhookSignature(rawBody, xVerify)
     if (!ok) {
@@ -50,7 +98,6 @@ serve(async (req) => {
       ? event.payload as Record<string, unknown>
       : event
 
-    // V2 Autopay canonical: top-level `event` field (V1 `type` is deprecated; `payload.*` is a safety net).
     const eventType = String(
       event.event ??
         event.type ??
@@ -78,7 +125,6 @@ serve(async (req) => {
       )
     }
 
-    // Look up our subscription row.
     let query = adminClient.from('subscriptions').select('*')
     if (merchantSubscriptionId) {
       query = query.eq('merchant_subscription_id', merchantSubscriptionId)
@@ -95,8 +141,10 @@ serve(async (req) => {
       )
     }
 
-// Map PhonePe V2 Autopay events to our status (exact-match only).
-    // V2 has no explicit `expired` event — derive from payload.state.
+    // Map PhonePe V2 Autopay events to our status (exact-match only).
+    // PhonePe pause events map to 'revoked' (with current_cycle_end
+    // preserved) so the entitlement module treats them as cancellation
+    // with grace-period access until the current cycle ends.
     let status: string | null = null
     switch (eventType) {
       case 'subscription.setup.order.completed':
@@ -105,7 +153,7 @@ serve(async (req) => {
         status = 'active'
         break
       case 'subscription.paused':
-        status = 'paused'
+        status = 'revoked'
         break
       case 'subscription.unpaused':
         status = 'active'
@@ -115,48 +163,141 @@ serve(async (req) => {
         status = 'revoked'
         break
       default:
-        if (payload.state === 'EXPIRED') status = 'expired'
+        // EXPIRED is case-insensitive: PhonePe docs use upper-case
+        // but some sandbox responses have used lowercase.
+        if (
+          typeof payload.state === 'string' &&
+          payload.state.toUpperCase() === 'EXPIRED'
+        ) {
+          status = 'expired'
+        }
         break
     }
 
-    const updates: Record<string, unknown> = {}
+    // Log unhandled event types so future PhonePe schema additions are
+    // visible in observability. The webhook still records the event in
+    // subscription_events (via the RPC) so audit is complete.
+    if (
+      eventType &&
+      !HANDLED_EVENT_TYPES.has(eventType) &&
+      status === null
+    ) {
+      const rawState =
+        typeof payload.state === 'string' ? payload.state : null
+      logger.warn('phonepe-autopay-webhook', 'unhandled event type', {
+        eventType,
+        merchantSubscriptionId,
+        state: rawState,
+      })
+    }
+
+    // Build idempotency key from stable event identifiers. Each
+    // component is truncated to avoid blowing past the B-tree index
+    // limit on adversarial inputs.
+    const transactionId = String(
+      payload.transactionId ??
+      payload.transaction_id ??
+      '',
+    ).trim()
+    const eventTimestampIso = parsePhonePeTimestamp(
+      payload.timestamp ?? payload.eventTime ?? payload.event_time,
+    )
+    const transactionPart = transactionId
+      ? `tx:${truncateKeyPart(transactionId)}`
+      : eventTimestampIso
+        ? `ts:${truncateKeyPart(eventTimestampIso)}`
+        : 'no-ts'
+    const idempotencyKey = [
+      truncateKeyPart(eventType || 'unknown'),
+      truncateKeyPart(merchantSubscriptionId || 'no-sub'),
+      truncateKeyPart(merchantOrderId || 'no-order'),
+      transactionPart,
+    ].join('|')
+
+    // Build the subscription update object as JSONB so the RPC can
+    // apply it atomically with the sentinel insert.
+    const subscriptionUpdates: Record<string, unknown> = {}
     if (status) {
-      updates.status = status
-      if (status === 'active') {
-        const start = new Date()
-        const { data: plan } = await adminClient
-          .from('plans')
-          .select('frequency')
-          .eq('id', subscription.plan_id)
-          .maybeSingle()
-        updates.current_cycle_start = start.toISOString()
-        updates.current_cycle_end = addFrequency(plan?.frequency ?? 'monthly', start).toISOString()
-        updates.next_charge_at = updates.current_cycle_end
+      subscriptionUpdates.status = status
+      const startsNewCycle =
+        eventType === 'subscription.setup.order.completed' ||
+        eventType === 'subscription.notification.completed' ||
+        eventType === 'subscription.redemption.order.completed'
+      if (status === 'active' && startsNewCycle) {
+        // Prefer the event-provided timestamp so delayed/retried
+        // webhooks don't shift the billing window. Fall back to server
+        // time.
+        const start = eventTimestampIso ? new Date(eventTimestampIso) : new Date()
+        if (!isNaN(start.getTime())) {
+          const { data: plan } = await adminClient
+            .from('plans')
+            .select('frequency')
+            .eq('id', subscription.plan_id)
+            .maybeSingle()
+          const cycleStart = start.toISOString()
+          const cycleEnd = addFrequency(plan?.frequency ?? 'monthly', start).toISOString()
+          subscriptionUpdates.current_cycle_start = cycleStart
+          subscriptionUpdates.current_cycle_end = cycleEnd
+          subscriptionUpdates.next_charge_at = cycleEnd
+        }
       }
     }
-    if (typeof payload.amount === 'number') {
-      updates.last_charge_amount_paise = payload.amount
+    if (typeof payload.amount === 'number' && Number.isFinite(payload.amount)) {
+      // Coerce to integer paise. PhonePe amounts are whole numbers;
+      // if a fractional value ever appears we truncate rather than
+      // fail the RPC's bigint cast (which would roll back the
+      // entire transaction and loop on retry).
+      subscriptionUpdates.last_charge_amount_paise = Math.trunc(payload.amount)
     }
 
-    if (Object.keys(updates).length > 0) {
-      const { error: updateError } = await adminClient
-        .from('subscriptions')
-        .update(updates)
-        .eq('id', subscription.id)
-      if (updateError) throw updateError
-    }
+    // Single atomic call: sentinel insert + subscription update either
+    // both commit or both roll back. Returns duplicate=true when the
+    // same event has already been processed.
+    const rpcStart = Date.now()
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc(
+      'process_phonepe_event',
+      {
+        p_idempotency_key: idempotencyKey,
+        p_subscription_id: subscription.id,
+        p_user_id: subscription.user_id,
+        p_event_type: eventType || 'unknown',
+        p_payload: payload,
+        p_received_at: eventTimestampIso ?? new Date().toISOString(),
+        p_subscription_updates: subscriptionUpdates,
+      },
+    )
+    if (rpcError) throw rpcError
 
-    await adminClient.from('subscription_events').insert({
-      user_id: subscription.user_id,
-      subscription_id: subscription.id,
-      event_type: eventType || 'unknown',
-      payload: payload,
-    }).throwOnError()
+    const result = (rpcResult ?? {}) as { duplicate?: boolean; processed?: boolean }
+    if (result.duplicate) {
+      if (result.processed === false) {
+        // Another transaction is in flight for the same key. Tell
+        // PhonePe we haven't processed it yet so they retry shortly.
+        logger.info('phonepe-autopay-webhook', 'in-flight duplicate, will retry', {
+          eventType,
+          subscriptionId: subscription.id,
+        })
+        return new Response(
+          JSON.stringify({ error: 'In flight, retry shortly' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 },
+        )
+      }
+      logger.info('phonepe-autopay-webhook', 'duplicate event ignored', {
+        eventType,
+        subscriptionId: subscription.id,
+        rpcMs: Date.now() - rpcStart,
+      })
+      return new Response(
+        JSON.stringify({ data: { received: true, duplicate: true } }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+      )
+    }
 
     logger.info('phonepe-autopay-webhook', 'event processed', {
       eventType,
       subscriptionId: subscription.id,
       status,
+      rpcMs: Date.now() - rpcStart,
     })
 
     return new Response(

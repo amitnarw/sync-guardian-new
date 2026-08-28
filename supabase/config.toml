@@ -441,6 +441,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/health/index.ts"
 
+[functions.phonepe-autopay-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/phonepe-autopay-webhook/index.ts"
+
 [functions.ping-child]
 enabled = true
 verify_jwt = true

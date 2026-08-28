@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { bufferNotification, flushBuffer, getProcessedKeysSet, addToProcessedKeys, NotificationPayload, QUEUE_SCHEMA_VERSION } from './mmkv-buffer';
 import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
+import { useSubscriptionStore } from '@/hooks/use-subscription-store';
 
 // Must match NotificationHeadlessTaskService.kt exactly
 const HEADLESS_TASK_NAME = 'RNAndroidNotificationListenerHeadlessJs';
@@ -91,6 +92,15 @@ async function processNotification(json: string): Promise<void> {
 
     const { userRole, pairId, deviceId } = state;
     if (userRole !== 'child') return;
+
+    // Hard gate: if the paired parent's trial/subscription has lapsed, stop
+    // capture entirely. Don't buffer, don't send — the parent is no longer
+    // entitled to receive notifications until they renew. The server applies
+    // the same check authoritatively; this client-side gate just avoids the
+    // network call and prevents local queue growth while expired.
+    if (useSubscriptionStore.getState().hasAccess === false) {
+      return;
+    }
 
     if (!pairId || !deviceId) {
       for (const row of rows) {

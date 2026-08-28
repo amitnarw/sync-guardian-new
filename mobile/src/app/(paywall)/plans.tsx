@@ -25,10 +25,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { AuthColors as C, AuthRadius as R } from '@/constants/auth-theme';
 import { listPlans, type Plan } from '@/services/subscription-api';
-import { TrialRibbon } from '@/components/paywall/trial-ribbon';
 import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
-import { useSubscriptionStore } from '@/hooks/use-subscription-store';
 import { useCheckoutSheet } from '@/components/paywall/checkout-sheet-controller';
 
 type Frequency = 'monthly' | 'yearly';
@@ -209,7 +207,6 @@ export default function PlansScreen() {
   const [frequency, setFrequency] = useState<Frequency>('yearly');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const trialDaysRemaining = useSubscriptionStore((s) => s.trialDaysRemaining);
   const { present: presentCheckoutSheet } = useCheckoutSheet();
 
   // Defense-in-depth: children never see pricing/billing screens. Their
@@ -331,14 +328,8 @@ export default function PlansScreen() {
           </Animated.View>
         ) : null}
 
-        {trialDaysRemaining != null && trialDaysRemaining > 0 ? (
-          <Animated.View entering={FadeInDown.duration(450).delay(80)}>
-            <TrialRibbon daysRemaining={trialDaysRemaining} />
-          </Animated.View>
-        ) : null}
-
         <Animated.View
-          entering={FadeInDown.duration(450).delay(140)}
+          entering={FadeInDown.duration(450).delay(80)}
           style={s.toggleRow}
         >
           <FrequencyToggle

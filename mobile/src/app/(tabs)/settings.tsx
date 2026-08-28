@@ -15,7 +15,6 @@ import { NotifListenerRequestModal } from '@/components/notif-listener-request-m
 import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
 import * as NotificationAccess from 'notification-access';
 import { ChildAppsModal } from '@/components/ui/child-apps-modal';
-import { ConnectedDevicesModal } from '@/components/connected-devices-modal';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
@@ -62,15 +61,28 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 function SubscriptionSection() {
-  const { hasAccess, reason, trialDaysRemaining, subscriptionStatus } = useSubscriptionStore();
+  const { hasAccess, reason, trialDaysRemaining, subscriptionStatus, subscription } =
+    useSubscriptionStore();
 
   let label = 'Manage';
-  if (reason === 'trial' && trialDaysRemaining != null && trialDaysRemaining > 0) {
+  let inGracePeriod = false;
+  if (hasAccess === false) {
+    label = 'Subscribe';
+  } else if (reason === 'trial' && trialDaysRemaining != null && trialDaysRemaining > 0) {
     label = `${trialDaysRemaining}d left`;
   } else if (reason === 'subscription') {
-    label = subscriptionStatus === 'paused' ? 'Paused' : 'Active';
-  } else if (hasAccess === false) {
-    label = 'Subscribe';
+    // Cancel/pause paths set status='revoked' (or 'cancelled') but keep
+    // current_cycle_end in the future, so hasAccess stays true during the
+    // grace period. Reflect that explicitly instead of misleading "Active".
+    inGracePeriod =
+      (subscriptionStatus === 'revoked' || subscriptionStatus === 'cancelled') &&
+      subscription?.current_cycle_end != null &&
+      new Date(subscription.current_cycle_end).getTime() > Date.now();
+    if (inGracePeriod) {
+      label = 'Cancelling';
+    } else {
+      label = 'Active';
+    }
   }
 
   return (
@@ -88,7 +100,13 @@ function SubscriptionSection() {
           onPress={() => router.push({ pathname: '/(paywall)/manage', params: { from: 'settings' } })}
           activeOpacity={0.7}
         >
-          <Text style={s.subscriptionManageText}>{hasAccess ? 'Manage' : 'View plans'}</Text>
+          <Text style={s.subscriptionManageText}>
+            {!hasAccess
+              ? 'View plans'
+              : inGracePeriod
+                ? 'View details'
+                : 'Manage'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -219,6 +237,7 @@ export default function SettingsScreen() {
             throw new Error(realMsg);
           }
           setChildren(children.filter(c => c.id !== pairId));
+          useAuthStore.getState().markPairRevoked();
         } catch (e: any) {
           showModal({
             title: 'Unpair Failed',
@@ -233,7 +252,6 @@ export default function SettingsScreen() {
 
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [appsModalChild, setAppsModalChild] = useState<{ childDeviceId: string; name: string | null } | null>(null);
-  const [connectedDevicesModalOpen, setConnectedDevicesModalOpen] = useState(false);
   const screenOpacity = useSharedValue(1);
   const containerAnimatedStyle = useAnimatedStyle(() => ({
     opacity: screenOpacity.value,
@@ -334,7 +352,7 @@ export default function SettingsScreen() {
             <View style={s.bentoGrid}>
               {/* Top row: 2 cards side-by-side */}
               <View style={s.bentoTopRow}>
-                <TouchableOpacity style={[s.bentoCard, s.cardProfile]} onPress={() => router.push('/(tabs)/child-account')}>
+                <TouchableOpacity style={[s.bentoCard, s.cardProfile]} onPress={() => router.push('/child-account')}>
                   <View style={[s.iconWrapper, { backgroundColor: C.primaryContainer }]}>
                     <Ionicons name="people" size={26} color={C.primary} />
                   </View>
@@ -343,18 +361,18 @@ export default function SettingsScreen() {
                   <Ionicons name="chevron-forward" size={16} color={C.outline} style={s.cardCaret} />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[s.bentoCard, s.cardDevices]} onPress={() => setConnectedDevicesModalOpen(true)}>
+                <TouchableOpacity style={[s.bentoCard, s.cardDevices]} onPress={() => router.push('/pairing')}>
                   <View style={[s.iconWrapper, { backgroundColor: C.surfaceVariant }]}>
-                    <Ionicons name="laptop" size={26} color={C.onSurfaceVariant} />
+                    <Ionicons name="qr-code-outline" size={26} color={C.onSurfaceVariant} />
                   </View>
-                  <Text style={s.cardTitle}>Connected Devices</Text>
-                  <Text style={s.cardDesc}>Overview of connected devices, battery health, and sync status.</Text>
+                  <Text style={s.cardTitle}>Pair Device</Text>
+                  <Text style={s.cardDesc}>Connect and monitor a new child device via QR code.</Text>
                   <Ionicons name="chevron-forward" size={16} color={C.outline} style={s.cardCaret} />
                 </TouchableOpacity>
               </View>
 
               {/* Bottom row: full-width Privacy & Security */}
-              <TouchableOpacity style={[s.bentoCard, s.cardFullWidth]} onPress={() => router.push('/(tabs)/privacy-security')}>
+              <TouchableOpacity style={[s.bentoCard, s.cardFullWidth]} onPress={() => router.push('/privacy-security')}>
                 <View style={[s.iconWrapper, { backgroundColor: C.tertiaryContainer }]}>
                   <Ionicons name="key" size={26} color={C.tertiary} />
                 </View>
@@ -367,10 +385,21 @@ export default function SettingsScreen() {
             {/* ========== CONNECTED CHILDREN ========== */}
             <View style={s.childrenSection}>
               <View style={s.childrenSectionHeader}>
-                <Text style={s.childrenSectionTitle}>Connected Devices</Text>
-                <View style={s.countBadge}>
-                  <Text style={s.countBadgeText}>{children.length}</Text>
+                <View style={s.childrenSectionTitleRow}>
+                  <Text style={s.childrenSectionTitle}>Connected Devices</Text>
+                  <View style={s.countBadge}>
+                    <Text style={s.countBadgeText}>{children.length}</Text>
+                  </View>
                 </View>
+                <TouchableOpacity
+                  style={s.headerAddBtn}
+                  onPress={() => router.push('/pairing')}
+                  hitSlop={8}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Pair new device"
+                >
+                  <Ionicons name="add" size={20} color={C.primary} />
+                </TouchableOpacity>
               </View>
               {children.length === 0 ? (
                 <View style={s.emptyStateCard}>
@@ -481,12 +510,6 @@ export default function SettingsScreen() {
           childDeviceId={appsModalChild?.childDeviceId ?? ''}
           childName={appsModalChild?.name}
           onClose={() => setAppsModalChild(null)}
-        />
-        <ConnectedDevicesModal
-          visible={connectedDevicesModalOpen}
-          onClose={() => setConnectedDevicesModalOpen(false)}
-          devices={children}
-          onManage={(deviceId) => router.push('/(tabs)/child-account')}
         />
       </Animated.View>
     </ThemedView>
@@ -675,9 +698,22 @@ const s = StyleSheet.create({
   childrenSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginLeft: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
     marginBottom: 12,
+  },
+  childrenSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerAddBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.primaryContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   childrenSectionTitle: {
     fontFamily: 'PlusJakartaSans-Bold',

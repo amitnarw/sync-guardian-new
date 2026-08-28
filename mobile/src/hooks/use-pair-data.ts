@@ -1,17 +1,6 @@
-import { usePairDataContext } from '@/contexts/PairDataContext';
+import { usePairDataContext, type MirroredNotification, type ChildSummary } from '@/contexts/PairDataContext';
 
-export type MirroredNotification = {
-  id: string;
-  pair_id: string;
-  child_device_id: string;
-  source_package: string | null;
-  source_app_name: string | null;
-  notification_title: string;
-  notification_body: string;
-  notification_posted_at: string;
-  delivery_mode: string;
-  app_icon_base64: string | null;
-};
+export type { MirroredNotification, ChildSummary };
 
 export type UsePairDataResult = {
   pair: { id: string; child_device_id: string } | null;
@@ -28,6 +17,7 @@ export type UsePairDataResult = {
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
+  allChildren: ChildSummary[];
   refresh: () => Promise<void>;
 };
 
