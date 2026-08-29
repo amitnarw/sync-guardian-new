@@ -4,7 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
+  primaryContainer: '#c5eccc',
+  onPrimary: '#e8ffea',
   onSurface: '#363228',
   onSurfaceVariant: '#645e53',
   error: '#a83836',

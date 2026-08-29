@@ -29,18 +29,27 @@
 
 ## Encryption at Rest (Notification Content)
 
-- **Scope**: `notification_title`, `notification_body`, `source_package`, `source_app_name`, `metadata_json` on `mirrored_notifications` are encrypted. Other tables/fields are not.
-- **Scheme**: AES-256-GCM via WebCrypto. Per-pair key derived via HKDF-SHA256 from a master key + `pair_id`. Each encryption uses a random 12-byte IV. Stored as `nv1:base64(iv + ciphertext + tag)`.
+- **Scope**: `notification_title`, `notification_body`, `source_package`, `source_app_name` on `mirrored_notifications` are encrypted. Other tables/fields are not.
+- **Scheme**: AES-256-GCM via WebCrypto. Per-relationship key derived via HKDF-SHA256 from a master key + `parent_user_id:child_user_id`. Each encryption uses a random 12-byte IV. Stored as `nv1:base64(iv + ciphertext + tag)`.
+- **Why a relationship key**: notification history is keyed by parent-child user relationship, not by a transient `pair_id`. Disconnect/reconnect cycles do not change the user IDs, so old notifications remain readable without re-keying.
 - **Key**: 32-byte random base64 value in Edge Function secret `NOTIFICATION_ENCRYPTION_KEY` (set via `supabase secrets set`). Visible to project owners. Never in DB, mobile app, or Git.
-- **Read path**: Parent app calls `get-notifications` edge function (JWT auth) which decrypts server-side with `service_role`. Direct `SELECT` from Supabase returns ciphertext only.
-- **Write path**: `ingest-child-notification` encrypts plaintext fields before upsert. FCM push uses plaintext from in-memory rows (before encryption).
+- **Read path**: Parent app calls `get-notifications` edge function (JWT auth) with one or more `child_user_id`s; the function decrypts server-side with `service_role` using each row's stored `parent_user_id:child_user_id`. Direct `SELECT` from Supabase returns ciphertext only (RLS still scopes by relationship).
+- **Write path**: `ingest-child-notification` encrypts plaintext fields before upsert, keyed by the active pair's `parent_user_id:child_user_id`. FCM push uses plaintext from in-memory rows (before encryption).
 
-**Key rotation runbook** (rotating the key breaks existing ciphertext ,  re-backfill required):
+**Key rotation runbook** (rotating the master key breaks existing ciphertext ,  re-backfill required):
+
+The `backfill-encrypt-notifications` edge function is designed for the **pair_id → relationship_key** migration, not for arbitrary master-key rotation. For a future master-key rotation, write a new one-shot edge function that:
+1. Decrypts each row with the OLD master key + current relationship key (`parent_user_id:child_user_id`).
+2. Re-encrypts with the NEW master key + the same relationship key.
+
+The legacy `decryptNotificationLegacy` helper decrypts with the OLD `pair_id` key only and is **not suitable** for this purpose.
+
+If you do need to rotate the master key while preserving the current scheme:
 1. `supabase secrets set NOTIFICATION_ENCRYPTION_KEY="$(openssl rand -base64 32)"`
-2. Temporarily re-deploy `backfill-encrypt-notifications` (from `supabase/functions/backfill-encrypt-notifications`)
+2. Temporarily re-deploy the new re-encryption edge function.
 3. `supabase secrets set BACKFILL_API_KEY="$(openssl rand -base64 16)"`
-4. `curl -X POST https://<project>.supabase.co/functions/v1/backfill-encrypt-notifications -H "Authorization: Bearer <anon_key>" -H "x-api-key: <BACKFILL_API_KEY>"`
-5. `supabase functions delete backfill-encrypt-notifications`
+4. `curl -X POST https://<project>.supabase.co/functions/v1/<new-backfill-fn> -H "Authorization: Bearer <anon_key>" -H "x-api-key: <BACKFILL_API_KEY>"`
+5. `supabase functions delete <new-backfill-fn>`
 6. `supabase secrets unset BACKFILL_API_KEY`
 
 **Local dev**: `supabase functions serve` requires `NOTIFICATION_ENCRYPTION_KEY` set locally:

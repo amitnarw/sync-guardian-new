@@ -21,8 +21,9 @@ import * as Haptics from 'expo-haptics';
 
 // Sync Guardian Colors
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
+  onPrimary: '#e8ffea',
   surface: '#ffffff',
   surfaceContainerLow: '#fcf6ec',
   surfaceContainer: '#eae1d2',

@@ -5,10 +5,10 @@
 
 export const AuthColors = {
   // Primary palette - Forest greens
-  primary: '#486730',
-  primaryContainer: '#87a96b',
+  primary: '#2f4a37',
+  primaryContainer: '#c5eccc',
   onPrimary: '#ffffff',
-  onPrimaryContainer: '#213d0b',
+  onPrimaryContainer: '#1b3223',
 
   // Secondary palette - Terracotta
   secondary: '#9f402d',
@@ -39,14 +39,14 @@ export const AuthColors = {
   // Surface hierarchy - Cream based
   surface: '#fff8f0',
   surfaceBright: '#fff8f0',
-  surfaceContainer: '#efefd7',
-  surfaceContainerHigh: '#eaead1',
-  surfaceContainerHighest: '#e4e4cc',
-  surfaceContainerLow: '#f5f5dc',
+  surfaceContainer: '#f5ede0',
+  surfaceContainerHigh: '#efe7da',
+  surfaceContainerHighest: '#eae1d2',
+  surfaceContainerLow: '#faf3e7',
   surfaceContainerLowest: '#ffffff',
-  surfaceDim: '#dbdcc3',
-  surfaceTint: '#486730',
-  surfaceVariant: '#e4e4cc',
+  surfaceDim: '#e5ddd0',
+  surfaceTint: '#2f4a37',
+  surfaceVariant: '#eae1d2',
 
   // On surface colors
   onSurface: '#1b1d0e',
@@ -206,7 +206,7 @@ export const AuthShadows = {
 
 // Gradient configurations
 export const AuthGradients = {
-  primaryButton: ['#486730', '#87a96b'],
+  primaryButton: ['#2f4a37', '#1b3223'],
   secondaryButton: ['#9f402d', '#fd876f'],
   surfaceGlass: ['rgba(228, 228, 204, 0.6)', 'rgba(239, 239, 215, 0.4)'],
 } as const;

@@ -69,8 +69,9 @@ serve(async (req) => {
 
     const { error: updateError } = await adminClient
       .from('pairs')
-      .update({ status: 'revoked' })
+      .update({ status: 'revoked', revoked_at: new Date().toISOString() })
       .eq('id', pairId)
+      .eq('status', 'active')
       // Defense in depth: even though we verified ownership above, scope
       // the mutation to pairs where the caller is one of the device owners
       // so a forged payload can't revoke an unrelated pair.
@@ -97,7 +98,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ data: { id: pairId, status: 'revoked' } }),
+      JSON.stringify({ data: { id: pairId, revoked: true } }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     )
   } catch (error) {

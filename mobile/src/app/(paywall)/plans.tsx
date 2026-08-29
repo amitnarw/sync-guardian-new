@@ -130,8 +130,68 @@ function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
   const meta = PLAN_META[plan.tier];
   const features = TIER_FEATURES[plan.tier];
   const period = plan.frequency === 'monthly' ? 'mo' : 'yr';
-  const isTierA = plan.tier === 'tier_a';
-  const accentColor = isTierA ? C.primary : C.secondary;
+  const isRecommended = plan.tier === 'tier_b'; // Tier B / Pro is recommended
+
+  if (isRecommended) {
+    return (
+      <Animated.View
+        entering={FadeInDown.duration(550).delay(160 + index * 90)}
+        style={[s.cardShadow, { width: CARD_WIDTH, marginRight: CARD_GAP }]}
+      >
+        <View style={[s.card, s.cardRecommended]}>
+          <View style={s.cardBody}>
+            {/* Top Badge & Icon Row (Image 4) */}
+            <View style={s.recommendedTopRow}>
+              <View style={s.recommendedBadge}>
+                <Text style={s.recommendedBadgeText}>RECOMMENDED</Text>
+              </View>
+              <View style={s.recommendedIconCircle}>
+                <Ionicons name="leaf-outline" size={20} color="#a5d6a7" />
+              </View>
+            </View>
+
+            {/* Title & Description */}
+            <View style={s.cardHeaderBlock}>
+              <Text style={s.cardTitleRec}>{plan.name}</Text>
+              <Text style={s.cardTaglineRec}>{plan.description}</Text>
+            </View>
+
+            {/* Price */}
+            <View style={s.priceRow}>
+              <Text style={s.priceValueRec}>{formatPaise(plan.amount_paise)}</Text>
+              <Text style={s.priceUnitRec}>/{period}</Text>
+            </View>
+
+            {/* Feature List */}
+            <View style={s.features}>
+              {features.map((label, i) => (
+                <View key={`${plan.id}-feature-${i}`} style={s.featureRow}>
+                  <View style={s.featureBulletRec}>
+                    <Ionicons name="checkmark" size={14} color="#a5d6a7" />
+                  </View>
+                  <Text style={s.featureTextRec}>{label}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* White Capsule CTA Button */}
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                onContinue();
+              }}
+              style={({ pressed }) => [
+                s.cardCtaRec,
+                pressed && { transform: [{ scale: 0.97 }] },
+              ]}
+            >
+              <Text style={s.cardCtaTextRec}>Choose {plan.name}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View
@@ -141,17 +201,8 @@ function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
       <View style={s.card}>
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           <LinearGradient
-            colors={['rgba(54,50,40,0.10)', 'rgba(54,50,40,0)']}
+            colors={['rgba(54,50,40,0.06)', 'rgba(54,50,40,0)']}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ flex: 1 }}
-          />
-        </View>
-
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <LinearGradient
-            colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.85)']}
-            start={{ x: 0.4, y: 0.4 }}
             end={{ x: 1, y: 1 }}
             style={{ flex: 1 }}
           />
@@ -166,7 +217,7 @@ function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
               <Text style={s.cardTagline}>{plan.description}</Text>
             </View>
             <View style={s.iconCircle}>
-              <Ionicons name={meta.icon} size={24} color={accentColor} />
+              <Ionicons name={meta.icon} size={22} color={C.primary} />
             </View>
           </View>
 
@@ -179,7 +230,7 @@ function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
             {features.map((label, i) => (
               <View key={`${plan.id}-feature-${i}`} style={s.featureRow}>
                 <View style={s.featureBullet}>
-                  <Ionicons name="checkmark" size={14} color={accentColor} />
+                  <Ionicons name="checkmark" size={14} color={C.primary} />
                 </View>
                 <Text style={s.featureText}>{label}</Text>
               </View>
@@ -193,7 +244,7 @@ function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
             }}
             style={({ pressed }) => [s.cardCta, pressed && { transform: [{ scale: 0.97 }] }]}
           >
-            <Text style={s.cardCtaText}>Continue</Text>
+            <Text style={s.cardCtaText}>Choose {plan.name}</Text>
           </Pressable>
         </View>
       </View>
@@ -547,6 +598,105 @@ const s = StyleSheet.create({
     minHeight: 460,
     position: 'relative',
     backgroundColor: C.surfaceContainer,
+  },
+  cardRecommended: {
+    backgroundColor: '#2f4a37',
+  },
+
+  recommendedTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  recommendedBadge: {
+    backgroundColor: '#a5d6a7',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 9999,
+  },
+  recommendedBadgeText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 10,
+    color: '#1b3d22',
+    letterSpacing: 1,
+  },
+  recommendedIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  cardTitleRec: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 22,
+    lineHeight: 28,
+    marginBottom: 6,
+    color: '#ffffff',
+    letterSpacing: -0.4,
+  },
+  cardTaglineRec: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#d1dfd5',
+  },
+
+  priceValueRec: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 44,
+    lineHeight: 48,
+    color: '#ffffff',
+    letterSpacing: -1.5,
+    fontVariant: ['tabular-nums'],
+  },
+  priceUnitRec: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 13,
+    color: '#b5cbbb',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+
+  featureBulletRec: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+  },
+  featureTextRec: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#ffffff',
+    flex: 1,
+  },
+
+  cardCtaRec: {
+    height: 52,
+    borderRadius: R.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  cardCtaTextRec: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    color: '#1f3a28',
   },
 
   blob: {

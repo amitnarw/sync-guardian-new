@@ -19,6 +19,7 @@ import { AppIcon } from '@/components/app-icon';
 import { AuthRadius } from '@/constants/auth-theme';
 import { logger } from '@/services/logger';
 import { HomeSkeleton } from '@/components/skeletons/home-skeleton';
+import { OfflineBanner } from '@/components/ui/offline-banner';
 import { ChildSelector } from '@/components/ui/child-selector';
 import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
 import { fetchParentNotificationsPaginated } from '@/services/notifications-service';
@@ -28,7 +29,7 @@ import type { RawNotification } from '@/services/notifications-service';
 // EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
 // ============================================================
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
   onPrimary: '#e8ffea',
   secondary: '#a0412d',
@@ -107,7 +108,7 @@ function MonitoringHealthCard({
   const status = computeHealthStatus({ childDevice, isOnline, todayCount });
 
   const statusConfig = {
-    healthy: { label: 'All systems Ok', dotColor: '#44674d', pillBg: '#c5eccc', pillText: '#2a4d33' },
+    healthy: { label: 'All systems Ok', dotColor: '#2f4a37', pillBg: '#c5eccc', pillText: '#1b3223' },
     connected: { label: 'Connected', dotColor: '#8a6a00', pillBg: '#ffefc0', pillText: '#6b4f00' },
     issue: { label: 'Check connection', dotColor: '#a83836', pillBg: '#ffdad3', pillText: '#7a2020' },
   }[status];
@@ -115,8 +116,6 @@ function MonitoringHealthCard({
   const lastSyncText = childDevice?.last_seen_at
     ? formatTimeAgo(new Date(childDevice.last_seen_at).getTime())
     : 'Never';
-
-  const pushOk = !!childDevice?.push_token;
 
   const latestApp = latestNotification?.source_app_name || null;
   const latestTime = latestNotification
@@ -218,18 +217,18 @@ function MonitoringHealthCard({
 
       {/* ── Animated pill metric rows ── */}
       <Animated.View style={[s.healthPillStack, pillAnimStyle]}>
-        {/* Push delivery */}
+        {/* Real-time sync status */}
         <View style={s.healthPillRow}>
-          <View style={[s.healthPillIcon, { backgroundColor: pushOk ? C.primaryContainer : C.secondaryContainer }]}>
-            <Ionicons name="send-outline" size={15} color={pushOk ? C.primary : C.secondary} />
+          <View style={[s.healthPillIcon, { backgroundColor: isOnline ? C.primaryContainer : C.surfaceContainerHighest }]}>
+            <Ionicons name="sync-outline" size={15} color={isOnline ? C.primary : C.onSurfaceVariant} />
           </View>
           <View style={s.healthPillText}>
-            <Text style={s.healthPillLabel}>Push delivery</Text>
-            <Text style={[s.healthPillValue, { color: pushOk ? C.primary : C.secondary }]}>
-              {pushOk ? 'Ready' : 'Not configured'}
+            <Text style={s.healthPillLabel}>Real-time sync</Text>
+            <Text style={[s.healthPillValue, { color: isOnline ? C.primary : C.onSurfaceVariant }]}>
+              {isOnline ? 'Active & connected' : 'Listening in background'}
             </Text>
           </View>
-          <View style={[s.healthPillDot, { backgroundColor: pushOk ? C.primary : C.secondary }]} />
+          <View style={[s.healthPillDot, { backgroundColor: isOnline ? '#31A24C' : C.outline }]} />
         </View>
 
         {/* Latest received */}
@@ -240,7 +239,7 @@ function MonitoringHealthCard({
           <View style={s.healthPillText}>
             <Text style={s.healthPillLabel}>Latest received</Text>
             <Text style={s.healthPillValue}>
-              {latestApp ? `${latestApp} · ${latestTime}` : 'None yet'}
+              {latestApp ? `${latestApp} · ${latestTime}` : 'No recent activity'}
             </Text>
           </View>
         </View>
@@ -320,7 +319,7 @@ function getGreeting(): string {
 }
 
 export default function HomeScreen() {
-  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isOnline, isLoading, isRefreshing, refresh, allChildren } = usePairData();
+  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isOnline, isLoading, isRefreshing, refresh, allChildren, error: pairError } = usePairData();
   const { showModal } = useAppModal();
   const { loading: setupLoading, hasPair, setupComplete, incompletePairId } = useSetupStatus();
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
@@ -386,7 +385,7 @@ export default function HomeScreen() {
   }, [isFocused, showModal]);
 
   const allChildrenKey = React.useMemo(
-    () => allChildren.map((c) => c.pairId).join(','),
+    () => allChildren.map((c) => c.childUserId).join(','),
     [allChildren],
   );
 
@@ -710,6 +709,8 @@ export default function HomeScreen() {
             <RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[C.primary]} tintColor={C.primary} />
           }
         >
+          {pairError && <OfflineBanner onRetry={refresh} />}
+
           {/* ========== HERO SECTION (v2) ========== */}
           <View style={s.heroSection}>
             <View style={s.heroTextBlock}>
@@ -720,12 +721,13 @@ export default function HomeScreen() {
                 <View style={s.heroChildSelector}>
                   <ChildSelector
                     options={allChildren.map((c) => ({
+                      childUserId: c.childUserId,
                       pairId: c.pairId,
                       childDeviceId: c.childDeviceId,
                       displayName: c.displayName,
                       isOnline: c.isOnline,
                     }))}
-                    selectedPairId={selectedChildId}
+                    selectedChildUserId={selectedChildId}
                     onSelect={setSelectedChildId}
                     showAllOption
                     allLabel={`All ${allChildren.length} children`}
@@ -1502,7 +1504,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginHorizontal: 24,
-    marginTop: 12,
+    marginTop: 4,
     marginBottom: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,

@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/supabase/admin";
-import { decryptNotification } from "@/lib/notification-crypto";
+import { decryptNotification, DecryptionError } from "@/lib/notification-crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +78,7 @@ export async function GET() {
       client
         .from("mirrored_notifications")
         .select(
-          "id,pair_id,notification_title,notification_body,source_package,source_app_name,notification_posted_at",
+          "id,parent_user_id,child_user_id,notification_title,notification_body,source_package,source_app_name,notification_posted_at",
         )
         .order("notification_posted_at", { ascending: false })
         .limit(8)
@@ -87,12 +87,22 @@ export async function GET() {
           const rows = [];
           for (const row of data ?? []) {
             const rec = row as Record<string, unknown>;
-            const pairId = rec.pair_id;
-            rows.push(
-              typeof pairId === "string"
-                ? await decryptNotification(rec, pairId)
-                : rec,
-            );
+            const pUserId = rec.parent_user_id;
+            const cUserId = rec.child_user_id;
+            if (typeof pUserId === "string" && typeof cUserId === "string") {
+              try {
+                rows.push(await decryptNotification(rec, pUserId, cUserId));
+              } catch (err) {
+                if (err instanceof DecryptionError) {
+                  // Skip the undecryptable row rather than leak the raw
+                  // "nv1:" blob into the dashboard.
+                  continue;
+                }
+                throw err;
+              }
+            } else {
+              rows.push(rec);
+            }
           }
           return rows;
         }),
@@ -131,8 +141,12 @@ export async function GET() {
       },
     });
   } catch (err) {
+    // Server-side log so the real error is preserved for ops debugging.
+    // The client-facing message is intentionally generic so internal Supabase
+    // errors (column names, constraint names, SQL hints) never leak to admins.
+    console.error('dashboard route failed', err);
     return NextResponse.json(
-      { message: err instanceof Error ? err.message : "Dashboard failed" },
+      { message: 'Dashboard failed. Please try again or contact support.' },
       { status: 500 },
     );
   }

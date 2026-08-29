@@ -73,9 +73,14 @@ serve(async (req) => {
     })
 
     if (!pushToken) {
+      logger.warn('ping-child', 'no push token registered on child device', { childDeviceId })
       return new Response(
-        JSON.stringify({ error: 'Child device does not have a push token registered' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
+        JSON.stringify({
+          error: 'Child device has not registered for push alerts yet. Open the child app and grant the notification permission once to enable pings.',
+          reason: 'no_push_token',
+          delivered: false,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 },
       )
     }
 

@@ -148,7 +148,7 @@ export const SOURCE_APP_THEMES: Record<string, SourceAppTheme> = {
 };
 
 export const FALLBACK_THEME: SourceAppTheme = {
-  accent: '#44674d',
+  accent: '#2f4a37',
   accentSoft: '#c5eccc',
   isChat: false,
   bubbleText: '#ffffff',

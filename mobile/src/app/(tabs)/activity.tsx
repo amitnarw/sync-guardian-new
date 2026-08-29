@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
-import { StyleSheet, View, Text, RefreshControl, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, RefreshControl, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
@@ -10,13 +10,14 @@ import { AppIcon } from '@/components/app-icon';
 import { NotificationSourceCard } from '@/components/notification-source-card';
 import { useRegisterHeaderRefresh } from '@/contexts/HeaderRefreshContext';
 import { ActivitySkeleton } from '@/components/skeletons/activity-skeleton';
+import { OfflineBanner } from '@/components/ui/offline-banner';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { ChildSelector } from '@/components/ui/child-selector';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { fetchParentNotifications, fetchMoreNotificationsOlderThan, type AggregatedNotification, type ChildRef, type MoreNotificationsCursor } from '@/services/notifications-service';
+import { getSourceTheme } from '@/constants/source-app-themes';
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
   onPrimary: '#e8ffea',
   secondary: '#a0412d',
@@ -59,8 +60,9 @@ export default function ActivityScreen() {
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<MoreNotificationsCursor | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
 
-  const allChildrenKey = allChildren.map((c) => c.pairId).join(',');
+  const allChildrenKey = allChildren.map((c) => c.childUserId).join(',');
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -154,49 +156,50 @@ export default function ActivityScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<'all' | 'custom'>('all');
+  const [showChildSelector, setShowChildSelector] = useState(false);
   const [showAppSelector, setShowAppSelector] = useState(false);
   const [showDateSelector, setShowDateSelector] = useState(false);
 
-  const appButtonRef = useRef<View>(null);
-  const dateButtonRef = useRef<View>(null);
-  const [appDropdownTop, setAppDropdownTop] = useState(0);
-  const [appDropdownRight, setAppDropdownRight] = useState(0);
   const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
   const [customStartTime, setCustomStartTime] = useState('00:00');
   const [customEndTime, setCustomEndTime] = useState('23:59');
 
   const openAppDropdown = () => {
-    appButtonRef.current?.measureInWindow((x, y, width, height) => {
-      const screenWidth = Dimensions.get('window').width;
-      setAppDropdownTop(y + height + 4);
-      setAppDropdownRight(screenWidth - (x + width));
-      setShowAppSelector(true);
-      setShowDateSelector(false);
-    });
+    setShowAppSelector(true);
+    setShowChildSelector(false);
+    setShowDateSelector(false);
   };
 
   const openDateDropdown = () => {
     setShowDateSelector(true);
+    setShowChildSelector(false);
     setShowAppSelector(false);
   };
 
   const uniqueApps = useMemo(() => {
-    const appsMap = new Map<string, { name: string; icon: string | null }>();
+    const appsMap = new Map<string, { name: string; icon: string | null; count: number }>();
     for (const n of aggregated) {
       const pkg = n.source_package;
       if (pkg) {
-        appsMap.set(pkg, {
-          name: n.source_app_name || pkg,
-          icon: n.app_icon_base64,
-        });
+        const existing = appsMap.get(pkg);
+        if (existing) {
+          existing.count++;
+        } else {
+          appsMap.set(pkg, {
+            name: n.source_app_name || pkg,
+            icon: n.app_icon_base64,
+            count: 1,
+          });
+        }
       }
     }
     return Array.from(appsMap.entries()).map(([pkg, data]) => ({
       package: pkg,
       name: data.name,
       icon: data.icon,
-    }));
+      count: data.count,
+    })).sort((a, b) => b.count - a.count);
   }, [aggregated]);
 
   const filters = useMemo(
@@ -265,7 +268,7 @@ export default function ActivityScreen() {
     }
     const byChild = new Map<string, Group>();
     for (const n of filtered) {
-      const key = n.pair_id;
+      const key = n.child_user_id;
       let entry = byChild.get(key);
       if (!entry) {
         entry = { child: n.child, items: [] };
@@ -274,13 +277,12 @@ export default function ActivityScreen() {
       entry.items.push(n);
     }
     return allChildren
-      .map((c) => byChild.get(c.pairId))
+      .map((c) => byChild.get(c.childUserId))
       .filter((g): g is Group => !!g);
   }, [filtered, isAllMode, allChildren]);
 
-  const showMultiSelector = allChildren.length > 1;
   const selectedChild = useMemo(
-    () => allChildren.find((c) => c.pairId === selectedChildId) ?? null,
+    () => allChildren.find((c) => c.childUserId === selectedChildId) ?? null,
     [allChildren, selectedChildId],
   );
   const heroDescription = (() => {
@@ -302,6 +304,8 @@ export default function ActivityScreen() {
       <EdgeFadeScrollView
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
+        onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={isRefreshing || pairIsRefreshing} onRefresh={doRefresh} colors={[C.primary]} tintColor={C.primary} />
         }
@@ -332,22 +336,6 @@ export default function ActivityScreen() {
           <View style={s.heroContent}>
             <Text style={s.heroTitle}>Activity</Text>
             <Text style={s.heroDescription}>{heroDescription}</Text>
-            {showMultiSelector && (
-              <View style={s.heroSelectorWrap}>
-                <ChildSelector
-                  options={allChildren.map((c) => ({
-                    pairId: c.pairId,
-                    childDeviceId: c.childDeviceId,
-                    displayName: c.displayName,
-                    isOnline: c.isOnline,
-                  }))}
-                  selectedPairId={selectedChildId}
-                  onSelect={setSelectedChildId}
-                  showAllOption
-                  allLabel={`All ${allChildren.length} children`}
-                />
-              </View>
-            )}
           </View>
         </View>
 
@@ -358,14 +346,6 @@ export default function ActivityScreen() {
 
         <Text style={s.sectionTitle}>Recent Activity</Text>
 
-        {!isLoading && aggregated.length > 0 && showMultiSelector === false && selectedChild && (
-          <View style={s.singleChildHint}>
-            <Text style={s.singleChildHintText}>
-              Showing {selectedChild.displayName || 'this child'}. Pair more devices from Settings to view together.
-            </Text>
-          </View>
-        )}
-
         {!isLoading && aggregated.length > 0 && (
           <View style={{ zIndex: 100, position: 'relative' }}>
             <View style={s.filterBarContainer}>
@@ -375,7 +355,7 @@ export default function ActivityScreen() {
                   style={s.searchInput}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Search..."
+                  placeholder="Search notifications..."
                   placeholderTextColor={C.onSurfaceVariant}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -387,8 +367,21 @@ export default function ActivityScreen() {
                 )}
               </View>
 
+              {allChildren.length > 0 && (
+                <TouchableOpacity
+                  style={[s.filterTriggerBtn, selectedChildId && s.filterTriggerBtnActive]}
+                  onPress={() => {
+                    setShowChildSelector(true);
+                    setShowAppSelector(false);
+                    setShowDateSelector(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="people-outline" size={20} color={selectedChildId ? C.white : C.primary} />
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
-                ref={appButtonRef}
                 style={[s.filterTriggerBtn, selectedPackage && s.filterTriggerBtnActive]}
                 onPress={openAppDropdown}
                 activeOpacity={0.7}
@@ -397,7 +390,6 @@ export default function ActivityScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                ref={dateButtonRef}
                 style={[s.filterTriggerBtn, dateRange !== 'all' && s.filterTriggerBtnActive]}
                 onPress={openDateDropdown}
                 activeOpacity={0.7}
@@ -406,42 +398,175 @@ export default function ActivityScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* ========== CHILD FILTER BOTTOM SHEET ========== */}
+            <Modal
+              visible={showChildSelector}
+              transparent
+              animationType="slide"
+              onRequestClose={() => setShowChildSelector(false)}
+            >
+              <View style={s.modalBackdrop}>
+                <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setShowChildSelector(false)} />
+                <View style={s.bottomSheetContainer}>
+                  <View style={s.sheetHandle} />
+                  <View style={s.sheetHeader}>
+                    <View>
+                      <Text style={s.sheetTitle}>Filter by Child Device</Text>
+                      <Text style={s.sheetSubtitle}>Choose a child to view their activity</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={s.sheetCloseBtn}
+                      onPress={() => setShowChildSelector(false)}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="close" size={20} color={C.onSurface} />
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={s.sheetList} showsVerticalScrollIndicator={false} contentContainerStyle={s.sheetListContent}>
+                    <TouchableOpacity
+                      style={[s.sheetAppRow, !selectedChildId && s.sheetAppRowActive]}
+                      onPress={() => {
+                        setSelectedChildId(null);
+                        setShowChildSelector(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[s.sheetAppIconWrap, { backgroundColor: C.primaryContainer }]}>
+                        <Ionicons name="people" size={20} color={C.primary} />
+                      </View>
+                      <View style={s.sheetAppDetails}>
+                        <Text style={[s.sheetAppName, !selectedChildId && s.sheetAppNameActive]}>All Children</Text>
+                        <Text style={s.sheetAppSub}>View activity across all {allChildren.length} devices</Text>
+                      </View>
+                      {!selectedChildId && (
+                        <Ionicons name="checkmark-circle" size={22} color={C.primary} />
+                      )}
+                    </TouchableOpacity>
+                    {allChildren.map((c) => {
+                      const isSelected = selectedChildId === c.childUserId;
+                      return (
+                        <TouchableOpacity
+                          key={c.pairId}
+                          style={[s.sheetAppRow, isSelected && s.sheetAppRowActive]}
+                          onPress={() => {
+                            setSelectedChildId(c.childUserId);
+                            setShowChildSelector(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Image
+                            source={require('@/assets/images/leo_avatar.jpg')}
+                            style={s.sheetChildAvatar}
+                          />
+                          <View style={s.sheetAppDetails}>
+                            <Text style={[s.sheetAppName, isSelected && s.sheetAppNameActive]} numberOfLines={1}>
+                              {c.displayName || 'Child Device'}
+                            </Text>
+                            <View style={s.sheetChildStatusRow}>
+                              <View style={[s.statusDotSmall, { backgroundColor: c.isOnline ? '#31A24C' : C.outline }]} />
+                              <Text style={s.sheetAppSub}>{c.isOnline ? 'Online' : 'Offline'}</Text>
+                            </View>
+                          </View>
+                          {isSelected && (
+                            <Ionicons name="checkmark-circle" size={22} color={C.primary} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
+            </Modal>
+
             <Modal
               visible={showAppSelector}
               transparent
-              animationType="fade"
+              animationType="slide"
               onRequestClose={() => setShowAppSelector(false)}
             >
-              <Pressable style={s.dropdownOverlay} onPress={() => setShowAppSelector(false)}>
-                <View style={[s.dropdownMenuFloating, { top: appDropdownTop, right: appDropdownRight }]}>
-                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled showsVerticalScrollIndicator>
+              <View style={s.modalBackdrop}>
+                <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setShowAppSelector(false)} />
+                <View style={s.bottomSheetContainer}>
+                  {/* Drag Handle */}
+                  <View style={s.sheetHandle} />
+
+                  {/* Header */}
+                  <View style={s.sheetHeader}>
+                    <View>
+                      <Text style={s.sheetTitle}>Filter by Application</Text>
+                      <Text style={s.sheetSubtitle}>Choose an app to narrow down activity</Text>
+                    </View>
                     <TouchableOpacity
-                      style={[s.dropdownItem, !selectedPackage && s.dropdownItemActive]}
+                      style={s.sheetCloseBtn}
+                      onPress={() => setShowAppSelector(false)}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="close" size={20} color={C.onSurface} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* List */}
+                  <ScrollView style={s.sheetList} showsVerticalScrollIndicator={false} contentContainerStyle={s.sheetListContent}>
+                    {/* All Apps Option */}
+                    <TouchableOpacity
+                      style={[s.sheetAppRow, !selectedPackage && s.sheetAppRowActive]}
                       onPress={() => {
                         setSelectedPackage(null);
                         setShowAppSelector(false);
                       }}
+                      activeOpacity={0.7}
                     >
-                      <Text style={[s.dropdownItemText, !selectedPackage && s.dropdownItemTextActive]}>All Apps</Text>
+                      <View style={[s.sheetAppIconWrap, { backgroundColor: C.primaryContainer }]}>
+                        <Ionicons name="apps" size={22} color={C.primary} />
+                      </View>
+                      <View style={s.sheetAppDetails}>
+                        <Text style={[s.sheetAppName, !selectedPackage && s.sheetAppNameActive]}>All Applications</Text>
+                        <Text style={s.sheetAppSub}>Show all {aggregated.length} notifications</Text>
+                      </View>
+                      {!selectedPackage ? (
+                        <Ionicons name="checkmark-circle" size={22} color={C.primary} />
+                      ) : (
+                        <View style={s.sheetBadge}>
+                          <Text style={s.sheetBadgeText}>{aggregated.length}</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
-                    {uniqueApps.map((app) => (
-                      <TouchableOpacity
-                        key={app.package}
-                        style={[s.dropdownItem, selectedPackage === app.package && s.dropdownItemActive]}
-                        onPress={() => {
-                          setSelectedPackage(app.package);
-                          setShowAppSelector(false);
-                        }}
-                      >
-                        <AppIcon iconBase64={app.icon} size={20} fallbackSize={10} />
-                        <Text style={[s.dropdownItemText, selectedPackage === app.package && s.dropdownItemTextActive]} numberOfLines={1}>
-                          {app.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+
+                    {/* App Rows */}
+                    {uniqueApps.map((app) => {
+                      const isSelected = selectedPackage === app.package;
+                      return (
+                        <TouchableOpacity
+                          key={app.package}
+                          style={[s.sheetAppRow, isSelected && s.sheetAppRowActive]}
+                          onPress={() => {
+                            setSelectedPackage(app.package);
+                            setShowAppSelector(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <AppIcon iconBase64={app.icon} size={36} fallbackSize={16} />
+                          <View style={s.sheetAppDetails}>
+                            <Text style={[s.sheetAppName, isSelected && s.sheetAppNameActive]} numberOfLines={1}>
+                              {app.name}
+                            </Text>
+                            <Text style={s.sheetAppSub}>
+                              {app.count} {app.count === 1 ? 'notification' : 'notifications'}
+                            </Text>
+                          </View>
+                          {isSelected ? (
+                            <Ionicons name="checkmark-circle" size={22} color={C.primary} />
+                          ) : (
+                            <View style={s.sheetBadge}>
+                              <Text style={s.sheetBadgeText}>{app.count}</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
                 </View>
-              </Pressable>
+              </View>
             </Modal>
 
             <DateRangePicker
@@ -474,8 +599,8 @@ export default function ActivityScreen() {
         {isLoading ? (
           <ActivitySkeleton />
         ) : error && aggregated.length === 0 ? (
-          <View style={{ padding: 32, alignItems: 'center' }}>
-            <Text style={{ fontFamily: 'PlusJakartaSans-Medium', fontSize: 14, color: C.error }}>{error}</Text>
+          <View style={{ paddingVertical: 16 }}>
+            <OfflineBanner onRetry={doRefresh} message={error} />
           </View>
         ) : aggregated.length === 0 ? (
           <View style={{ padding: 32, alignItems: 'center' }}>
@@ -518,24 +643,35 @@ export default function ActivityScreen() {
                 setLastIconY={group === groups[groups.length - 1] ? setLastIconY : () => undefined}
                 isFirstGroup={group === groups[0]}
                 isLastGroup={group === groups[groups.length - 1]}
+                scrollY={scrollY}
               />
             ))}
-            {hasMore && aggregated.length >= 50 && (
-              <View style={s.loadMoreWrap}>
+            {hasMore && (!selectedPackage || filtered.length >= 50) ? (
+              <View style={s.loadMoreSection}>
                 <TouchableOpacity
                   onPress={loadMore}
                   disabled={isLoadingMore}
                   activeOpacity={0.7}
-                  style={s.loadMoreBtn}
+                  style={s.premiumLoadMoreBtn}
                 >
                   {isLoadingMore ? (
-                    <ActivityIndicator size="small" color={C.primary} />
+                    <ActivityIndicator size="small" color={C.primary} style={{ marginRight: 4 }} />
                   ) : (
-                    <Text style={s.loadMoreText}>Load older activity</Text>
+                    <Ionicons name="arrow-down-circle-outline" size={16} color={C.primary} />
                   )}
+                  <Text style={s.loadMoreTitle}>
+                    {isLoadingMore ? 'Loading Older Activity...' : 'Load Older Activity'}
+                  </Text>
                 </TouchableOpacity>
               </View>
-            )}
+            ) : filtered.length > 0 ? (
+              <View style={s.caughtUpContainer}>
+                <View style={s.caughtUpCard}>
+                  <Ionicons name="checkmark-done" size={15} color={C.primary} />
+                  <Text style={s.caughtUpHeading}>{"You're all caught up"}</Text>
+                </View>
+              </View>
+            ) : null}
           </View>
         )}
 
@@ -553,6 +689,31 @@ interface ChildGroupSectionProps {
   setLastIconY: (y: number | null) => void;
   isFirstGroup: boolean;
   isLastGroup: boolean;
+  scrollY: number;
+}
+
+function interpolateRgb(hex1: string, hex2: string, ratio: number): string {
+  const f = Math.max(0, Math.min(1, ratio));
+  const parseHex = (hex: string) => {
+    let clean = hex.replace('#', '');
+    if (clean.length === 3) {
+      clean = clean.split('').map((c) => c + c).join('');
+    }
+    const num = parseInt(clean, 16);
+    if (isNaN(num)) return { r: 47, g: 74, b: 55 };
+    return {
+      r: (num >> 16) & 255,
+      g: (num >> 8) & 255,
+      b: num & 255,
+    };
+  };
+
+  const c1 = parseHex(hex1);
+  const c2 = parseHex(hex2);
+  const r = Math.round(c1.r + (c2.r - c1.r) * f);
+  const g = Math.round(c1.g + (c2.g - c1.g) * f);
+  const b = Math.round(c1.b + (c2.b - c1.b) * f);
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 function ChildGroupSection({
@@ -563,47 +724,170 @@ function ChildGroupSection({
   setLastIconY,
   isFirstGroup,
   isLastGroup,
+  scrollY,
 }: ChildGroupSectionProps) {
-  const { child, items } = group;
+  const { items } = group;
+  const [iconYMap, setIconYMap] = useState<Record<number, number>>({});
+
+  // Active scroll tracking & bead position
+  const activeData = useMemo(() => {
+    if (items.length === 0) return null;
+    const firstY = iconYMap[0] ?? (firstIconY ?? 22);
+    const lastY = iconYMap[items.length - 1] ?? (lastIconY ?? 22);
+
+    // Initial position before user scrolls: bead stays precisely at first icon
+    const scrollDistance = Math.max(0, scrollY);
+    const clampedBeamY = Math.min(lastY, firstY + scrollDistance);
+
+    // Find the segment [i, i+1] that currently contains clampedBeamY
+    let currentColor = getSourceTheme(items[0]?.source_package).accent;
+
+    for (let i = 0; i < items.length - 1; i++) {
+      const y1 = iconYMap[i];
+      const y2 = iconYMap[i + 1];
+      if (y1 !== undefined && y2 !== undefined && y2 > y1) {
+        if (clampedBeamY >= y1 && clampedBeamY <= y2) {
+          const ratio = (clampedBeamY - y1) / (y2 - y1);
+          const c1 = getSourceTheme(items[i].source_package).accent;
+          const c2 = getSourceTheme(items[i + 1].source_package).accent;
+          currentColor = interpolateRgb(c1, c2, ratio);
+          break;
+        } else if (clampedBeamY > y2) {
+          currentColor = getSourceTheme(items[i + 1]?.source_package).accent;
+        }
+      }
+    }
+
+    return {
+      beamY: clampedBeamY,
+      firstY,
+      lastY,
+      currentColor,
+      isScrolled: scrollDistance > 4,
+    };
+  }, [items, iconYMap, scrollY, firstIconY, lastIconY]);
+
+  // Compute filled connecting segments (ONLY above the bead)
+  const filledSegments = useMemo(() => {
+    if (items.length < 2 || !activeData || !activeData.isScrolled) return [];
+    const segs: {
+      key: string;
+      top: number;
+      height: number;
+      colors: [string, string];
+    }[] = [];
+
+    const { beamY } = activeData;
+
+    for (let i = 0; i < items.length - 1; i++) {
+      const y1 = iconYMap[i];
+      const y2 = iconYMap[i + 1];
+      if (y1 === undefined || y2 === undefined || y2 <= y1) continue;
+
+      // If beam hasn't reached this segment yet, keep it muted (do not render colored overlay)
+      if (beamY <= y1) break;
+
+      const c1 = getSourceTheme(items[i].source_package).accent;
+      const c2 = getSourceTheme(items[i + 1].source_package).accent;
+
+      if (beamY >= y2) {
+        // Fully passed segment: full height from y1 to y2
+        segs.push({
+          key: `seg-full-${items[i].id}-${items[i + 1].id}`,
+          top: y1,
+          height: y2 - y1,
+          colors: [c1, c2],
+        });
+      } else {
+        // Partially passed segment containing the bead: fill from y1 up to beamY
+        const ratio = (beamY - y1) / (y2 - y1);
+        const interpolatedColor = interpolateRgb(c1, c2, ratio);
+        segs.push({
+          key: `seg-partial-${items[i].id}-${items[i + 1].id}`,
+          top: y1,
+          height: beamY - y1,
+          colors: [c1, interpolatedColor],
+        });
+        break; // Everything below beamY stays completely muted
+      }
+    }
+
+    return segs;
+  }, [items, iconYMap, activeData]);
+
   return (
     <View>
-      {child && (
-        <View style={s.childGroupHeader}>
-          <View style={s.childGroupAvatar}>
-            <Ionicons name="person-outline" size={16} color={C.primary} />
-            <View
-              style={[
-                s.childGroupOnlineDot,
-                { backgroundColor: child.isOnline ? '#31A24C' : C.outline },
-              ]}
+      <View style={stylesLocal.timelineContainer}>
+        {/* Subtle base track line (always visible & muted by default) */}
+        {items.length > 1 && (
+          <View
+            style={[
+              stylesLocal.timelineBaseTrack,
+              isFirstGroup && firstIconY !== null && isLastGroup && lastIconY !== null
+                ? { top: firstIconY, height: lastIconY - firstIconY }
+                : isFirstGroup && firstIconY !== null && !isLastGroup
+                  ? { top: firstIconY, height: undefined, bottom: 26 }
+                  : !isFirstGroup && isLastGroup && lastIconY !== null
+                    ? { top: 26, bottom: undefined, height: lastIconY }
+                    : { top: 26, bottom: 26 },
+            ]}
+          />
+        )}
+
+        {/* Multi-brand colored liquid segments (ONLY above the bead) */}
+        {filledSegments.map((seg) => (
+          <View
+            key={seg.key}
+            style={[
+              stylesLocal.timelineSegment,
+              {
+                top: seg.top,
+                height: seg.height,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <LinearGradient
+              colors={seg.colors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
             />
           </View>
-          <View style={s.childGroupText}>
-            <Text style={s.childGroupName}>{child.displayName || 'Child Device'}</Text>
-            <Text style={s.childGroupSub}>
-              {child.isOnline
-                ? 'Online'
-                : child.lastSeenAt
-                  ? `Last seen ${new Date(child.lastSeenAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
-                  : 'Offline'}
-            </Text>
-          </View>
-        </View>
-      )}
+        ))}
 
-      <View style={stylesLocal.timelineContainer}>
-        <View
-          style={[
-            stylesLocal.timelineLine,
-            isFirstGroup && firstIconY !== null && isLastGroup && lastIconY !== null
-              ? { top: firstIconY, height: lastIconY - firstIconY }
-              : isFirstGroup && firstIconY !== null && !isLastGroup
-                ? { top: firstIconY, height: undefined, bottom: 26 }
-                : !isFirstGroup && isLastGroup && lastIconY !== null
-                  ? { top: 26, bottom: undefined, height: lastIconY }
-                  : { top: 26, bottom: 26 },
-          ]}
-        />
+        {/* Scroll-driven bead & top trailing glow (only when scrolled) */}
+        {activeData && items.length > 1 && activeData.isScrolled && (
+          <View
+            style={[
+              stylesLocal.beadContainer,
+              {
+                top: activeData.beamY - 6,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            {/* Soft trailing upward light beam (no glow below) */}
+            <LinearGradient
+              colors={['transparent', activeData.currentColor]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={stylesLocal.beadTrailGlow}
+            />
+            {/* Glowing Bead */}
+            <View
+              style={[
+                stylesLocal.beadCircle,
+                {
+                  backgroundColor: activeData.currentColor,
+                  shadowColor: activeData.currentColor,
+                },
+              ]}
+            >
+              <View style={stylesLocal.beadInnerDot} />
+            </View>
+          </View>
+        )}
 
         {items.map((n, idx) => {
           const isToday = new Date(n.notification_posted_at).toDateString() === new Date().toDateString();
@@ -618,21 +902,30 @@ function ChildGroupSection({
           const isFacebook =
             n.source_package &&
             (n.source_package.includes('facebook') || n.source_package.includes('orca'));
+          const theme = getSourceTheme(n.source_package);
+          const itemY = iconYMap[idx];
+          const isNearBead =
+            activeData &&
+            activeData.isScrolled &&
+            itemY !== undefined &&
+            Math.abs(activeData.beamY - itemY) < 24;
 
           return (
             <React.Fragment key={n.id}>
               {showDateMarker && (
-                <View style={[stylesLocal.dateMarkerRow, idx > 0 ? { marginTop: 10 } : undefined]}>
+                <View style={[stylesLocal.dateMarkerContainer, idx > 0 ? { marginTop: 14 } : undefined]}>
+                  <View style={stylesLocal.dateHairline} />
                   <View
                     style={[
-                      stylesLocal.dateMarkerPill,
-                      !isToday ? stylesLocal.dateMarkerPillYesterday : undefined,
+                      stylesLocal.dateCapsule,
+                      isToday && stylesLocal.dateCapsuleToday,
                     ]}
                   >
+                    <View style={[stylesLocal.dateCapsuleDot, isToday && stylesLocal.dateCapsuleDotToday]} />
                     <Text
                       style={[
-                        stylesLocal.dateMarkerText,
-                        !isToday ? { color: C.onSurfaceVariant } : undefined,
+                        stylesLocal.dateCapsuleText,
+                        isToday && stylesLocal.dateCapsuleTextToday,
                       ]}
                     >
                       {isToday
@@ -646,16 +939,30 @@ function ChildGroupSection({
                             })}
                     </Text>
                   </View>
+                  <View style={stylesLocal.dateHairline} />
                 </View>
               )}
               <View
                 style={stylesLocal.activityRow}
                 onLayout={(e) => {
-                  if (isFirstInList) setFirstIconY(e.nativeEvent.layout.y + 22);
-                  if (isLastInList) setLastIconY(e.nativeEvent.layout.y + 22);
+                  const y = e.nativeEvent.layout.y + 22;
+                  setIconYMap((prev) => (prev[idx] === y ? prev : { ...prev, [idx]: y }));
+                  if (isFirstInList) setFirstIconY(y);
+                  if (isLastInList) setLastIconY(y);
                 }}
               >
-                <View style={stylesLocal.iconNodeWrap}>
+                <View
+                  style={[
+                    stylesLocal.iconNodeWrap,
+                    isNearBead && [
+                      stylesLocal.iconNodeWrapActive,
+                      {
+                        borderColor: theme.accent,
+                        shadowColor: theme.accent,
+                      },
+                    ],
+                  ]}
+                >
                   <AppIcon iconBase64={n.app_icon_base64} size={44} fallbackSize={18} />
                   {isFacebook && <View style={stylesLocal.onlineBadgeDot} />}
                 </View>
@@ -677,7 +984,7 @@ const stylesLocal = StyleSheet.create({
     marginLeft: 8,
     paddingLeft: 24,
   },
-  timelineLine: {
+  timelineBaseTrack: {
     position: 'absolute',
     left: 2,
     top: 0,
@@ -685,35 +992,102 @@ const stylesLocal = StyleSheet.create({
     width: 2,
     backgroundColor: C.surfaceContainerHigh,
     zIndex: 0,
+    borderRadius: 1,
   },
-  dateMarkerRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginLeft: -44,
-    marginBottom: 24,
+  timelineSegment: {
+    position: 'absolute',
+    left: 1.5,
+    width: 3,
+    borderRadius: 1.5,
+    overflow: 'hidden',
+    zIndex: 1,
+  },
+  beadContainer: {
+    position: 'absolute',
+    left: -4,
+    width: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 2,
   },
-  dateMarkerPill: {
-    backgroundColor: 'rgba(255, 248, 240, 0.75)',
-    paddingHorizontal: 20,
-    paddingTop: 8,
+  beadTrailGlow: {
+    position: 'absolute',
+    bottom: 7,
+    left: 5.5,
+    width: 3,
+    height: 32,
+    borderRadius: 1.5,
+    zIndex: 1,
+  },
+  beadCircle: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.95,
+    shadowRadius: 6,
+    elevation: 5,
+    zIndex: 2,
+  },
+  beadInnerDot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: '#ffffff',
+  },
+  dateMarkerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -24,
+    marginRight: 0,
+    marginVertical: 16,
+    zIndex: 2,
+  },
+  dateHairline: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(47, 74, 55, 0.10)',
+  },
+  dateCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#faf3e7',
+    paddingHorizontal: 12,
+    paddingVertical: 4.5,
     borderRadius: 9999,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 32,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(47, 74, 55, 0.10)',
+    gap: 6,
   },
-  dateMarkerPillYesterday: {
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
+  dateCapsuleToday: {
+    backgroundColor: '#e8ffea',
+    borderColor: 'rgba(47, 74, 55, 0.20)',
   },
-  dateMarkerText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 14,
-    lineHeight: 20,
-    color: C.onSurface,
+  dateCapsuleDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#807a6d',
+  },
+  dateCapsuleDotToday: {
+    backgroundColor: '#2f4a37',
+  },
+  dateCapsuleText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 10.5,
+    color: '#645e53',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  dateCapsuleTextToday: {
+    color: '#2f4a37',
   },
   activityRow: {
     flexDirection: 'row',
@@ -731,11 +1105,21 @@ const stylesLocal = StyleSheet.create({
     backgroundColor: C.surfaceContainerLowest,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 2,
+    zIndex: 3,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     shadowColor: '#363228',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
+    elevation: 2,
+  },
+  iconNodeWrapActive: {
+    borderWidth: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 4,
   },
   onlineBadgeDot: {
     position: 'absolute',
@@ -800,9 +1184,12 @@ const s = StyleSheet.create({
     backgroundColor: C.surfaceContainerLowest,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(68, 103, 77, 0.12)',
   },
   filterTriggerBtnActive: {
     backgroundColor: C.primary,
+    borderColor: C.primary,
   },
   heroSection: {
     position: 'relative',
@@ -832,9 +1219,6 @@ const s = StyleSheet.create({
     zIndex: 2,
     alignItems: 'center',
     gap: 14,
-  },
-  heroSelectorWrap: {
-    marginTop: 4,
   },
   heroTitle: {
     fontFamily: 'PlusJakartaSans-ExtraBold',
@@ -871,118 +1255,191 @@ const s = StyleSheet.create({
     fontSize: 11,
     color: C.primary,
   },
-  childGroupHeader: {
+  bottomSpacer: {
+    height: 160,
+  },
+
+  /* Load More Section - Flat, Sleek, Minimalist */
+  loadMoreSection: {
+    marginVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumLoadMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
+    justifyContent: 'center',
+    backgroundColor: C.surfaceContainerLowest,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: 'rgba(47, 74, 55, 0.16)',
+    gap: 8,
+    alignSelf: 'center',
   },
-  childGroupAvatar: {
+  loadMoreTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    color: C.primary,
+    letterSpacing: 0.2,
+  },
+
+  /* All Caught Up - Flat & Refined */
+  caughtUpContainer: {
+    marginVertical: 20,
+    alignItems: 'center',
+  },
+  caughtUpCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(47, 74, 55, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(47, 74, 55, 0.10)',
+    gap: 6,
+    alignSelf: 'center',
+  },
+  caughtUpHeading: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 12,
+    color: C.primary,
+  },
+
+  /* Bottom Sheet Modal */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheetContainer: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 12,
+    paddingBottom: 36,
+    maxHeight: '75%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: C.surfaceContainerHighest,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: C.surfaceContainerHigh,
+  },
+  sheetTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 18,
+    color: C.onSurface,
+  },
+  sheetSubtitle: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    color: C.onSurfaceVariant,
+    marginTop: 2,
+  },
+  sheetCloseBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: C.primaryContainer,
-    alignItems: 'center',
+    backgroundColor: C.surfaceContainerLow,
     justifyContent: 'center',
-    position: 'relative',
+    alignItems: 'center',
   },
-  childGroupOnlineDot: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: C.surface,
+  sheetList: {
+    paddingHorizontal: 16,
   },
-  childGroupText: {
+  sheetListContent: {
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 8,
+  },
+  sheetAppRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: C.surfaceContainerLowest,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    shadowColor: '#363228',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  sheetAppRowActive: {
+    backgroundColor: C.primaryContainer,
+    borderColor: 'rgba(68, 103, 77, 0.25)',
+  },
+  sheetAppIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sheetAppDetails: {
     flex: 1,
+    gap: 2,
   },
-  childGroupName: {
+  sheetAppName: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 15,
     color: C.onSurface,
   },
-  childGroupSub: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 11,
-    color: C.onSurfaceVariant,
-    marginTop: 2,
+  sheetAppNameActive: {
+    color: C.primary,
   },
-  singleChildHint: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 12,
-    backgroundColor: C.surfaceContainerLow,
-    borderRadius: 16,
-  },
-  singleChildHintText: {
-    fontFamily: 'PlusJakartaSans-Medium',
+  sheetAppSub: {
+    fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 12,
     color: C.onSurfaceVariant,
-    lineHeight: 18,
   },
-  bottomSpacer: {
-    height: 120,
-  },
-
-  loadMoreWrap: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  loadMoreBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+  sheetBadge: {
+    backgroundColor: C.surfaceContainerHighest,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 9999,
-    backgroundColor: C.surfaceContainerLowest,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 2,
   },
-  loadMoreText: {
+  sheetBadgeText: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    color: C.primary,
+    fontSize: 12,
+    color: C.onSurfaceVariant,
   },
-
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(54, 50, 40, 0.15)',
+  sheetChildAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
-  dropdownMenuFloating: {
-    position: 'absolute',
-    backgroundColor: C.surface,
-    borderRadius: 24,
-    padding: 16,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 8,
-    width: 240,
-  },
-  dropdownItem: {
+  sheetChildStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
+    gap: 6,
   },
-  dropdownItemActive: {
-    backgroundColor: C.primaryContainer,
-  },
-  dropdownItemText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 13,
-    color: C.onSurface,
-  },
-  dropdownItemTextActive: {
-    color: C.primary,
+  statusDotSmall: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
 });

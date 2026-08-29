@@ -66,7 +66,7 @@ function StepRow({
     <Animated.View style={[styles.stepRow, rowStyle]}>
       <View style={styles.stepIcon}>
         <Animated.View style={[styles.stepCircle, circleStyle]}>
-          <MaterialIcons name={step.icon} size={22} color="#486730" />
+          <MaterialIcons name={step.icon} size={22} color="#2f4a37" />
         </Animated.View>
         <Animated.View style={[styles.stepRing, ringStyle]} />
       </View>
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: '#486730',
+    backgroundColor: '#2f4a37',
     paddingVertical: 14,
     borderRadius: 999,
     alignItems: 'center',
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     flex: 1,
-    backgroundColor: '#efefd7',
+    backgroundColor: '#efe7da',
     paddingVertical: 14,
     borderRadius: 999,
     alignItems: 'center',
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#e3ecd8',
+    backgroundColor: '#c5eccc',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderRadius: 19,
     borderWidth: 2,
-    borderColor: '#486730',
+    borderColor: '#2f4a37',
   },
   stepLabel: {
     fontFamily: 'Manrope-Medium',

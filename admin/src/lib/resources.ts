@@ -47,8 +47,8 @@ export interface ResourceConfig {
   searchFields: string[];
   fields: FieldConfig[];
   relations?: RelationConfig[];
-  /** For encrypted resources: field holding pair_id used to derive the key */
-  encryptedPairField?: string;
+  /** For encrypted resources: fields used to derive the encryption key */
+  encryptedRelationshipFields?: { parentUserId: string; childUserId: string };
 }
 
 export const ROLE_OPTIONS = [
@@ -254,14 +254,22 @@ export const RESOURCES: ResourceConfig[] = [
     canDelete: true,
     defaultSort: { field: "notification_posted_at", order: "desc" },
     searchFields: ["notification_key", "delivery_mode"],
-    encryptedPairField: "pair_id",
+    encryptedRelationshipFields: {
+      parentUserId: "parent_user_id",
+      childUserId: "child_user_id",
+    },
     fields: [
       { name: "id", label: "ID", type: "text", readOnly: true, monospace: true, copyable: true },
       { name: "notification_title", label: "Title", type: "text", truncate: true },
       { name: "notification_body", label: "Body", type: "textarea", hiddenInList: true },
       { name: "source_package", label: "Package", type: "text", monospace: true, truncate: true },
       { name: "source_app_name", label: "App Name", type: "text", truncate: true },
-      { name: "pair_id", label: "Pair", type: "text", monospace: true, copyable: true },
+      // `pair_id` is now an audit-only column (FK was dropped by the
+      // relationship-key migration). Edits to it would break decryption
+      // and audit traceability, so it is read-only.
+      { name: "pair_id", label: "Pair (audit)", type: "text", readOnly: true, monospace: true, copyable: true },
+      { name: "parent_user_id", label: "Parent User", type: "text", monospace: true, copyable: true },
+      { name: "child_user_id", label: "Child User", type: "text", monospace: true, copyable: true },
       { name: "child_device_id", label: "Child Device", type: "text", hiddenInForm: true, monospace: true, copyable: true },
       {
         name: "delivery_mode",
@@ -278,6 +286,12 @@ export const RESOURCES: ResourceConfig[] = [
       { name: "app_icon_base64", label: "Icon (base64)", type: "textarea", hiddenInList: true, hiddenInForm: true },
       { name: "notification_posted_at", label: "Posted At", type: "datetime" },
       { name: "ingested_at", label: "Ingested At", type: "datetime", hiddenInForm: true },
+      // `push_sent_at` is the durable signal that the FCM push for this
+      // notification has been attempted. The ingest edge function checks
+      // this column to skip duplicate pushes. It is read-only here to
+      // preserve that guarantee — manually editing it would re-arm a push
+      // on the next ingest.
+      { name: "push_sent_at", label: "Push Sent At", type: "datetime", readOnly: true },
       ...createdFields().map((f) => ({ ...f, hiddenInList: true })),
     ],
   },
@@ -316,8 +330,12 @@ export const RESOURCES: ResourceConfig[] = [
         ],
       },
       { name: "notification_id", label: "Notification", type: "text", monospace: true, copyable: true },
-      { name: "pair_id", label: "Pair", type: "text", monospace: true, copyable: true },
-      { name: "device_id", label: "Device", type: "text", monospace: true, copyable: true },
+      { name: "parent_user_id", label: "Parent User", type: "text", monospace: true, copyable: true },
+      { name: "child_user_id", label: "Child User", type: "text", monospace: true, copyable: true },
+      // `pair_id` and `device_id` are audit-only now (FK dropped, NOT NULL
+      // dropped for pair_id). Edits would break traceability.
+      { name: "pair_id", label: "Pair (audit)", type: "text", readOnly: true, monospace: true, copyable: true },
+      { name: "device_id", label: "Device (audit)", type: "text", readOnly: true, monospace: true, copyable: true },
       { name: "attempted_at", label: "Attempted At", type: "datetime" },
       ...createdFields().map((f) => ({ ...f, hiddenInList: true })),
     ],

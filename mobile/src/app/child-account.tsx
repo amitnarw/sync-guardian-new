@@ -11,7 +11,7 @@ import { isValidUUID } from '@/lib/uuid';
 import { ChildAppsModal } from '@/components/ui/child-apps-modal';
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
   onPrimary: '#e8ffea',
   secondary: '#a0412d',
@@ -196,7 +196,7 @@ export default function ChildAccountScreen() {
   const hasMultiple = children.length > 1;
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <SafeAreaView style={s.container} edges={['top', 'bottom']}>
       {/* Top Bar with back arrow and Centered Title (Matching Image 2) */}
       <View style={s.header}>
         <TouchableOpacity

@@ -4,6 +4,7 @@ import { getServiceClient } from "@/lib/supabase/admin";
 import {
   decryptNotification,
   encryptNotification,
+  DecryptionError,
 } from "@/lib/notification-crypto";
 import {
   getResource,
@@ -235,21 +236,48 @@ export async function fetchList(
     .range(Math.max(0, opts.start), Math.max(0, opts.end));
   if (error) throw new Error(error.message);
 
-  const rows = ((data ?? []) as unknown) as Record<string, unknown>[];
-  if (cfg.encryptedPairField) {
+  const allRows = ((data ?? []) as unknown) as Record<string, unknown>[];
+  let rows = allRows;
+  let filtered = false;
+  if (cfg.encryptedRelationshipFields) {
+    const { parentUserId, childUserId } = cfg.encryptedRelationshipFields;
+    const decryptable: Record<string, unknown>[] = [];
     await Promise.all(
-      rows.map(async (row) => {
-        const pairId = row[cfg.encryptedPairField!];
-        if (typeof pairId === "string") {
-          Object.assign(row, await decryptNotification(row, pairId));
+      allRows.map(async (row) => {
+        const pUserId = row[parentUserId];
+        const cUserId = row[childUserId];
+        if (typeof pUserId === "string" && typeof cUserId === "string") {
+          try {
+            Object.assign(row, await decryptNotification(row, pUserId, cUserId));
+            decryptable.push(row);
+          } catch (err) {
+            // Match edge-function behavior: skip undecryptable rows so the
+            // admin UI never sees the raw "nv1:" blob. The row is still in
+            // the database; if the master key is restored the row becomes
+            // readable on the next request.
+            if (err instanceof DecryptionError) {
+              filtered = true;
+              return;
+            }
+            throw err;
+          }
+        } else {
+          decryptable.push(row);
         }
       }),
     );
+    rows = decryptable;
   }
   if (cfg.relations) await enrichRelations(rows, cfg.relations);
   if (cfg.name === "user-trials") await attachPairedChildren(rows);
 
-  return { data: rows, total: count ?? 0 };
+  // When decryption filtering removed rows from this page, the Supabase
+  // pre-filter `count` no longer matches what the user sees. Returning
+  // `rows.length` keeps pagination accurate (we only see this page, so
+  // the visible count == rows.length). For unfiltered queries we keep
+  // the exact count from the DB so server-side pagination works.
+  const total = filtered ? rows.length : count ?? rows.length;
+  return { data: rows, total };
 }
 
 export async function fetchOne(
@@ -276,9 +304,25 @@ export async function fetchOne(
   if (error) throw new Error(error.message);
   if (!data) throw new Error(`${cfg.label} not found`);
   const row = data as Record<string, unknown>;
-  if (cfg.encryptedPairField) {
-    const pairId = row[cfg.encryptedPairField];
-    if (typeof pairId === "string") Object.assign(row, await decryptNotification(row, pairId));
+  if (cfg.encryptedRelationshipFields) {
+    const { parentUserId, childUserId } = cfg.encryptedRelationshipFields;
+    const pUserId = row[parentUserId];
+    const cUserId = row[childUserId];
+    if (typeof pUserId === "string" && typeof cUserId === "string") {
+      try {
+        Object.assign(row, await decryptNotification(row, pUserId, cUserId));
+      } catch (err) {
+        if (err instanceof DecryptionError) {
+          // The user explicitly requested this row by id, so we cannot
+          // hide it. Mark the row with `__decryption_error` so the admin
+          // UI can show a placeholder instead of leaking the raw "nv1:"
+          // ciphertext.
+          row.__decryption_error = err.message;
+        } else {
+          throw err;
+        }
+      }
+    }
   }
   if (cfg.relations) await enrichRelations([row], cfg.relations);
   if (cfg.name === "user-trials") await attachPairedChildren([row]);
@@ -355,12 +399,14 @@ export async function insertRow(
   if (cfg.table === "__auth_users") throw new Error("Auth users cannot be created here");
   const client = getServiceClient();
   let values = sanitizePayload(resource, payload, "create");
-  if (cfg.encryptedPairField) {
-    const pairId = values[cfg.encryptedPairField];
-    if (typeof pairId !== "string" || !pairId) {
-      throw new Error("pair_id is required to encrypt notification content");
+  if (cfg.encryptedRelationshipFields) {
+    const { parentUserId, childUserId } = cfg.encryptedRelationshipFields;
+    const pUserId = values[parentUserId];
+    const cUserId = values[childUserId];
+    if (typeof pUserId !== "string" || !pUserId || typeof cUserId !== "string" || !cUserId) {
+      throw new Error("parent_user_id and child_user_id are required to encrypt notification content");
     }
-    values = await encryptNotification(values, pairId);
+    values = await encryptNotification(values, pUserId, cUserId);
   }
   const { data, error } = (await (client
     .from(cfg.table)
@@ -381,10 +427,12 @@ export async function updateRow(
   if (cfg.table === "__auth_users") throw new Error("Auth users cannot be edited here");
   const client = getServiceClient();
   let values = sanitizePayload(resource, payload, "update");
-  if (cfg.encryptedPairField) {
-    const pairId = values[cfg.encryptedPairField];
-    if (typeof pairId === "string" && pairId) {
-      values = await encryptNotification(values, pairId);
+  if (cfg.encryptedRelationshipFields) {
+    const { parentUserId, childUserId } = cfg.encryptedRelationshipFields;
+    const pUserId = values[parentUserId];
+    const cUserId = values[childUserId];
+    if (typeof pUserId === "string" && typeof cUserId === "string" && pUserId && cUserId) {
+      values = await encryptNotification(values, pUserId, cUserId);
     }
   }
   const { data, error } = (await (client

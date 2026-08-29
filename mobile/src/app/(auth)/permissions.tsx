@@ -16,7 +16,7 @@ import { getOnboardingState, setOnboardingRole } from '@/services/onboarding-api
 import * as NotificationAccess from 'notification-access';
 
 const C = {
-  primary: '#486730',
+  primary: '#2f4a37',
   secondary: '#9f402d',
   surface: '#fff8f0',
   onSurface: '#1b1d0e',

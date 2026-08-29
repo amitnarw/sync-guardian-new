@@ -44,7 +44,7 @@ function ParentRoleNode({ onPress }: { onPress: () => void }) {
         <Svg width="100%" height="100%" viewBox="0 0 256 256" style={StyleSheet.absoluteFill}>
           <Defs>
             <LinearGradient id="parentGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="#44674d" stopOpacity="0.1" />
+              <Stop offset="0%" stopColor="#2f4a37" stopOpacity="0.15" />
               <Stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
             </LinearGradient>
           </Defs>
@@ -61,9 +61,9 @@ function ParentRoleNode({ onPress }: { onPress: () => void }) {
         </Svg>
 
         <View style={[styles.innerCircle, styles.parentShadow]}>
-          <MaterialIcons name="family-restroom" size={38} color="#44674d" />
+          <MaterialIcons name="family-restroom" size={38} color="#2f4a37" />
         </View>
-        <Text style={[styles.roleTitle, { color: '#375941' }]}>Parent</Text>
+        <Text style={[styles.roleTitle, { color: '#2f4a37' }]}>Parent</Text>
       </View>
       <Animated.Text style={[styles.roleSubtitle, animatedText]}>I want to monitor a child device</Animated.Text>
     </AnimatedPressable>
@@ -149,7 +149,7 @@ export default function RoleSelectionScreen() {
         {/* Top Header */}
         <View style={styles.header}>
           <View style={styles.headerLogo}>
-            <MaterialIcons name="spa" size={24} color="#44674d" />
+            <MaterialIcons name="spa" size={24} color="#2f4a37" />
             <Text style={styles.headerText}>Sync Guardian</Text>
           </View>
         </View>
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerText: {
-    color: '#44674d',
+    color: '#2f4a37',
     fontFamily: 'PlusJakartaSans-Bold',
     fontWeight: '700',
     fontSize: 18,
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   titleItalic: {
-    color: '#44674d',
+    color: '#2f4a37',
     fontStyle: 'italic',
   },
   roleGrid: {
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   parentShadow: {
-    shadowColor: '#44674d', // shadow-primary/5
+    shadowColor: '#2f4a37', // shadow-primary/5
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.05,
     shadowRadius: 16,

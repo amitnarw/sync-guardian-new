@@ -248,7 +248,7 @@ export function ResourceTable({ cfg }: { cfg: ResourceConfig }) {
 
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const cols: ColumnDef<Row>[] = listFields.map((f: FieldConfig) => {
-      const isEncrypted = Boolean(cfg.encryptedPairField) && ENCRYPTED_FIELDS.has(f.name);
+      const isEncrypted = Boolean(cfg.encryptedRelationshipFields) && ENCRYPTED_FIELDS.has(f.name);
       const isRelation = cfg.relations?.some((r) => r.field === f.name) ?? false;
       return {
         id: f.name,

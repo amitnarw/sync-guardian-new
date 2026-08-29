@@ -9,7 +9,7 @@ import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { getLegalDocument, type LegalKey, type LegalDocument } from '@/services/legal-api';
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
   onPrimary: '#e8ffea',
   tertiary: '#44674e',
@@ -58,7 +58,7 @@ export default function LegalDocumentScreen() {
   const iconName = key === 'privacy' ? 'shield-checkmark' : 'document-text';
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <SafeAreaView style={s.container} edges={['top', 'bottom']}>
       {/* Background ambient glow */}
       <View style={s.ambientBg}>
         <LinearGradient

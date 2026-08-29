@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCreate, useDelete, useOne, useUpdate } from "@refinedev/core";
@@ -215,9 +215,6 @@ export function ResourceForm({
   id?: string;
 }) {
   const router = useRouter();
-  const [values, setValues] = useState<Record<string, unknown>>(() =>
-    toFormValues(cfg),
-  );
   const [formError, setFormError] = useState<string | null>(null);
 
   const isEdit = mode === "edit" && Boolean(id);
@@ -228,14 +225,26 @@ export function ResourceForm({
     queryOptions: { enabled: isEdit },
   });
 
-  // Sync form values when the record arrives (render-time state adjustment).
-  // Refine v5 flattens useOne results: `result` is already the record.
+  // `loadedData` is `undefined` until the fetch resolves. We mirror it into
+  // local form state via useEffect (not at render time) to avoid React 19
+  // warnings and dropped updates in Strict/Concurrent mode.
   const loadedData = isEdit ? (oneQuery.result as Row | undefined) : undefined;
-  const [lastLoaded, setLastLoaded] = useState<Row | undefined>(loadedData);
-  if (loadedData && loadedData !== lastLoaded) {
-    setLastLoaded(loadedData);
-    setValues(toFormValues(cfg, loadedData));
-  }
+  const [lastLoaded, setLastLoaded] = useState<Row | undefined>(undefined);
+  const [values, setValues] = useState<Record<string, unknown>>(() =>
+    toFormValues(cfg),
+  );
+
+  useEffect(() => {
+    // Mirroring async fetched data into local form state is the standard
+    // Refine pattern for editable forms. The parent hook owns the canonical
+    // record; the form mirrors it into editable local state so a derived
+    // selector does not re-render on every keystroke.
+    if (loadedData && loadedData !== lastLoaded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLastLoaded(loadedData);
+      setValues(toFormValues(cfg, loadedData));
+    }
+  }, [loadedData, lastLoaded, cfg]);
 
   const { mutate: createRow } = useCreate<Row>();
   const { mutate: updateRow } = useUpdate<Row>();
@@ -325,7 +334,7 @@ export function ResourceForm({
             {mode === "create"
               ? `Fill in the fields to create a new ${cfg.table} row.`
               : `Editing row ${id}`}
-            {cfg.encryptedPairField ? (
+            {cfg.encryptedRelationshipFields ? (
               <span className="mt-1 block">
                 Encrypted content fields are encrypted server-side before storage.
               </span>

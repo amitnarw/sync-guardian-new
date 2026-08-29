@@ -53,14 +53,16 @@ export async function syncInstalledApps(childDeviceId: string): Promise<SyncInst
     const { data, error } = await supabase.functions.invoke('sync-installed-apps', { body: payload });
     if (error) {
       let detail = error.message;
+      let status: number | undefined;
       try {
         const ctx = (error as any)?.context;
         if (ctx) {
+          status = ctx.status;
           const body = await ctx.json();
           if (body?.error) detail = body.error;
         }
       } catch {}
-      logger.error('syncInstalledApps', 'failed to sync installed apps', detail);
+      logger.error('syncInstalledApps', 'failed to sync installed apps', { detail, status, appCount: socialApps.length });
       return EMPTY_RESULT;
     }
 

@@ -126,7 +126,7 @@ export const NotificationSourceCard = React.memo(function NotificationSourceCard
     return <XTwitterCard title={title} body={body} theme={theme} timeStr={timeStr} />;
   }
   if (REDDIT_PACKAGES.has(pkg)) {
-    return <RedditCard title={title} body={body} theme={theme} timeStr={timeStr} />;
+    return <RedditCard title={title} body={body} theme={theme} timeStr={timeStr} postedAt={notification.notification_posted_at} />;
   }
   if (LINKEDIN_PACKAGES.has(pkg)) {
     return <LinkedInCard title={title} body={body} theme={theme} timeStr={timeStr} />;
@@ -151,7 +151,7 @@ function WhatsAppCard({ title, body, theme, timeStr }: { title: string; body: st
       <BubbleTailWhatsApp color="#D9FDD3" />
       <View style={whatsappStyles.bubble}>
         {showSender ? (
-          <Text style={whatsappStyles.senderName} numberOfLines={1}>{title}</Text>
+          <Text style={whatsappStyles.senderName}>{title}</Text>
         ) : null}
         <Text style={whatsappStyles.body} numberOfLines={12}>{displayText}</Text>
         <View style={whatsappStyles.footer}>
@@ -172,7 +172,7 @@ function FacebookMessengerCard({ title, body, theme, timeStr }: { title: string;
     <View style={fbMessengerStyles.container}>
       <View style={fbMessengerStyles.bubble}>
         {showSender ? (
-          <Text style={fbMessengerStyles.senderName} numberOfLines={1}>{title}</Text>
+          <Text style={fbMessengerStyles.senderName}>{title}</Text>
         ) : null}
         <Text style={fbMessengerStyles.body} numberOfLines={12}>{displayText}</Text>
       </View>
@@ -206,7 +206,7 @@ function TelegramCard({ title, body, theme, timeStr }: { title: string; body: st
     <View style={telegramStyles.container}>
       <BubbleTailTelegram color="#FFFFFF" />
       <View style={telegramStyles.bubble}>
-        <Text style={telegramStyles.senderName} numberOfLines={1}>{title}</Text>
+        <Text style={telegramStyles.senderName}>{title}</Text>
         {renderBody()}
         {timeStr && (
           <Text style={telegramStyles.time}>{timeStr}</Text>
@@ -221,7 +221,7 @@ function IMessageCard({ title, body, theme, timeStr }: { title: string; body: st
   return (
     <View style={imessageStyles.container}>
       <View style={imessageStyles.bubble}>
-        <Text style={[imessageStyles.senderName, { color: theme.accent }]} numberOfLines={1}>
+        <Text style={[imessageStyles.senderName, { color: theme.accent }]}>
           {title}
         </Text>
         {body ? (
@@ -238,7 +238,7 @@ function DiscordCard({ title, body, theme, timeStr }: { title: string; body: str
   return (
     <View style={discordStyles.card}>
       <View style={discordStyles.header}>
-        <Text style={discordStyles.senderName} numberOfLines={1}>{title}</Text>
+        <Text style={discordStyles.senderName}>{title}</Text>
         {timeStr && <Text style={discordStyles.time}>{timeStr}</Text>}
       </View>
       {body ? <Text style={discordStyles.body} numberOfLines={12}>{body}</Text> : null}
@@ -246,25 +246,20 @@ function DiscordCard({ title, body, theme, timeStr }: { title: string; body: str
   );
 }
 
-// X / Twitter Card
+// X / Twitter Card - Clean layout without triple-dot icon, multi-line sender wrap
 function XTwitterCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
   return (
     <View style={xTwitterStyles.card}>
       <View style={xTwitterStyles.header}>
         <View style={xTwitterStyles.headerLeft}>
-          <View style={xTwitterStyles.headerText}>
-            <View style={xTwitterStyles.nameRow}>
-              <Text style={xTwitterStyles.senderName} numberOfLines={1}>{title}</Text>
-              <View style={[xTwitterStyles.verifiedBadge, { backgroundColor: theme.accent }]}>
-                <Ionicons name="checkmark" size={9} color="#FFFFFF" />
-              </View>
+          <View style={xTwitterStyles.nameRow}>
+            <Text style={xTwitterStyles.senderName}>{title}</Text>
+            <View style={[xTwitterStyles.verifiedBadge, { backgroundColor: theme.accent }]}>
+              <Ionicons name="checkmark" size={9} color="#FFFFFF" />
             </View>
-            {timeStr && <Text style={xTwitterStyles.time}>{timeStr}</Text>}
           </View>
         </View>
-        <Pressable hitSlop={8} onPress={() => {}}>
-          <Ionicons name="ellipsis-horizontal" size={16} color="#71767B" />
-        </Pressable>
+        {timeStr && <Text style={xTwitterStyles.time}>{timeStr}</Text>}
       </View>
 
       {body ? <Text style={xTwitterStyles.body} numberOfLines={12}>{body}</Text> : null}
@@ -291,54 +286,87 @@ function XTwitterCard({ title, body, theme, timeStr }: { title: string; body: st
   );
 }
 
-// Reddit Card
-function RedditCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
+function formatRedditTime(postedAt?: string, timeStr?: string | null) {
+  if (postedAt) {
+    const diffMs = Date.now() - new Date(postedAt).getTime();
+    if (!isNaN(diffMs) && diffMs >= 0) {
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) return 'now';
+      if (mins < 60) return `${mins}m`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h`;
+      const days = Math.floor(hrs / 24);
+      if (days < 30) return `${days}d`;
+      const months = Math.floor(days / 30);
+      if (months < 12) return `${months}mo`;
+      return `${Math.floor(months / 12)}y`;
+    }
+  }
+  return timeStr || '1h';
+}
+
+// Reddit Card - Exactly matching Reddit comment UI from screenshot
+function RedditCard({
+  title,
+  body,
+  theme,
+  timeStr,
+  postedAt,
+}: {
+  title: string;
+  body: string;
+  theme: SourceAppTheme;
+  timeStr: string | null;
+  postedAt?: string;
+}) {
+  const redditTime = formatRedditTime(postedAt, timeStr);
+  const displayText = body || title;
+
   return (
     <View style={redditStyles.card}>
+      {/* Top Header: Username + Time */}
       <View style={redditStyles.header}>
-        <View style={redditStyles.headerText}>
-          <Text style={redditStyles.senderName} numberOfLines={1}>{title}</Text>
-          {timeStr && <Text style={redditStyles.time}>{timeStr}</Text>}
+        <View style={redditStyles.metaWrap}>
+          <Text style={redditStyles.senderName} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={redditStyles.timeText}>{redditTime}</Text>
         </View>
       </View>
 
-      {body ? <Text style={redditStyles.body} numberOfLines={12}>{body}</Text> : null}
+      {/* Comment Body */}
+      {displayText ? (
+        <Text style={redditStyles.body} numberOfLines={12}>
+          {displayText}
+        </Text>
+      ) : null}
 
-      <View style={redditStyles.actionBar}>
-        <View style={redditStyles.actionGroup}>
-          <Pressable style={redditStyles.iconBtn} hitSlop={6} onPress={() => {}}>
+      {/* Bottom Actions: Upvote / Count / Downvote on the right */}
+      <View style={redditStyles.footerRow}>
+        <View style={redditStyles.voteGroup}>
+          <Pressable style={redditStyles.voteBtn} hitSlop={6} onPress={() => {}}>
             <Ionicons name="arrow-up-outline" size={16} color="#D7DADC" />
           </Pressable>
-          <Text style={redditStyles.voteCount}>24</Text>
-          <Pressable style={redditStyles.iconBtn} hitSlop={6} onPress={() => {}}>
+          <Text style={redditStyles.voteScore}>50</Text>
+          <Pressable style={redditStyles.voteBtn} hitSlop={6} onPress={() => {}}>
             <Ionicons name="arrow-down-outline" size={16} color="#D7DADC" />
           </Pressable>
         </View>
-        <Pressable style={redditStyles.actionItem} hitSlop={6} onPress={() => {}}>
-          <Ionicons name="chatbubble-outline" size={14} color="#D7DADC" />
-          <Text style={redditStyles.actionLabel}>Reply</Text>
-        </Pressable>
-        <Pressable style={redditStyles.actionItem} hitSlop={6} onPress={() => {}}>
-          <Ionicons name="trophy-outline" size={14} color="#D7DADC" />
-          <Text style={redditStyles.actionLabel}>Award</Text>
-        </Pressable>
-        <Pressable style={redditStyles.actionItem} hitSlop={6} onPress={() => {}}>
-          <Ionicons name="share-outline" size={14} color="#D7DADC" />
-          <Text style={redditStyles.actionLabel}>Share</Text>
-        </Pressable>
       </View>
     </View>
   );
 }
 
-// LinkedIn Card
+// LinkedIn Card - Clean multi-line header wrap to prevent timestamp overflow
 function LinkedInCard({ title, body, theme, timeStr }: { title: string; body: string; theme: SourceAppTheme; timeStr: string | null }) {
   return (
     <View style={linkedInStyles.card}>
       <View style={linkedInStyles.header}>
-        <Text style={linkedInStyles.senderName} numberOfLines={1}>{title}</Text>
-        <View style={linkedInStyles.verifiedBadge}>
-          <Ionicons name="checkmark" size={9} color="#FFFFFF" />
+        <View style={linkedInStyles.headerLeft}>
+          <Text style={linkedInStyles.senderName}>{title}</Text>
+          <View style={linkedInStyles.verifiedBadge}>
+            <Ionicons name="checkmark" size={9} color="#FFFFFF" />
+          </View>
         </View>
         {timeStr && <Text style={linkedInStyles.time}>{timeStr}</Text>}
       </View>
@@ -359,7 +387,7 @@ function MediaCard({ title, body, theme, timeStr }: { title: string; body: strin
           </Text>
           {timeStr && <Text style={mediaStyles.time}>{timeStr}</Text>}
         </View>
-        <Text style={mediaStyles.title} numberOfLines={2}>{title}</Text>
+        <Text style={mediaStyles.title}>{title}</Text>
         {body ? (
           <Text style={mediaStyles.body} numberOfLines={6}>{body}</Text>
         ) : null}
@@ -583,11 +611,13 @@ const discordStyles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: 8,
     marginBottom: 4,
   },
   senderName: {
+    flex: 1,
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 14,
     color: '#FFFFFF',
@@ -598,6 +628,7 @@ const discordStyles = StyleSheet.create({
     fontSize: 11,
     color: '#72767D',
     flexShrink: 0,
+    marginTop: 2,
   },
   body: {
     fontFamily: 'PlusJakartaSans-Regular',
@@ -607,7 +638,7 @@ const discordStyles = StyleSheet.create({
   },
 });
 
-// LinkedIn Styles
+// LinkedIn Styles - With flexWrap and proper header boundaries
 const linkedInStyles = StyleSheet.create({
   card: {
     marginLeft: 6,
@@ -621,14 +652,24 @@ const linkedInStyles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 4,
+  },
+  headerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 4,
   },
   senderName: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 13.5,
     color: '#000000E6',
+    lineHeight: 18,
+    flexShrink: 1,
   },
   verifiedBadge: {
     width: 14,
@@ -642,7 +683,8 @@ const linkedInStyles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 11,
     color: '#00000099',
-    marginLeft: 'auto',
+    flexShrink: 0,
+    marginTop: 2,
   },
   body: {
     fontFamily: 'PlusJakartaSans-Regular',
@@ -652,14 +694,18 @@ const linkedInStyles = StyleSheet.create({
   },
 });
 
-// Reddit Styles
+// Reddit Styles - Authentic Reddit comment card with cyan Snoo avatar, white text, upvote counter
 const redditStyles = StyleSheet.create({
   card: {
     marginLeft: 6,
-    backgroundColor: '#1A1A1B',
-    borderRadius: 12,
-    padding: 12,
-    maxWidth: '94%',
+    backgroundColor: '#0E1113',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+    maxWidth: '96%',
     alignSelf: 'flex-start',
   },
   header: {
@@ -667,65 +713,57 @@ const redditStyles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  headerText: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
+  metaWrap: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
   },
   senderName: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    color: '#D7DADC',
+    fontSize: 13.5,
+    color: '#FFFFFF',
+    flexShrink: 1,
   },
-  time: {
+  timeText: {
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 11,
+    fontSize: 12,
     color: '#818384',
+    flexShrink: 0,
   },
   body: {
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 14.5,
+    lineHeight: 21,
     color: '#D7DADC',
-    marginBottom: 8,
+    marginTop: 2,
+    marginBottom: 6,
   },
-  actionBar: {
+  footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#343536',
+    justifyContent: 'flex-end',
+    marginTop: 2,
   },
-  actionGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  iconBtn: {
-    padding: 2,
-    borderRadius: 4,
-  },
-  voteCount: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 12,
-    color: '#D7DADC',
-    marginHorizontal: 2,
-  },
-  actionItem: {
+  voteGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  actionLabel: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 12,
+  voteBtn: {
+    padding: 3,
+    borderRadius: 4,
+  },
+  voteScore: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12.5,
     color: '#D7DADC',
+    marginHorizontal: 3,
   },
 });
 
-// X / Twitter Styles
+// X / Twitter Styles - Clean header with flexWrap, no triple-dot icon
 const xTwitterStyles = StyleSheet.create({
   card: {
     marginLeft: 6,
@@ -739,26 +777,29 @@ const xTwitterStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 6,
   },
   headerLeft: {
+    flex: 1,
     flexDirection: 'row',
-    flex: 1,
+    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 6,
-  },
-  headerText: {
-    flex: 1,
-    gap: 1,
   },
   nameRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 4,
+    flexShrink: 1,
   },
   senderName: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 13.5,
     color: '#E7E9EA',
+    lineHeight: 18,
+    flexShrink: 1,
   },
   verifiedBadge: {
     width: 14,
@@ -771,6 +812,8 @@ const xTwitterStyles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 11,
     color: '#71767B',
+    flexShrink: 0,
+    marginTop: 2,
   },
   body: {
     fontFamily: 'PlusJakartaSans-Regular',
@@ -840,6 +883,7 @@ const mediaStyles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 11,
     color: C.outline,
+    flexShrink: 0,
   },
   title: {
     fontFamily: 'PlusJakartaSans-Bold',

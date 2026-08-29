@@ -6,7 +6,9 @@ import { useAuthStore } from '@/hooks/use-auth-store';
 
 export interface MirroredNotification {
   id: string;
-  pair_id: string;
+  pair_id: string | null;
+  parent_user_id: string;
+  child_user_id: string;
   child_device_id: string;
   source_package: string | null;
   source_app_name: string | null;
@@ -30,6 +32,13 @@ export interface ChildSummary {
 
 interface PairDataState {
   pair: { id: string; child_device_id: string } | null;
+  /**
+   * The child_user_id of the currently selected child. Stable across
+   * disconnect/reconnect cycles, unlike `pair.id`. Used for comparison
+   * against the auth store's `selectedChildId` so we don't repeatedly
+   * re-run `init()` on every render.
+   */
+  currentChildUserId: string | null;
   childDevice: {
     id: string;
     is_foreground: boolean;
@@ -100,6 +109,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
   const [allChildren, setAllChildren] = useState<ChildSummary[]>([]);
   const [state, setState] = useState<PairDataState>({
     pair: null,
+    currentChildUserId: null,
     childDevice: null,
     childName: null,
     notifications: [],
@@ -150,7 +160,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadChildData = useCallback(
-    async (pairId: string, childDeviceId: string, childUserId: string): Promise<{
+    async (childUserId: string, childDeviceId: string): Promise<{
       device: PairDataState['childDevice'];
       name: string | null;
       notifications: MirroredNotification[];
@@ -167,7 +177,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
           .eq('id', childUserId)
           .maybeSingle(),
         supabase.functions.invoke('get-notifications', {
-          body: { pair_id: pairId, limit: 50 },
+          body: { child_user_id: childUserId, limit: 50 },
         }),
       ]);
 
@@ -190,10 +200,10 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const subscribeToChild = useCallback(
-    async (childDeviceId: string, pairId: string, childLabel: string) => {
+    async (childDeviceId: string, childUserId: string, childLabel: string) => {
       const uniqueSuffix = Math.random().toString(36).slice(2);
       const deviceChannel = supabase.channel(`pairdata_device_${childDeviceId}_${uniqueSuffix}`);
-      const notifChannel = supabase.channel(`pairdata_notifications_${pairId}_${uniqueSuffix}`);
+      const notifChannel = supabase.channel(`pairdata_notifications_${childUserId}_${uniqueSuffix}`);
 
       deviceChannel.on(
         'postgres_changes',
@@ -250,20 +260,21 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
           event: 'INSERT',
           schema: 'public',
           table: 'mirrored_notifications',
-          filter: `pair_id=eq.${pairId}`,
+          filter: `child_user_id=eq.${childUserId}`,
         },
         async (payload) => {
           const notifId = (payload.new as any).id;
           if (!notifId) return;
 
+          const rowChildUserId = (payload.new as any)?.child_user_id ?? childUserId;
           const { data: fetched } = await supabase.functions.invoke('get-notifications', {
-            body: { ids: [notifId] },
+            body: { child_user_id: rowChildUserId, ids: [notifId] },
           });
 
           if (fetched?.data?.length > 0) {
             const newNotif = fetched.data[0] as MirroredNotification;
             setState((prev) => {
-              if (prev.pair?.id !== pairId) return prev;
+              if (newNotif.child_user_id !== childUserId) return prev;
               const exists = prev.notifications.some((n) => n.id === newNotif.id);
               if (exists) return prev;
               return { ...prev, notifications: [newNotif, ...prev.notifications] };
@@ -288,6 +299,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
       if (!isParent) {
         setState({
           pair: null,
+          currentChildUserId: null,
           childDevice: null,
           childName: null,
           notifications: [],
@@ -317,6 +329,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
           setSelectedChildIdInStore(null);
           setState({
             pair: null,
+            currentChildUserId: null,
             childDevice: null,
             childName: null,
             notifications: [],
@@ -330,25 +343,25 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
         const auth = useAuthStore.getState();
         const requestedId = auth.selectedChildId;
         const requested = requestedId
-          ? children.find((c) => c.pairId === requestedId)
+          ? children.find((c) => c.childUserId === requestedId)
           : undefined;
         const target =
           requested ?? children[children.length - 1];
 
         if (!target) return;
-        if (requestedId && requestedId !== target.pairId) {
-          setSelectedChildIdInStore(target.pairId);
+        if (requestedId && requestedId !== target.childUserId) {
+          setSelectedChildIdInStore(target.childUserId);
         }
 
         setState((prev) => ({
           ...prev,
           pair: { id: target.pairId, child_device_id: target.childDeviceId },
+          currentChildUserId: target.childUserId,
         }));
 
         const { device, name, notifications } = await loadChildData(
-          target.pairId,
-          target.childDeviceId,
           target.childUserId,
+          target.childDeviceId,
         );
 
         if (cancelledRef.current || initId !== initIdRef.current) return;
@@ -360,7 +373,7 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
           notifications,
         }));
 
-        await subscribeToChild(target.childDeviceId, target.pairId, name ?? 'child');
+        await subscribeToChild(target.childDeviceId, target.childUserId, name ?? 'child');
       } catch (err) {
         logger.warn('PairDataProvider: init error:', err);
         setState((prev) => ({
@@ -433,15 +446,19 @@ export function PairDataProvider({ children }: { children: React.ReactNode }) {
 
   const effectiveSelectedId = useMemo(() => {
     if (!selectedChildIdFromStore) return null;
-    const hit = allChildren.find((c) => c.pairId === selectedChildIdFromStore);
-    return hit ? hit.pairId : null;
+    const hit = allChildren.find((c) => c.childUserId === selectedChildIdFromStore);
+    return hit ? hit.childUserId : null;
   }, [selectedChildIdFromStore, allChildren]);
 
   useEffect(() => {
-    if (effectiveSelectedId && effectiveSelectedId !== state.pair?.id && !state.isLoading) {
+    if (
+      effectiveSelectedId &&
+      effectiveSelectedId !== state.currentChildUserId &&
+      !state.isLoading
+    ) {
       init(true);
     }
-  }, [effectiveSelectedId, state.pair?.id, state.isLoading, init]);
+  }, [effectiveSelectedId, state.currentChildUserId, state.isLoading, init]);
 
   const [, forceUpdate] = useState(0);
   useEffect(() => {

@@ -5,7 +5,9 @@ import { router } from 'expo-router';
 import { useAuthStore } from '@/hooks/use-auth-store';
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
+  primaryContainer: '#c5eccc',
+  onPrimary: '#e8ffea',
   surfaceContainerHighest: '#eae1d2',
   surfaceContainerLowest: '#ffffff',
 } as const;

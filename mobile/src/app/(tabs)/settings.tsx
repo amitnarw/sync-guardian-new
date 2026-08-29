@@ -15,6 +15,7 @@ import { NotifListenerRequestModal } from '@/components/notif-listener-request-m
 import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
 import * as NotificationAccess from 'notification-access';
 import { ChildAppsModal } from '@/components/ui/child-apps-modal';
+import { DevInfoPanel } from '@/components/dev-info-panel';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
@@ -24,7 +25,7 @@ import { logger } from '@/services/logger';
 // EXACT STITCH COLORS (from HTML Tailwind config)
 // ============================================================
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
   onPrimary: '#e8ffea',
   secondary: '#a0412d',
@@ -64,51 +65,78 @@ function SubscriptionSection() {
   const { hasAccess, reason, trialDaysRemaining, subscriptionStatus, subscription } =
     useSubscriptionStore();
 
-  let label = 'Manage';
+  let tierName = 'Free Trial';
+  let badgeLabel = '7-Day Access';
+  let statusDetail = 'Full family safety and notification monitoring active';
+  let ctaLabel = 'Manage Plan';
   let inGracePeriod = false;
+
   if (hasAccess === false) {
-    label = 'Subscribe';
+    tierName = 'Access Expired';
+    badgeLabel = 'No Active Plan';
+    statusDetail = 'Subscribe to continue monitoring child devices in real-time';
+    ctaLabel = 'View Plans';
   } else if (reason === 'trial' && trialDaysRemaining != null && trialDaysRemaining > 0) {
-    label = `${trialDaysRemaining}d left`;
+    tierName = 'Guardian Trial';
+    badgeLabel = `${trialDaysRemaining} ${trialDaysRemaining === 1 ? 'day' : 'days'} left`;
+    statusDetail = 'Premium trial with all safety features unlocked';
+    ctaLabel = 'Upgrade';
   } else if (reason === 'subscription') {
-    // Cancel/pause paths set status='revoked' (or 'cancelled') but keep
-    // current_cycle_end in the future, so hasAccess stays true during the
-    // grace period. Reflect that explicitly instead of misleading "Active".
     inGracePeriod =
       (subscriptionStatus === 'revoked' || subscriptionStatus === 'cancelled') &&
       subscription?.current_cycle_end != null &&
       new Date(subscription.current_cycle_end).getTime() > Date.now();
-    if (inGracePeriod) {
-      label = 'Cancelling';
-    } else {
-      label = 'Active';
-    }
+
+    tierName = 'Sync Guardian Pro';
+    badgeLabel = inGracePeriod ? 'Cancelling' : 'Active Member';
+    statusDetail = inGracePeriod
+      ? `Active until ${new Date(subscription!.current_cycle_end!).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+      : 'Unlimited devices & real-time notification sync';
+    ctaLabel = inGracePeriod ? 'View Details' : 'Manage';
   }
 
   return (
     <View style={s.subscriptionSection}>
-      <View style={s.subscriptionHeader}>
-        <View style={[s.iconWrapper, { backgroundColor: C.primaryContainer }]}>
-          <Ionicons name="card-outline" size={26} color={C.primary} />
+      <TouchableOpacity
+        style={s.premiumCard}
+        onPress={() => router.push({ pathname: '/(paywall)/manage', params: { from: 'settings' } })}
+        activeOpacity={0.85}
+      >
+        <LinearGradient
+          colors={['#2f4a37', '#1b3223']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <LinearGradient
+          colors={['rgba(197, 236, 204, 0.25)', 'transparent']}
+          start={{ x: 1, y: 0 }}
+          end={{ x: 0.3, y: 0.8 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+
+        <View style={s.premiumCardHeader}>
+          <View style={s.premiumBadge}>
+            <Ionicons name="shield-checkmark" size={13} color="#e8ffea" />
+            <Text style={s.premiumBadgeText}>{badgeLabel.toUpperCase()}</Text>
+          </View>
+          <View style={s.premiumPlanPill}>
+            <Text style={s.premiumPlanPillText}>{tierName}</Text>
+          </View>
         </View>
-        <View style={s.subscriptionText}>
-          <Text style={s.cardTitle}>Subscription</Text>
-          <Text style={s.subscriptionStatus}>{label}</Text>
+
+        <View style={s.premiumCardBody}>
+          <Text style={s.premiumCardTitle}>Membership & Billing</Text>
+          <Text style={s.premiumCardDesc}>{statusDetail}</Text>
         </View>
-        <TouchableOpacity
-          style={s.subscriptionManageBtn}
-          onPress={() => router.push({ pathname: '/(paywall)/manage', params: { from: 'settings' } })}
-          activeOpacity={0.7}
-        >
-          <Text style={s.subscriptionManageText}>
-            {!hasAccess
-              ? 'View plans'
-              : inGracePeriod
-                ? 'View details'
-                : 'Manage'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+
+        <View style={s.premiumCardFooter}>
+          <View style={s.premiumCtaBtn}>
+            <Text style={s.premiumCtaText}>{ctaLabel}</Text>
+            <Ionicons name="chevron-forward" size={14} color="#e8ffea" />
+          </View>
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -123,6 +151,8 @@ export default function SettingsScreen() {
     last_seen_at: string | null;
   }[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [devTapCount, setDevTapCount] = useState(0);
+  const [showDevPanel, setShowDevPanel] = useState(false);
   const { deviceId } = useAuthStore();
   const { showModal, updateModal } = useAppModal();
 
@@ -493,6 +523,30 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Hidden developer diagnostics — tap version 7× */}
+            {showDevPanel ? (
+              <DevInfoPanel role="parent" />
+            ) : (
+              <TouchableOpacity
+                style={s.versionTapArea}
+                onPress={() => {
+                  const next = devTapCount + 1;
+                  if (next >= 7) {
+                    setDevTapCount(0);
+                    setShowDevPanel(true);
+                  } else {
+                    setDevTapCount(next);
+                  }
+                }}
+                activeOpacity={0.6}
+              >
+                <Text style={s.versionText}>Sync Guardian v1.0.0</Text>
+                {devTapCount > 0 && devTapCount < 7 ? (
+                  <Text style={s.versionHint}>{7 - devTapCount} more tap(s)</Text>
+                ) : null}
+              </TouchableOpacity>
+            )}
+
             {/* Bottom spacing */}
             <View style={s.bottomSpacer} />
           </EdgeFadeScrollView>
@@ -631,42 +685,85 @@ const s = StyleSheet.create({
     marginBottom: 50,
   },
 
-  /* ---------- Subscription Section ---------- */
+  /* ---------- Premium Subscription Card ---------- */
   subscriptionSection: {
     marginBottom: 32,
   },
-  subscriptionHeader: {
+  premiumCard: {
+    borderRadius: 32,
+    padding: 22,
+    overflow: 'hidden',
+    shadowColor: '#2f4a37',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 4,
+    gap: 16,
+  },
+  premiumCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    backgroundColor: C.surfaceContainerLowest,
-    borderRadius: 28,
-    padding: 18,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
+    justifyContent: 'space-between',
   },
-  subscriptionText: {
-    flex: 1,
-    gap: 2,
-  },
-  subscriptionStatus: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 13,
-    color: C.onSurfaceVariant,
-  },
-  subscriptionManageBtn: {
-    backgroundColor: C.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 9999,
   },
-  subscriptionManageText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
+  premiumBadgeText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 11,
+    color: '#e8ffea',
+    letterSpacing: 0.5,
+  },
+  premiumPlanPill: {
+    backgroundColor: 'rgba(197, 236, 204, 0.22)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 9999,
+  },
+  premiumPlanPillText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  premiumCardBody: {
+    gap: 4,
+  },
+  premiumCardTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 20,
+    color: '#ffffff',
+    letterSpacing: -0.3,
+  },
+  premiumCardDesc: {
+    fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 13,
-    color: C.onPrimary,
+    color: 'rgba(232, 255, 234, 0.85)',
+    lineHeight: 18,
+  },
+  premiumCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginTop: 4,
+  },
+  premiumCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 9999,
+  },
+  premiumCtaText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    color: '#e8ffea',
   },
   signOutButton: {
     flexDirection: 'row',
@@ -828,6 +925,23 @@ const s = StyleSheet.create({
   /* Bottom Spacer */
   bottomSpacer: {
     height: 130,
+  },
+
+  /* Hidden dev tap area */
+  versionTapArea: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  versionText: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    color: C.outline,
+  },
+  versionHint: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 10,
+    color: C.primary,
+    marginTop: 4,
   },
   permissionsSection: {
     marginBottom: 32,

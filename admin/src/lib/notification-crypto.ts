@@ -21,7 +21,10 @@ function getMasterKey(): Uint8Array<ArrayBuffer> {
   return base64ToBytes(raw);
 }
 
-async function derivePairKey(pairId: string): Promise<CryptoKey> {
+async function deriveRelationshipKey(
+  parentUserId: string,
+  childUserId: string,
+): Promise<CryptoKey> {
   const master = getMasterKey();
   const hkdfKey = await crypto.subtle.importKey("raw", master, "HKDF", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
@@ -29,7 +32,7 @@ async function derivePairKey(pairId: string): Promise<CryptoKey> {
       name: "HKDF",
       hash: "SHA-256",
       salt: new Uint8Array(new ArrayBuffer(0)),
-      info: new TextEncoder().encode(`notification-encryption-v1:${pairId}`),
+      info: new TextEncoder().encode(`notification-encryption-v1:${parentUserId}:${childUserId}`),
     },
     hkdfKey,
     { name: "AES-GCM", length: 256 },
@@ -38,9 +41,13 @@ async function derivePairKey(pairId: string): Promise<CryptoKey> {
   );
 }
 
-async function encryptPlaintext(plain: string, pairId: string): Promise<string> {
+async function encryptPlaintext(
+  plain: string,
+  parentUserId: string,
+  childUserId: string,
+): Promise<string> {
   if (plain.length === 0) return plain;
-  const key = await derivePairKey(pairId);
+  const key = await deriveRelationshipKey(parentUserId, childUserId);
   const iv = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(IV_LENGTH)));
   const cipherBuffer = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
@@ -53,18 +60,37 @@ async function encryptPlaintext(plain: string, pairId: string): Promise<string> 
   return ENCODING_PREFIX + bytesToBase64(combined);
 }
 
-async function decryptToString(encoded: string, pairId: string): Promise<string> {
+/**
+ * Thrown when AES-GCM decryption fails. Mirrors the edge function's
+ * `DecryptionError` so dashboard callers can decide whether to skip the
+ * row or fail the request — we never silently leak "nv1:..." blobs to
+ * the admin UI.
+ */
+export class DecryptionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DecryptionError";
+  }
+}
+
+async function decryptToString(
+  encoded: string,
+  parentUserId: string,
+  childUserId: string,
+): Promise<string> {
   if (!encoded.startsWith(ENCODING_PREFIX)) return encoded;
+  const key = await deriveRelationshipKey(parentUserId, childUserId);
+  const raw = base64ToBytes(encoded.slice(ENCODING_PREFIX.length));
+  if (raw.length <= IV_LENGTH) {
+    throw new DecryptionError("encrypted payload is shorter than the IV");
+  }
+  const iv = raw.slice(0, IV_LENGTH);
+  const cipher = raw.slice(IV_LENGTH);
   try {
-    const key = await derivePairKey(pairId);
-    const raw = base64ToBytes(encoded.slice(ENCODING_PREFIX.length));
-    const iv = raw.slice(0, IV_LENGTH);
-    const cipher = raw.slice(IV_LENGTH);
     const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
     return new TextDecoder().decode(plain);
   } catch {
-    // Key mismatch or corrupted value — surface the raw ciphertext.
-    return encoded;
+    throw new DecryptionError("AES-GCM decryption failed (wrong key or corrupted value)");
   }
 }
 
@@ -81,13 +107,14 @@ export function isEncrypted(value: unknown): boolean {
 
 export async function encryptNotification(
   row: Record<string, unknown>,
-  pairId: string,
+  parentUserId: string,
+  childUserId: string,
 ): Promise<Record<string, unknown>> {
   const out = { ...row };
   for (const field of CONTENT_FIELDS) {
     const val = out[field];
     if (typeof val === "string" && val.length > 0 && !val.startsWith(ENCODING_PREFIX)) {
-      out[field] = await encryptPlaintext(val, pairId);
+      out[field] = await encryptPlaintext(val, parentUserId, childUserId);
     }
   }
   return out;
@@ -95,13 +122,14 @@ export async function encryptNotification(
 
 export async function decryptNotification(
   row: Record<string, unknown>,
-  pairId: string,
+  parentUserId: string,
+  childUserId: string,
 ): Promise<Record<string, unknown>> {
   const out = { ...row };
   for (const field of CONTENT_FIELDS) {
     const val = out[field];
     if (isEncrypted(val)) {
-      out[field] = await decryptToString(val as string, pairId);
+      out[field] = await decryptToString(val as string, parentUserId, childUserId);
     }
   }
   return out;

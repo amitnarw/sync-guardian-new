@@ -103,6 +103,14 @@ export function mapError(error: unknown): ErrorResponse {
   if (name === 'TooManyRequestsError' || msg.includes('Too many')) {
     return { status: 429, error: 'Too many attempts. Please try again later.' }
   }
+  // AuthError means verifyAuth() rejected the JWT (expired, malformed,
+  // missing, etc). The mobile client treats 401 as "session invalid" and
+  // signs the user out, so returning the correct status is critical for
+  // the re-auth flow. Previously this fell through to the catch-all 400
+  // which looked like a generic request failure.
+  if (name === 'AuthError') {
+    return { status: 401, error: 'Your session has expired. Please sign in again.' }
+  }
   if (code === '42501' /* insufficient_privilege / RLS */ || (name === 'PostgrestError' && !code)) {
     return { status: 403, error: 'You are not authorized to perform this action.' }
   }

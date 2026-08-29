@@ -36,12 +36,12 @@ export interface AppModalProps {
 const ICON_CONFIG: Record<AppModalIcon, { name: keyof typeof MaterialIcons.glyphMap; bg: string; color: string }> = {
   error: { name: 'error-outline', bg: '#ffdad3', color: '#9f402d' },
   warning: { name: 'warning-amber', bg: '#fff3cd', color: '#856404' },
-  info: { name: 'info-outline', bg: '#d4edda', color: '#486730' },
-  success: { name: 'check-circle-outline', bg: '#d4edda', color: '#2d6a4f' },
+  info: { name: 'info-outline', bg: '#c5eccc', color: '#2f4a37' },
+  success: { name: 'check-circle-outline', bg: '#c5eccc', color: '#2f4a37' },
 }
 
 const PRIMARY_VARIANTS = {
-  default: { bg: '#486730', text: '#ffffff' },
+  default: { bg: '#2f4a37', text: '#ffffff' },
   destructive: { bg: '#9f402d', text: '#ffffff' },
 }
 

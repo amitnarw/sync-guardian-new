@@ -15,19 +15,23 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    let response = NextResponse.next({ request });
+    // Build the redirect response FIRST so we can attach session cookies
+    // directly to it. The previous implementation wrote cookies to a
+    // NextResponse.next() intermediate and copied them onto the final
+    // redirect, which is brittle in Next.js 16 where cookie jars may
+    // not be mutable on next() responses.
+    const redirectTarget = NextResponse.redirect(
+      new URL(next.startsWith("/") ? next : "/", origin),
+    );
+
     const supabase = createServerClient(url, anonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) {
-            request.cookies.set(name, value);
-          }
-          response = NextResponse.next({ request });
           for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
+            redirectTarget.cookies.set(name, value, options);
           }
         },
       },
@@ -35,12 +39,7 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      const target = NextResponse.redirect(new URL(next.startsWith("/") ? next : "/", origin));
-      // Copy refreshed session cookies onto the redirect response.
-      for (const cookie of response.cookies.getAll()) {
-        target.cookies.set(cookie);
-      }
-      return target;
+      return redirectTarget;
     }
   }
 

@@ -97,7 +97,7 @@ export default function SplashScreen() {
           <Svg width={256} height={256} viewBox="0 0 256 256" style={styles.svgContainer}>
             <Defs>
               <LinearGradient id="hearthGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <Stop offset="0%" stopColor="#44674d" />
+                <Stop offset="0%" stopColor="#2f4a37" />
                 <Stop offset="100%" stopColor="#c5eccc" />
               </LinearGradient>
             </Defs>
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   },
   loadingFill: {
     height: '100%',
-    backgroundColor: '#44674d',
+    backgroundColor: '#2f4a37',
     borderRadius: 2,
   },
 });

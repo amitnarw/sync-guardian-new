@@ -59,54 +59,27 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
   }, [pairId, isAuthenticated, role])
 
   // Parents: watch every active/pending pair that belongs to this parent
-  // device. Only a transition INTO `revoked` (UPDATE) or a DELETE triggers
-  // a refresh/disconnect modal; active/pending transitions do not.
+  // device. Revoked pairs are deleted immediately by `revoke-pair`, so a
+  // DELETE event on the `pairs` table signals that a child disconnected.
   // Children: continue watching the single pairId (their own pairing).
   useEffect(() => {
     if (role === 'parent') {
       if (!isValidUUID(deviceId)) return
-
-      const validate = async () => {
-        try {
-          const { data, error } = await supabase
-            .from('pairs')
-            .select('id, status')
-            .eq('parent_device_id', deviceId)
-            .eq('status', 'revoked')
-          if (error) return
-          if (data && data.length > 0) {
-            const latest = data[data.length - 1]
-            showRevokedModal(latest.id)
-            markPairRevoked()
-          }
-        } catch (err) {
-          logger.warn('usePairStatusGuard: parent validate error', err)
-        }
-      }
-      validate()
 
       const channel = supabase
         .channel(`pairs_parent_${deviceId}_${Math.random().toString(36).slice(2)}`)
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'DELETE',
             schema: 'public',
             table: 'pairs',
             filter: `parent_device_id=eq.${deviceId}`,
           },
           (payload) => {
-            const eventType = (payload as any).eventType
-            const newRow = payload.new as any
             const oldRow = payload.old as any
-            if (eventType === 'DELETE') {
-              if (oldRow?.id) showRevokedModal(oldRow.id)
-              markPairRevoked()
-              return
-            }
-            if (newRow?.status === 'revoked' && oldRow?.status !== 'revoked') {
-              showRevokedModal(newRow.id)
-            }
+            if (oldRow?.id) showRevokedModal(oldRow.id)
+            markPairRevoked()
           },
         )
         .subscribe()
@@ -154,13 +127,12 @@ export function usePairStatusGuard(role: 'parent' | 'child') {
           filter: `id=eq.${pairId}`,
         },
         (payload) => {
+          // Revoked pairs are deleted from the `pairs` table by
+          // `revoke-pair`, so a DELETE event is the only signal.
+          // The initial `validate()` above also catches the case
+          // where the row is already missing.
           const eventType = (payload as any).eventType
           if (eventType === 'DELETE') {
-            handleRevoked()
-            return
-          }
-          const newStatus = (payload.new as any)?.status
-          if (newStatus === 'revoked') {
             handleRevoked()
           }
         },

@@ -346,7 +346,7 @@ export default function PairingScreen() {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#44674d" />
+        <ActivityIndicator size="large" color="#2f4a37" />
         <Text style={styles.loadingText}>Preparing your connection...</Text>
       </View>
     );
@@ -358,7 +358,7 @@ export default function PairingScreen() {
     return (
       <EdgeFadeScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false} style={styles.container}>
           <View style={styles.header}>
-            <MaterialIcons name="spa" size={32} color="#44674d" />
+            <MaterialIcons name="spa" size={32} color="#2f4a37" />
             <Text style={styles.title}>Child Mode Setup</Text>
             <Text style={styles.subtitle}>Show this screen to the person with the Parent phone</Text>
           </View>
@@ -392,7 +392,7 @@ export default function PairingScreen() {
                 </View>
 
                 <View style={styles.countdownContainer}>
-                  <MaterialIcons name="timer" size={16} color={isExpired ? '#ba1a1a' : '#486730'} />
+                  <MaterialIcons name="timer" size={16} color={isExpired ? '#ba1a1a' : '#2f4a37'} />
                   {isExpired ? (
                     <Text style={[styles.countdownText, styles.countdownExpired]}>Code expired</Text>
                   ) : (

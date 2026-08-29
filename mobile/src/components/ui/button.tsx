@@ -116,8 +116,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   primaryButton: {
-    backgroundColor: '#44674d',
-    shadowColor: '#44674d',
+    backgroundColor: '#2f4a37',
+    shadowColor: '#2f4a37',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 30,

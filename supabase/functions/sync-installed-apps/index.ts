@@ -111,14 +111,16 @@ serve(async (req) => {
     }
 
     // Remove rows for apps no longer present on the child device (except
-    // those the parent explicitly enabled ,  don't undo parent choices).
+    // those the parent explicitly enabled, don't undo parent choices).
+    // Pass the array directly to Supabase; it handles parameterization
+    // safely. Manual string escaping was a SQL/PostgREST injection risk.
     if (incomingPackages.size > 0) {
       await adminClient
         .from('child_app_filters')
         .delete()
         .eq('child_device_id', childDeviceId)
         .neq('is_enabled', true)
-        .not('package_name', 'in', `(${Array.from(incomingPackages).map((p) => `"${p.replace(/"/g, '\\"')}"`).join(',')})`)
+        .not('package_name', 'in', Array.from(incomingPackages))
     } else {
       await adminClient
         .from('child_app_filters')
@@ -157,7 +159,16 @@ serve(async (req) => {
     )
   } catch (error) {
     const { status, error: safeMsg } = mapError(error)
-    logger.error('sync-installed-apps', safeMsg, error instanceof Error ? error.message : '')
+    // Surface the raw error message for ops debugging (logger sanitizes
+    // tokens/UUIDs from object metadata but raw text is preserved so we
+    // can identify the underlying cause). The client-facing message is
+    // still sanitized via mapError so internal details never leak.
+    logger.error('sync-installed-apps', safeMsg, {
+      raw: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+      code: (error as any)?.code,
+      name: error instanceof Error ? error.name : undefined,
+    })
     return new Response(
       JSON.stringify({ error: safeMsg }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status },

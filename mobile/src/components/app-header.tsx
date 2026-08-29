@@ -6,7 +6,9 @@ import { UserAvatar } from './user-avatar'
 import { useHeaderRefresh } from '@/contexts/HeaderRefreshContext'
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
+  primaryContainer: '#c5eccc',
+  onPrimary: '#e8ffea',
   surface: '#fff8f0',
   surfaceContainer: '#f5ede0',
 } as const
@@ -52,7 +54,7 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingVertical: 10,
     backgroundColor: 'rgba(255,248,240,0.80)',
   },
   headerLeft: {

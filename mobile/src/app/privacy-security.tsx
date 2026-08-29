@@ -9,7 +9,7 @@ import { useAppModal } from '@/hooks/use-app-modal';
 import { supabase } from '@/lib/supabase';
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
   onPrimary: '#e8ffea',
   secondary: '#a0412d',
@@ -64,7 +64,7 @@ export default function PrivacySecurityScreen() {
   };
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <SafeAreaView style={s.container} edges={['top', 'bottom']}>
       {/* Top Bar with back arrow and Centered Title (Matching Image 2) */}
       <View style={s.header}>
         <TouchableOpacity

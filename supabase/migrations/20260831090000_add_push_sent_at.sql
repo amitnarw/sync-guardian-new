@@ -1,0 +1,33 @@
+-- ============================================================
+-- Add push_sent_at to mirrored_notifications for idempotent
+-- FCM push delivery.
+--
+-- Background:
+--   The ingest-child-notification edge function upserts
+--   notifications with `onConflict: 'parent_user_id, child_user_id,
+--   child_device_id, notification_key'`. When the upsert conflicts
+--   (the same content-hash notification arrives again), Supabase
+--   returns the EXISTING row from `.select()` after upsert. The
+--   code previously treated every returned row as newly inserted
+--   and fired an FCM push, which meant a duplicate notification
+--   arrival would push the parent again even though the DB row
+--   count was correct.
+--
+--   Adding a `push_sent_at` column gives us a definitive "did we
+--   already push this?" signal. The edge function reads the
+--   returned row's `push_sent_at`; if it was null before this
+--   transaction, the row is fresh and we push, then set
+--   `push_sent_at = now()`. If it was already set, the row is a
+--   duplicate and we skip the push.
+--
+-- Notes:
+--   * The column defaults to NULL so existing rows are considered
+--     "never pushed" — the next ingest for that pair will push
+--     once and then stop.
+--   * Indexing is intentionally not added; the column is read in
+--     a single-row context after upsert and the existing indexes
+--     on parent_user_id/child_user_id cover the lookups.
+-- ============================================================
+
+ALTER TABLE mirrored_notifications
+  ADD COLUMN IF NOT EXISTS push_sent_at TIMESTAMPTZ;

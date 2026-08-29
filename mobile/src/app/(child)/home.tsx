@@ -25,7 +25,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 // EXACT STITCH COLORS (from v1 + v2 HTML Tailwind config)
 // ============================================================
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
   onPrimary: '#e8ffea',
   secondary: '#a0412d',

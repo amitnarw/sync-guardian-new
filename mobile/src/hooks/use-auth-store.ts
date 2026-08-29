@@ -176,6 +176,10 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       partialize: (state) => ({
+        // isAuthenticated and userId are intentionally NOT persisted.
+        // They must be derived from the live Supabase session on every
+        // app launch via _layout.tsx. Persisting them lets the app act
+        // on stale auth state before the session has been verified.
         userRole: state.userRole,
         hasCompletedOnboarding: state.hasCompletedOnboarding,
         email: state.email,

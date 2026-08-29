@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthColors, AuthFonts, AuthRadius, AuthShadows } from '@/constants/auth-theme';
 
 export interface ChildOption {
+  childUserId: string;
   pairId: string;
   childDeviceId: string;
   displayName: string | null;
@@ -12,11 +13,11 @@ export interface ChildOption {
 
 export interface ChildSelectorProps {
   options: ChildOption[];
-  selectedPairId: string | null;
-  onSelect: (pairId: string | null) => void;
+  selectedChildUserId: string | null;
+  onSelect: (childUserId: string | null) => void;
   showAllOption?: boolean;
   allLabel?: string;
-  variant?: 'pill' | 'inline';
+  variant?: 'pill' | 'inline' | 'icon';
   disabled?: boolean;
 }
 
@@ -25,7 +26,7 @@ const MIN_DROPDOWN_WIDTH = 200;
 
 export function ChildSelector({
   options,
-  selectedPairId,
+  selectedChildUserId,
   onSelect,
   showAllOption = true,
   allLabel = 'All children',
@@ -64,13 +65,46 @@ export function ChildSelector({
 
   if (options.length === 0) return null;
 
-  const selected = options.find((c) => c.pairId === selectedPairId);
+  const selected = options.find((c) => c.childUserId === selectedChildUserId);
   const isAll = !selected && showAllOption;
   const triggerLabel = isAll ? allLabel : (selected?.displayName || 'Child');
   const triggerActive = !isAll;
+  const initial = !isAll ? (selected?.displayName?.charAt(0).toUpperCase() || 'C') : null;
+  const showOnlineDot = !!selected?.isOnline;
 
-  return (
-    <>
+  const renderTrigger = () => {
+    if (variant === 'icon') {
+      return (
+        <TouchableOpacity
+          ref={triggerRef}
+          onPress={openDropdown}
+          activeOpacity={0.7}
+          disabled={disabled}
+          style={[s.triggerIcon, disabled && s.triggerDisabled]}
+          accessibilityRole="button"
+          accessibilityLabel={triggerLabel}
+        >
+          {isAll ? (
+            <View style={[s.triggerIconBubble, s.triggerIconBubbleAll]}>
+              <Ionicons name="people" size={18} color={AuthColors.primary} />
+              {options.some((o) => o.isOnline) && <View style={s.iconOnlineDot} />}
+            </View>
+          ) : (
+            <View style={s.triggerIconBubble}>
+              <Text style={s.triggerIconInitial}>{initial}</Text>
+              {showOnlineDot && <View style={s.iconOnlineDot} />}
+            </View>
+          )}
+          <Ionicons
+            name="chevron-down"
+            size={12}
+            color={AuthColors.onSurfaceVariant}
+            style={s.iconChevron}
+          />
+        </TouchableOpacity>
+      );
+    }
+    return (
       <TouchableOpacity
         ref={triggerRef}
         onPress={openDropdown}
@@ -102,6 +136,12 @@ export function ChildSelector({
           color={triggerActive ? AuthColors.onPrimary : AuthColors.onSurfaceVariant}
         />
       </TouchableOpacity>
+    );
+  };
+
+  return (
+    <>
+      {renderTrigger()}
 
       {open && (
         <Modal visible transparent animationType="fade" onRequestClose={closeDropdown}>
@@ -128,12 +168,12 @@ export function ChildSelector({
                   </TouchableOpacity>
                 )}
                 {options.map((child) => {
-                  const active = selectedPairId === child.pairId;
+                  const active = selectedChildUserId === child.childUserId;
                   return (
                     <TouchableOpacity
-                      key={child.pairId}
+                      key={child.childUserId}
                       style={[s.menuItem, active && s.menuItemActive]}
-                      onPress={() => handleSelect(child.pairId)}
+                      onPress={() => handleSelect(child.childUserId)}
                       activeOpacity={0.7}
                     >
                       <View style={s.menuAvatar}>
@@ -248,5 +288,51 @@ const s = StyleSheet.create({
   menuTextActive: {
     color: AuthColors.onPrimaryContainer,
     fontWeight: '700',
+  },
+  triggerIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingLeft: 4,
+    paddingRight: 6,
+    borderRadius: AuthRadius.full,
+    backgroundColor: AuthColors.surfaceContainerLowest,
+    ...AuthShadows.ambient,
+  },
+  triggerIconBubble: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: AuthColors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  triggerIconBubbleAll: {
+    backgroundColor: AuthColors.primaryContainer,
+  },
+  triggerIconInitial: {
+    color: AuthColors.onPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'PlusJakartaSans-Bold',
+  },
+  triggerIconAllIcon: {
+    position: 'absolute',
+  },
+  iconOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#31A24C',
+    borderWidth: 2,
+    borderColor: AuthColors.surfaceContainerLowest,
+  },
+  iconChevron: {
+    marginLeft: 2,
   },
 });

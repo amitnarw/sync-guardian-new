@@ -3,8 +3,9 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 
 const colors = {
-  primary: '#486730',
-  primaryContainer: '#87a96b',
+  primary: '#2f4a37',
+  primaryContainer: '#c5eccc',
+  onPrimary: '#e8ffea',
   secondary: '#9f402d',
   surface: '#fff8f0',
   surfaceContainerLow: '#f5ede0',

@@ -141,7 +141,11 @@ export async function sendParentPush(
 
   if (!fcmResponse.ok) {
     const errorCode = fcmData?.error?.details?.[0]?.errorCode
-    if (errorCode === 'UNREGISTERED' || errorCode === 'INVALID_ARGUMENT') {
+    // Only treat these two error codes as terminal token state. Everything
+    // else (INVALID_ARGUMENT for malformed payloads, QUOTA_EXCEEDED,
+    // UNAVAILABLE, INTERNAL, etc.) is transient or payload-side and must
+    // NOT wipe a valid push token.
+    if (errorCode === 'UNREGISTERED' || errorCode === 'SENDER_ID_MISMATCH') {
       return { success: false, unregisteredToken: true }
     }
     throw new Error(`FCM error: ${JSON.stringify(fcmData)}`)
@@ -189,7 +193,7 @@ export async function sendChildRecoveryPush(
 
   if (!fcmResponse.ok) {
     const errorCode = fcmData?.error?.details?.[0]?.errorCode
-    if (errorCode === 'UNREGISTERED' || errorCode === 'INVALID_ARGUMENT') {
+    if (errorCode === 'UNREGISTERED' || errorCode === 'SENDER_ID_MISMATCH') {
       return { success: false, unregisteredToken: true }
     }
     throw new Error(`FCM error: ${JSON.stringify(fcmData)}`)
@@ -241,7 +245,7 @@ export async function sendPairRevokedPush(
 
   if (!fcmResponse.ok) {
     const errorCode = fcmData?.error?.details?.[0]?.errorCode
-    if (errorCode === 'UNREGISTERED' || errorCode === 'INVALID_ARGUMENT') {
+    if (errorCode === 'UNREGISTERED' || errorCode === 'SENDER_ID_MISMATCH') {
       return { success: false, unregisteredToken: true }
     }
     throw new Error(`FCM error: ${JSON.stringify(fcmData)}`)

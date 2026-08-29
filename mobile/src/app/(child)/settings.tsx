@@ -12,6 +12,7 @@ import { PermissionStatusRow } from '@/components/permission-status-row';
 import { NotifListenerRequestModal } from '@/components/notif-listener-request-modal';
 import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
 import { NotificationDiagnosticPanel } from '@/components/notification-diagnostic-panel';
+import { DevInfoPanel } from '@/components/dev-info-panel';
 import * as NotificationAccess from 'notification-access';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
@@ -21,7 +22,7 @@ import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanima
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
   primaryContainer: '#c5eccc',
   onPrimary: '#e8ffea',
   secondary: '#a0412d',
@@ -52,6 +53,8 @@ export default function ChildSettingsScreen() {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pairStatus, setPairStatus] = useState<'active' | 'revoked' | 'pending' | null>(null);
+  const [devTapCount, setDevTapCount] = useState(0);
+  const [showDevPanel, setShowDevPanel] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -311,6 +314,30 @@ export default function ChildSettingsScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Hidden developer diagnostics — tap version 7× */}
+            {showDevPanel ? (
+              <DevInfoPanel role="child" />
+            ) : (
+              <TouchableOpacity
+                style={s.versionTapArea}
+                onPress={() => {
+                  const next = devTapCount + 1;
+                  if (next >= 7) {
+                    setDevTapCount(0);
+                    setShowDevPanel(true);
+                  } else {
+                    setDevTapCount(next);
+                  }
+                }}
+                activeOpacity={0.6}
+              >
+                <Text style={s.versionText}>Sync Guardian v1.0.0</Text>
+                {devTapCount > 0 && devTapCount < 7 ? (
+                  <Text style={s.versionHint}>{7 - devTapCount} more tap(s)</Text>
+                ) : null}
+              </TouchableOpacity>
+            )}
+
             {/* Bottom spacing */}
             <View style={s.bottomSpacer} />
           </EdgeFadeScrollView>
@@ -541,6 +568,21 @@ const s = StyleSheet.create({
   },
   bottomSpacer: {
     height: 130,
+  },
+  versionTapArea: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  versionText: {
+    fontFamily: 'PlusJakartaSans-Regular',
+    fontSize: 12,
+    color: C.outline,
+  },
+  versionHint: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 10,
+    color: C.primary,
+    marginTop: 4,
   },
   permissionsSection: {
     marginBottom: 32,

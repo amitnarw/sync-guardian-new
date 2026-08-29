@@ -10,10 +10,21 @@ const MAX_PROCESSED_KEYS = 500;
 
 // Bump when the buffered payload shape or flush behavior changes.
 // Items with an older version are dropped on flush (one-time cleanup of stale data).
-export const QUEUE_SCHEMA_VERSION = 2;
+// v3: switch dedup key to use `child_user_id` (stable across pair revoke/reconnect)
+// instead of `pair_id` (transient, regenerates on every new pairing). Adding
+// `child_user_id` to the payload resolves the relationship key directly,
+// so the edge function never needs to look up the pair by pair_id at ingest.
+export const QUEUE_SCHEMA_VERSION = 3;
 
 export interface NotificationPayload {
   child_device_id: string;
+  /**
+   * Stable user id of the child device owner. Used by the edge function
+   * to derive the encryption relationship key. `pair_id` is kept for
+   * audit only; if missing at capture time it is filled in from auth
+   * state at flush time.
+   */
+  child_user_id: string;
   pair_id: string;
   source_package: string;
   source_app_name: string;
@@ -26,8 +37,11 @@ export interface NotificationPayload {
   _schemaVersion?: number;
 }
 
+// Dedup uses child_user_id (stable across reconnect cycles) instead of
+// pair_id (transient). If two pairs exist for the same child user, the
+// combination with notification_key is still unique.
 function dedupKey(p: NotificationPayload): string {
-  return `${p.child_device_id}|${p.pair_id}|${p.notification_key}`;
+  return `${p.child_user_id}|${p.notification_key}`;
 }
 
 function getMMKV() {
@@ -153,20 +167,35 @@ function isRetryableStatus(status: number | undefined): boolean {
   return false;
 }
 
-/** Fill empty pair_id/child_device_id from current auth state at flush time. */
+/**
+ * Resolve pair_id / child_device_id / child_user_id at flush time.
+ *
+ * When a child reinstalls the app, the buffered queue may contain rows
+ * captured against an OLD `child_device_id` from the previous install.
+ * At flush time we always prefer the LIVE values from the auth store
+ * over the stale ones captured at write time, so a recovered device
+ * id (or any other corrected store value) wins. We only fall back to
+ * the item values when the store has not hydrated yet.
+ */
 function resolveIdsFromStore(item: NotificationPayload): NotificationPayload {
   const state = useAuthStore.getState();
-  const pairId = item.pair_id || state.pairId || '';
-  const childDeviceId = item.child_device_id || state.deviceId || '';
-  return { ...item, pair_id: pairId, child_device_id: childDeviceId };
+  const pairId = state.pairId || item.pair_id || '';
+  const childDeviceId = state.deviceId || item.child_device_id || '';
+  const childUserId = state.userId || item.child_user_id || '';
+  return {
+    ...item,
+    pair_id: pairId,
+    child_device_id: childDeviceId,
+    child_user_id: childUserId,
+  };
 }
 
 export const flushBuffer = async () => {
   if (isFlushing) return;
   isFlushing = true;
   try {
-    const queue = await readQueue();
-    if (queue.length === 0) return;
+    const initialQueue = await readQueue();
+    if (initialQueue.length === 0) return;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { supabase } = require('@/lib/supabase');
@@ -175,8 +204,8 @@ export const flushBuffer = async () => {
     // One-time cleanup: drop stale payloads from a previous queue schema.
     let droppedStale = 0;
 
-    for (let i = 0; i < queue.length; i += BATCH_SIZE) {
-      let batch = queue.slice(i, i + BATCH_SIZE).map(resolveIdsFromStore);
+    for (let i = 0; i < initialQueue.length; i += BATCH_SIZE) {
+      let batch = initialQueue.slice(i, i + BATCH_SIZE).map(resolveIdsFromStore);
 
       // Filter out items that cannot be sent (old schema or missing ids after resolution).
       const valid: NotificationPayload[] = [];
@@ -185,14 +214,14 @@ export const flushBuffer = async () => {
           droppedStale++;
           continue;
         }
-        if (!n.pair_id || !n.child_device_id) {
+        if (!n.pair_id || !n.child_device_id || !n.child_user_id) {
           const st = useAuthStore.getState();
-          if (!st.pairId || !st.deviceId) {
+          if (!st.pairId || !st.deviceId || !st.userId) {
             const retry = (n._retryCount ?? 0) + 1;
             if (retry <= 5) remaining.push({ ...n, _retryCount: retry });
             continue;
           }
-          logger.warn('flushBuffer: dropping item with missing pair_id/child_device_id', { title: n.notification_title });
+          logger.warn('flushBuffer: dropping item with missing pair_id/child_device_id/child_user_id', { title: n.notification_title });
           continue;
         }
         valid.push(n);
@@ -262,12 +291,52 @@ export const flushBuffer = async () => {
       logger.info(`flushBuffer: dropped ${droppedStale} stale buffered item(s).`);
     }
 
-    if (remaining.length === 0) {
+    // Merge any items that were appended to the queue while we were flushing.
+    // Without this, a notification captured between `await readQueue()` and
+    // `await replaceBufferedNotifications(remaining)` would be overwritten by
+    // `remaining` (which is a strict subset of the original queue) and lost.
+    // We re-read the queue, drop anything we already processed (matched by
+    // notification_key), and concatenate the new arrivals with `remaining`.
+    const finalQueue = await readQueue();
+    const remainingKeys = new Set(
+      remaining.map((n) => n.notification_key).filter((k): k is string => !!k),
+    );
+    const processedKeys = new Set(
+      initialQueue
+        .filter((n) => !remaining.find((r) => r.notification_key === n.notification_key))
+        .map((n) => n.notification_key)
+        .filter((k): k is string => !!k),
+    );
+
+    const freshlyCaptured: NotificationPayload[] = [];
+    for (const item of finalQueue) {
+      const key = item.notification_key;
+      if (!key) {
+        // Items without a notification_key were never counted as "processed";
+        // preserve them as freshly-captured so they survive the merge.
+        freshlyCaptured.push(item);
+        continue;
+      }
+      if (remainingKeys.has(key)) continue;
+      if (processedKeys.has(key)) continue;
+      freshlyCaptured.push(item);
+    }
+
+    const merged: NotificationPayload[] = [...remaining, ...freshlyCaptured];
+    // Cap to MAX_QUEUE_SIZE so a runaway producer cannot blow past the
+    // MMKV budget; drop oldest first.
+    while (merged.length > MAX_QUEUE_SIZE) {
+      merged.shift();
+    }
+
+    if (merged.length === 0) {
       await deleteQueue();
       logger.info('Successfully flushed buffered notifications');
     } else {
-      await replaceBufferedNotifications(remaining);
-      logger.info(`Flushed partially. ${remaining.length} items re-buffered for retry.`);
+      await replaceBufferedNotifications(merged);
+      logger.info(
+        `Flushed partially. remaining=${remaining.length} captured-mid-flush=${freshlyCaptured.length} total=${merged.length}`,
+      );
     }
   } finally {
     isFlushing = false;

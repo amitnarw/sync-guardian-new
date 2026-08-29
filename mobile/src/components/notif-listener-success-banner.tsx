@@ -24,7 +24,7 @@ export function NotifListenerSuccessBanner() {
 
   return (
     <Animated.View style={[styles.banner, animatedStyle]} pointerEvents="none">
-      <MaterialIcons name="check-circle" size={22} color="#486730" />
+      <MaterialIcons name="check-circle" size={22} color="#2f4a37" />
       <Text style={styles.text}>Notification access granted</Text>
     </Animated.View>
   );
@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 14,
     paddingHorizontal: 20,
-    backgroundColor: '#e3ecd8',
+    backgroundColor: '#c5eccc',
     borderRadius: 999,
     shadowColor: '#1b1d0e',
     shadowOffset: { width: 0, height: 8 },
@@ -54,6 +54,6 @@ const styles = StyleSheet.create({
   text: {
     fontFamily: 'PlusJakartaSans-Bold',
     fontSize: 14,
-    color: '#486730',
+    color: '#2f4a37',
   },
 });

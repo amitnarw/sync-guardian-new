@@ -4,7 +4,9 @@ import { logger } from '@/services/logger';
 
 export interface RawNotification {
   id: string;
-  pair_id: string;
+  pair_id: string | null;
+  parent_user_id: string;
+  child_user_id: string;
   child_device_id: string;
   source_package: string | null;
   source_app_name: string | null;
@@ -17,6 +19,7 @@ export interface RawNotification {
 
 export interface ChildRef {
   pairId: string;
+  childUserId: string;
   childDeviceId: string;
   displayName: string | null;
   isOnline: boolean;
@@ -71,6 +74,7 @@ async function loadChildren(parentDeviceId: string): Promise<ChildRef[]> {
       (lastSeenAt !== null && Date.now() - new Date(lastSeenAt).getTime() < 120000);
     return {
       pairId: row.id as string,
+      childUserId: row.child_user_id as string,
       childDeviceId: row.child_device_id as string,
       displayName: (prof?.display_name as string | null) ?? null,
       isOnline,
@@ -82,12 +86,12 @@ async function loadChildren(parentDeviceId: string): Promise<ChildRef[]> {
 }
 
 function buildRequestBody(
-  pairIds: string[],
+  childUserIds: string[],
   options: { limit?: number; since?: string | null; before?: string | null },
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {};
-  if (pairIds.length > 1) body.pair_ids = pairIds;
-  else if (pairIds.length === 1) body.pair_id = pairIds[0];
+  if (childUserIds.length > 1) body.child_user_ids = childUserIds;
+  else if (childUserIds.length === 1) body.child_user_id = childUserIds[0];
   if (options.limit != null) body.limit = options.limit;
   if (options.since) body.since = options.since;
   if (options.before) body.before = options.before;
@@ -100,7 +104,7 @@ function tagWithChildren(
 ): AggregatedNotification[] {
   return rows.map((n) => ({
     ...n,
-    child: childIndex.get(n.pair_id) ?? null,
+    child: childIndex.get(n.child_user_id) ?? null,
   }));
 }
 
@@ -119,10 +123,10 @@ export async function fetchParentNotifications(params: {
   const children = await loadChildren(parentDeviceId);
   const requestedIds: string[] = selectedChildId
     ? (() => {
-        const match = children.find((c) => c.pairId === selectedChildId);
-        return match ? [match.pairId] : [];
+        const match = children.find((c) => c.childUserId === selectedChildId);
+        return match ? [match.childUserId] : [];
       })()
-    : children.map((c) => c.pairId);
+    : children.map((c) => c.childUserId);
 
   if (requestedIds.length === 0) {
     return { notifications: [], children };
@@ -138,10 +142,10 @@ export async function fetchParentNotifications(params: {
     return { notifications: [], children };
   }
 
-  const childIndex = new Map(children.map((c) => [c.pairId, c]));
+  const childIndex = new Map(children.map((c) => [c.childUserId, c]));
   const rows = (data.data as RawNotification[]).map((n) => ({
     ...n,
-    child: childIndex.get(n.pair_id) ?? null,
+    child: childIndex.get(n.child_user_id) ?? null,
   }));
 
   return { notifications: rows, children };
@@ -176,16 +180,16 @@ export async function fetchParentNotificationsPaginated(
   const children = await loadChildren(parentDeviceId);
   const requestedIds: string[] = selectedChildId
     ? (() => {
-        const match = children.find((c) => c.pairId === selectedChildId);
-        return match ? [match.pairId] : [];
+        const match = children.find((c) => c.childUserId === selectedChildId);
+        return match ? [match.childUserId] : [];
       })()
-    : children.map((c) => c.pairId);
+    : children.map((c) => c.childUserId);
 
   if (requestedIds.length === 0) {
     return { notifications: [], children, hasMore: false, totalFetched: 0 };
   }
 
-  const childIndex = new Map(children.map((c) => [c.pairId, c]));
+  const childIndex = new Map(children.map((c) => [c.childUserId, c]));
   const all: AggregatedNotification[] = [];
   let before: string | null = params.before ?? null;
   let beforeId: string | null = params.beforeId ?? null;
@@ -197,8 +201,8 @@ export async function fetchParentNotificationsPaginated(
     const body: Record<string, unknown> = {
       limit: SERVER_PAGE_CAP,
     };
-    if (requestedIds.length > 1) body.pair_ids = requestedIds;
-    else body.pair_id = requestedIds[0];
+    if (requestedIds.length > 1) body.child_user_ids = requestedIds;
+    else body.child_user_id = requestedIds[0];
     if (since) body.since = since;
     if (before) body.before = before;
     if (before && beforeId) body.before_id = beforeId;
@@ -263,10 +267,10 @@ export async function fetchMoreNotificationsOlderThan(params: {
   const children = await loadChildren(params.parentDeviceId);
   const requestedIds: string[] = params.selectedChildId
     ? (() => {
-        const match = children.find((c) => c.pairId === params.selectedChildId);
-        return match ? [match.pairId] : [];
+        const match = children.find((c) => c.childUserId === params.selectedChildId);
+        return match ? [match.childUserId] : [];
       })()
-    : children.map((c) => c.pairId);
+    : children.map((c) => c.childUserId);
 
   if (requestedIds.length === 0) {
     return { notifications: [], children, nextCursor: null, hasMore: false };
@@ -277,8 +281,8 @@ export async function fetchMoreNotificationsOlderThan(params: {
     before: params.cursor.before,
     before_id: params.cursor.beforeId,
   };
-  if (requestedIds.length > 1) body.pair_ids = requestedIds;
-  else body.pair_id = requestedIds[0];
+  if (requestedIds.length > 1) body.child_user_ids = requestedIds;
+  else body.child_user_id = requestedIds[0];
 
   const { data, error } = await supabase.functions.invoke('get-notifications', { body });
 
@@ -289,7 +293,7 @@ export async function fetchMoreNotificationsOlderThan(params: {
     return { notifications: [], children, nextCursor: null, hasMore: false };
   }
 
-  const childIndex = new Map(children.map((c) => [c.pairId, c]));
+  const childIndex = new Map(children.map((c) => [c.childUserId, c]));
   const rows = (data.data as RawNotification[]) ?? [];
   const hasMore = rows.length >= SERVER_PAGE_CAP;
   const nextCursor =

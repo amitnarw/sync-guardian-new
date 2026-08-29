@@ -12,7 +12,13 @@ interface SubscriptionState {
   // NEVER trusted from disk: a persisted `hasAccess: true` would let a user
   // bypass the trial by simply not opening the app (or by toggling airplane
   // mode after their trial expired). The server is the only authority.
-  hasAccess: boolean;
+  //
+  // `hasAccess === undefined` means "not yet verified by the server on this
+  // launch". The notification listener treats that as "buffer but do not
+  // send" so notifications captured during the cold-start hydration window
+  // are not silently dropped. `false` means "server confirmed no access" and
+  // is terminal. `true` means "active".
+  hasAccess: boolean | undefined;
   reason: SubscriptionReason;
   trialDaysRemaining: number | null;
   activePlanId: string | null;
@@ -30,11 +36,13 @@ interface SubscriptionState {
 export const useSubscriptionStore = create<SubscriptionState>()(
   persist(
     (set) => ({
-      // Default to NO access. Until the server confirms access via refresh(),
-      // we must not assume the user is entitled to anything — otherwise a
-      // stale persisted state (or a device-clock manipulation) would let the
-      // user bypass the paywall.
-      hasAccess: false,
+      // Default to UNKNOWN (`undefined`) so the notification listener
+      // buffers during the cold-start hydration window instead of dropping.
+      // A previous `false` default caused any notification captured before
+      // the first foreground refresh to be silently lost. The server is the
+      // only authority on access — leaving this undefined until refresh()
+      // resolves is strictly safer than assuming denial.
+      hasAccess: undefined,
       reason: null,
       trialDaysRemaining: null,
       activePlanId: null,
@@ -59,6 +67,11 @@ export const useSubscriptionStore = create<SubscriptionState>()(
           });
         } catch (e) {
           set({
+            // On failure, leave `hasAccess` as it was. If the listener was
+            // already buffered while hydrating, it will retry on the next
+            // foreground refresh. If we force `false` here, a transient
+            // network blip on launch would silently lock the user out for
+            // the rest of the session.
             error: e instanceof Error ? e.message : 'Failed to load subscription',
             loading: false,
           });
@@ -67,7 +80,11 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 
       clear: () =>
         set({
-          hasAccess: false,
+          // After sign-out, reset to `undefined` so the next signed-in user
+          // hydrates from scratch. Forcing `false` here would cause the
+          // listener to drop the very first notifications of the new user
+          // before their first refresh completes.
+          hasAccess: undefined,
           reason: null,
           trialDaysRemaining: null,
           activePlanId: null,

@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 48,
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 54,
-    shadowColor: '#44674d',
+    shadowColor: '#2f4a37',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -115,6 +115,6 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: '#44674d', // soft green fill, opacity animated in styles
+    backgroundColor: '#2f4a37', // soft green fill, opacity animated in styles
   }
 });

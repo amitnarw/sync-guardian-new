@@ -264,7 +264,7 @@ export default function LoginScreen() {
               <Svg width={200} height={200} viewBox="0 0 256 256" style={styles.logoSvg}>
                 <Defs>
                   <LinearGradient id="hearthGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <Stop offset="0%" stopColor="#44674d" />
+                    <Stop offset="0%" stopColor="#2f4a37" />
                     <Stop offset="100%" stopColor="#c5eccc" />
                   </LinearGradient>
                 </Defs>

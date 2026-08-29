@@ -33,6 +33,7 @@
     "expo-build-properties": "~55.0.15",
     "expo-camera": "~55.0.19",
     "expo-constants": "~55.0.14",
+    "expo-crypto": "~55.0.16",
     "expo-device": "~55.0.15",
     "expo-font": "~55.0.6",
     "expo-glass-effect": "~55.0.10",

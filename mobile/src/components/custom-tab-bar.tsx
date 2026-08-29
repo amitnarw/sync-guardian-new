@@ -7,7 +7,9 @@ import { useRouter, usePathname } from 'expo-router';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
+  primaryContainer: '#c5eccc',
+  onPrimary: '#e8ffea',
   selectedPill: '#dcebd2',
 } as const;
 

@@ -3,8 +3,10 @@ import { View, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const C = {
-  primary: '#44674d',
+  primary: '#2f4a37',
+  primaryContainer: '#c5eccc',
   surfaceContainerHighest: '#eae1d2',
+  surfaceContainerLowest: '#ffffff',
 } as const;
 
 interface AppIconProps {
