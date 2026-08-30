@@ -3,7 +3,7 @@
 --
 -- Trials are a billing concept: only parent devices purchase
 -- subscriptions and consume the 7-day trial. Children never see
--- subscription or money UI — their access is derived from their
+-- subscription or money UI ,  their access is derived from their
 -- paired parent's state (see get-my-subscription edge function).
 --
 -- 1. Backfill: drop trials belonging to children (paired as child

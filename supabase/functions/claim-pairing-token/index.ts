@@ -57,8 +57,8 @@ serve(async (req) => {
     if (error) throw new Error(error.message)
 
     // Advance onboarding for both users. A transient failure here would leave
-    // the rows stuck at a pre-pairing step while the pair is already active —
-    // which used to funnel paired users back into /pairing on every launch —
+    // the rows stuck at a pre-pairing step while the pair is already active , 
+    // which used to funnel paired users back into /pairing on every launch , 
     // so retry a few times and escalate to error logging if all attempts fail.
     const upsertOnboardingWithRetry = async (
       userId: string,

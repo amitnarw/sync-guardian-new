@@ -22,7 +22,7 @@
 --
 -- Notes:
 --   * The column defaults to NULL so existing rows are considered
---     "never pushed" — the next ingest for that pair will push
+--     "never pushed" ,  the next ingest for that pair will push
 --     once and then stop.
 --   * Indexing is intentionally not added; the column is read in
 --     a single-row context after upsert and the existing indexes

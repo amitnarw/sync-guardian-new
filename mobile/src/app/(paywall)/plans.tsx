@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   FadeInDown,
   FadeInUp,
@@ -37,26 +37,12 @@ const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 380);
 const CARD_GAP = 24;
 const CARD_INSET = (SCREEN_WIDTH - CARD_WIDTH) / 2;
 
-const PLAN_META: Record<
-  'tier_a' | 'tier_b',
-  {
-    icon: keyof typeof Ionicons.glyphMap;
-  }
-> = {
-  tier_a: {
-    icon: 'sparkles',
-  },
-  tier_b: {
-    icon: 'rocket',
-  },
-};
-
 const TIER_FEATURES: Record<'tier_a' | 'tier_b', string[]> = {
   tier_a: [
     'Real-time notification mirror',
     'One paired child device',
     '30-day activity history',
-    'UPI AutoPay — cancel anytime',
+    'UPI AutoPay, cancel anytime',
   ],
   tier_b: [
     'Up to 4 paired child devices',
@@ -127,8 +113,7 @@ interface SculpturalCardProps {
 }
 
 function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
-  const meta = PLAN_META[plan.tier];
-  const features = TIER_FEATURES[plan.tier];
+  const features = TIER_FEATURES[plan.tier] ?? [];
   const period = plan.frequency === 'monthly' ? 'mo' : 'yr';
   const isRecommended = plan.tier === 'tier_b'; // Tier B / Pro is recommended
 
@@ -136,45 +121,59 @@ function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
     return (
       <Animated.View
         entering={FadeInDown.duration(550).delay(160 + index * 90)}
-        style={[s.cardShadow, { width: CARD_WIDTH, marginRight: CARD_GAP }]}
+        style={[s.cardShadowRec, { width: CARD_WIDTH, marginRight: CARD_GAP }]}
       >
         <View style={[s.card, s.cardRecommended]}>
+          {/* Exact Membership & Billing gradients */}
+          <LinearGradient
+            colors={['#2f4a37', '#1b3223']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <LinearGradient
+            colors={['rgba(197, 236, 204, 0.25)', 'transparent']}
+            start={{ x: 1, y: 0 }}
+            end={{ x: 0.3, y: 0.8 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+
           <View style={s.cardBody}>
-            {/* Top Badge & Icon Row (Image 4) */}
-            <View style={s.recommendedTopRow}>
-              <View style={s.recommendedBadge}>
-                <Text style={s.recommendedBadgeText}>RECOMMENDED</Text>
-              </View>
-              <View style={s.recommendedIconCircle}>
-                <Ionicons name="leaf-outline" size={20} color="#a5d6a7" />
-              </View>
-            </View>
-
-            {/* Title & Description */}
-            <View style={s.cardHeaderBlock}>
-              <Text style={s.cardTitleRec}>{plan.name}</Text>
-              <Text style={s.cardTaglineRec}>{plan.description}</Text>
-            </View>
-
-            {/* Price */}
-            <View style={s.priceRow}>
-              <Text style={s.priceValueRec}>{formatPaise(plan.amount_paise)}</Text>
-              <Text style={s.priceUnitRec}>/{period}</Text>
-            </View>
-
-            {/* Feature List */}
-            <View style={s.features}>
-              {features.map((label, i) => (
-                <View key={`${plan.id}-feature-${i}`} style={s.featureRow}>
-                  <View style={s.featureBulletRec}>
-                    <Ionicons name="checkmark" size={14} color="#a5d6a7" />
-                  </View>
-                  <Text style={s.featureTextRec}>{label}</Text>
+            <View style={s.cardTopContent}>
+              {/* Top Row: RECOMMENDED badge on left, App Logo (spa) on right */}
+              <View style={s.topRow}>
+                <View style={s.recommendedBadge}>
+                  <Text style={s.recommendedBadgeText}>RECOMMENDED</Text>
                 </View>
-              ))}
+                <MaterialCommunityIcons name="spa" size={26} color="#c5eccc" />
+              </View>
+
+              {/* Title & Description */}
+              <View style={s.cardHeaderBlock}>
+                <Text style={s.cardTitleRec}>{plan.name}</Text>
+                <Text style={s.cardTaglineRec}>{plan.description}</Text>
+              </View>
+
+              {/* Price */}
+              <View style={s.priceRow}>
+                <Text style={s.priceValueRec}>{formatPaise(plan.amount_paise)}</Text>
+                <Text style={s.priceUnitRec}>/{period}</Text>
+              </View>
+
+              {/* Feature List */}
+              <View style={s.features}>
+                {features.map((label, i) => (
+                  <View key={`${plan.id}-feature-${i}`} style={s.featureRow}>
+                    <View style={s.featureBulletRec}>
+                      <Ionicons name="checkmark" size={13} color="#c5eccc" />
+                    </View>
+                    <Text style={s.featureTextRec}>{label}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
 
-            {/* White Capsule CTA Button */}
+            {/* White Capsule CTA Button with "Pay" */}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
@@ -182,10 +181,10 @@ function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
               }}
               style={({ pressed }) => [
                 s.cardCtaRec,
-                pressed && { transform: [{ scale: 0.97 }] },
+                pressed && { transform: [{ scale: 0.98 }] },
               ]}
             >
-              <Text style={s.cardCtaTextRec}>Choose {plan.name}</Text>
+              <Text style={s.cardCtaTextRec}>Pay</Text>
             </Pressable>
           </View>
         </View>
@@ -196,55 +195,62 @@ function SculpturalCard({ plan, index, onContinue }: SculpturalCardProps) {
   return (
     <Animated.View
       entering={FadeInDown.duration(550).delay(160 + index * 90)}
-      style={[s.cardShadow, { width: CARD_WIDTH, marginRight: CARD_GAP }]}
+      style={[s.cardShadowLight, { width: CARD_WIDTH, marginRight: CARD_GAP }]}
     >
-      <View style={s.card}>
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <LinearGradient
-            colors={['rgba(54,50,40,0.06)', 'rgba(54,50,40,0)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ flex: 1 }}
-          />
-        </View>
-
-        <View pointerEvents="none" style={s.blob} />
+      <View style={[s.card, s.cardLight]}>
+        {/* Simple gradient of primary color light shade */}
+        <LinearGradient
+          colors={['#eaf5ed', '#cde8d5']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <LinearGradient
+          colors={['rgba(255, 255, 255, 0.45)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.4, y: 0.7 }}
+          style={StyleSheet.absoluteFillObject}
+        />
 
         <View style={s.cardBody}>
-          <View style={s.cardHeaderRow}>
+          <View style={s.cardTopContent}>
+            {/* Title & Description */}
             <View style={s.cardHeaderBlock}>
-              <Text style={s.cardTitle}>{plan.name}</Text>
-              <Text style={s.cardTagline}>{plan.description}</Text>
+              <Text style={s.cardTitleLight}>{plan.name}</Text>
+              <Text style={s.cardTaglineLight}>{plan.description}</Text>
             </View>
-            <View style={s.iconCircle}>
-              <Ionicons name={meta.icon} size={22} color={C.primary} />
+
+            {/* Price */}
+            <View style={s.priceRow}>
+              <Text style={s.priceValueLight}>{formatPaise(plan.amount_paise)}</Text>
+              <Text style={s.priceUnitLight}>/{period}</Text>
             </View>
-          </View>
 
-          <View style={s.priceRow}>
-            <Text style={s.priceValue}>{formatPaise(plan.amount_paise)}</Text>
-            <Text style={s.priceUnit}>/{period}</Text>
-          </View>
-
-          <View style={s.features}>
-            {features.map((label, i) => (
-              <View key={`${plan.id}-feature-${i}`} style={s.featureRow}>
-                <View style={s.featureBullet}>
-                  <Ionicons name="checkmark" size={14} color={C.primary} />
+            {/* Feature List */}
+            <View style={s.features}>
+              {features.map((label, i) => (
+                <View key={`${plan.id}-feature-${i}`} style={s.featureRow}>
+                  <View style={s.featureBulletLight}>
+                    <Ionicons name="checkmark" size={13} color="#2f4a37" />
+                  </View>
+                  <Text style={s.featureTextLight}>{label}</Text>
                 </View>
-                <Text style={s.featureText}>{label}</Text>
-              </View>
-            ))}
+              ))}
+            </View>
           </View>
 
+          {/* Primary Shade Capsule CTA Button with "Pay" */}
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
               onContinue();
             }}
-            style={({ pressed }) => [s.cardCta, pressed && { transform: [{ scale: 0.97 }] }]}
+            style={({ pressed }) => [
+              s.cardCtaLight,
+              pressed && { transform: [{ scale: 0.98 }] },
+            ]}
           >
-            <Text style={s.cardCtaText}>Choose {plan.name}</Text>
+            <Text style={s.cardCtaTextLight}>Pay</Text>
           </Pressable>
         </View>
       </View>
@@ -271,7 +277,7 @@ export default function PlansScreen() {
 
   // Back navigation: this screen is reachable from Settings → Manage → View
   // Plans and from the Home locked-state CTAs (pushed), but also as the
-  // cold-start paywall (replaced — no history). Show the back affordance and
+  // cold-start paywall (replaced ,  no history). Show the back affordance and
   // honor hardware back only when there is actually a screen to return to.
   const canGoBack = router.canGoBack();
   const handleBack = () => {
@@ -321,13 +327,13 @@ export default function PlansScreen() {
   }, [monthlyTierA, yearlyTierA]);
 
   // Contextual notice when the user was routed here because their access
-  // lapsed (cold-start gate) — answers "why am I seeing pricing?" politely.
+  // lapsed (cold-start gate) ,  answers "why am I seeing pricing?" politely.
   const accessNotice: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string } | null =
     reason === 'trial_ended'
       ? {
           icon: 'hourglass-outline',
           title: 'Your free trial has ended',
-          body: 'Choose a plan below to resume monitoring — everything is waiting for you.',
+          body: 'Choose a plan below to resume monitoring ,  everything is waiting for you.',
         }
       : reason === 'subscription_ended'
         ? {
@@ -582,255 +588,215 @@ const s = StyleSheet.create({
   cardList: {
     paddingLeft: CARD_INSET,
     paddingRight: 16,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
 
-  cardShadow: {
-    shadowColor: '#363228',
+  cardShadowRec: {
+    shadowColor: '#1b3223',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  cardShadowLight: {
+    shadowColor: '#2f4a37',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.10,
     shadowRadius: 16,
-    elevation: 4,
+    elevation: 3,
   },
   card: {
-    borderRadius: 40,
+    borderRadius: 32,
     overflow: 'hidden',
-    minHeight: 460,
     position: 'relative',
-    backgroundColor: C.surfaceContainer,
   },
   cardRecommended: {
     backgroundColor: '#2f4a37',
   },
+  cardLight: {
+    backgroundColor: '#eaf5ed',
+  },
 
-  recommendedTopRow: {
+  cardBody: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+    zIndex: 2,
+  },
+  cardTopContent: {
+    // Normal content flow
+  },
+
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    minHeight: 28,
+    marginBottom: 16,
   },
   recommendedBadge: {
-    backgroundColor: '#a5d6a7',
+    backgroundColor: '#c5eccc',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 9999,
   },
   recommendedBadgeText: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 10,
-    color: '#1b3d22',
-    letterSpacing: 1,
-  },
-  recommendedIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontSize: 10.5,
+    color: '#1b3223',
+    letterSpacing: 0.8,
   },
 
+  cardHeaderBlock: {
+    marginBottom: 18,
+  },
   cardTitleRec: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 22,
+    fontSize: 24,
     lineHeight: 28,
-    marginBottom: 6,
     color: '#ffffff',
     letterSpacing: -0.4,
   },
   cardTaglineRec: {
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 13,
+    fontSize: 13.5,
     lineHeight: 18,
-    color: '#d1dfd5',
+    color: 'rgba(232, 255, 234, 0.85)',
+    marginTop: 4,
   },
-
-  priceValueRec: {
+  cardTitleLight: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 44,
-    lineHeight: 48,
-    color: '#ffffff',
-    letterSpacing: -1.5,
-    fontVariant: ['tabular-nums'],
-  },
-  priceUnitRec: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 13,
-    color: '#b5cbbb',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-
-  featureBulletRec: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-  },
-  featureTextRec: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#ffffff',
-    flex: 1,
-  },
-
-  cardCtaRec: {
-    height: 52,
-    borderRadius: R.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    backgroundColor: '#ffffff',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  cardCtaTextRec: {
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    color: '#1f3a28',
-  },
-
-  blob: {
-    position: 'absolute',
-    right: -48,
-    top: -48,
-    width: 192,
-    height: 192,
-    borderRadius: 96,
-    backgroundColor: C.surfaceContainerLowest,
-    opacity: 0.5,
-  },
-
-  cardBody: {
-    padding: 28,
-    zIndex: 2,
-  },
-
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: C.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 16,
-    marginBottom: 24,
-  },
-
-  cardHeaderBlock: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  cardTitle: {
-    fontFamily: 'PlusJakartaSans-Light',
-    fontWeight: '300',
-    fontSize: 22,
+    fontSize: 24,
     lineHeight: 28,
-    marginBottom: 6,
-    color: C.onSurface,
+    color: '#1b3223',
     letterSpacing: -0.4,
   },
-
-  cardTagline: {
+  cardTaglineLight: {
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 13,
+    fontSize: 13.5,
     lineHeight: 18,
-    color: C.onSurfaceVariant,
+    color: '#3d5c47',
+    marginTop: 4,
   },
 
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 4,
-    marginBottom: 28,
+    gap: 3,
+    marginBottom: 22,
   },
-  priceValue: {
-    fontFamily: 'PlusJakartaSans-Light',
-    fontSize: 48,
-    lineHeight: 52,
-    color: C.onSurface,
-    letterSpacing: -1.5,
+  priceValueRec: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 40,
+    lineHeight: 44,
+    color: '#ffffff',
+    letterSpacing: -1.2,
     fontVariant: ['tabular-nums'],
   },
-  priceUnit: {
+  priceUnitRec: {
     fontFamily: 'PlusJakartaSans-SemiBold',
-    fontSize: 12,
-    color: C.onSurfaceVariant,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    fontSize: 14,
+    color: 'rgba(232, 255, 234, 0.85)',
+    letterSpacing: 0.2,
+  },
+  priceValueLight: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 40,
+    lineHeight: 44,
+    color: '#1b3223',
+    letterSpacing: -1.2,
+    fontVariant: ['tabular-nums'],
+  },
+  priceUnitLight: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 14,
+    color: '#3d5c47',
+    letterSpacing: 0.2,
   },
 
   features: {
-    gap: 12,
-    marginBottom: 28,
+    gap: 13,
+    marginBottom: 16,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  featureBullet: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  featureBulletRec: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    backgroundColor: C.surfaceContainerLow,
-    shadowColor: '#363228',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
   },
-  featureText: {
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 13,
+  featureTextRec: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 13.5,
     lineHeight: 18,
-    color: C.onSurface,
+    color: '#ffffff',
+    flex: 1,
+  },
+  featureBulletLight: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: 'rgba(47, 74, 55, 0.12)',
+  },
+  featureTextLight: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 13.5,
+    lineHeight: 18,
+    color: '#1b3223',
     flex: 1,
   },
 
-  cardCta: {
-    height: 52,
-    borderRadius: R.full,
+  cardCtaRec: {
+    height: 50,
+    borderRadius: 9999,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    backgroundColor: C.primary,
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    elevation: 6,
+    marginTop: 20,
+    marginBottom: 6,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  cardCtaText: {
+  cardCtaTextRec: {
     fontFamily: 'PlusJakartaSans-Bold',
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    color: C.onPrimary,
+    fontSize: 15,
+    color: '#1b3223',
+    letterSpacing: 0.3,
+  },
+  cardCtaLight: {
+    height: 50,
+    borderRadius: 9999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    marginTop: 20,
+    marginBottom: 6,
+    backgroundColor: '#2f4a37',
+    shadowColor: '#2f4a37',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.20,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardCtaTextLight: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 15,
+    color: '#ffffff',
+    letterSpacing: 0.3,
   },
 
   errorBox: {

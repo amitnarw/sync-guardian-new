@@ -94,7 +94,7 @@ serve(async (req) => {
       // caller, so a forged child_device_id cannot trigger this UPDATE.
       // If we can't re-confirm the pair exists and is active (e.g. it
       // was revoked between the ownership check and now), skip the
-      // UPDATE entirely — better to leave a stale token than to wipe
+      // UPDATE entirely ,  better to leave a stale token than to wipe
       // a valid one through a chained query that may have misfired.
       const { data: livePair } = await adminClient
         .from('pairs')

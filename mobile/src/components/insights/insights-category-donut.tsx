@@ -40,7 +40,6 @@ export function InsightsCategoryDonut({ slices, total }: InsightsCategoryDonutPr
     <InsightCard
       title="Where attention goes"
       subtitle={topCategory ? `${CATEGORY_LABELS[topCategory.category]} represents ${topCategory.percent}% of activity` : 'Category breakdown'}
-      icon="pie-chart-outline"
     >
       <View style={s.cardBody}>
         {/* Top Hero Row (Exact Layout of Image 2) */}
@@ -154,8 +153,6 @@ const s = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(47, 74, 55, 0.08)',
   },
   categoryPill: {
     flexDirection: 'row',

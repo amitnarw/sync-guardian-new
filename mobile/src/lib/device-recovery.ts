@@ -22,7 +22,7 @@ function mask(id: string | null | undefined): string {
  * the parent pairs a child. If the parent reinstalls the app, clears app
  * data, or installs the latest APK in a way that resets the persisted
  * `deviceId`, the in-memory `deviceId` will no longer match any active
- * pair — even though the parent still has an active pair in the database
+ * pair ,  even though the parent still has an active pair in the database
  * under a previous device record.
  *
  * `loadAllChildren()` and `get-notifications` both filter by
@@ -43,7 +43,7 @@ export async function resolveParentDeviceId(
   if (!isValidUUID(userId)) return null;
 
   // Fast path: current deviceId is already valid and points at an active
-  // pair — no recovery needed.
+  // pair ,  no recovery needed.
   if (isValidUUID(currentDeviceId)) {
     const { data: matches, error: matchErr } = await supabase
       .from('pairs')
@@ -109,7 +109,7 @@ export async function resolveParentDeviceId(
  *
  * Recovery: if the persisted deviceId is not referenced by any active
  * pair for this user, find the child device row that IS referenced and
- * return its id. Returns null when no active pair exists yet — the caller
+ * return its id. Returns null when no active pair exists yet ,  the caller
  * treats that as "needs pairing" and lets the regular onboarding flow
  * generate a fresh device id.
  */

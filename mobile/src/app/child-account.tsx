@@ -192,7 +192,7 @@ export default function ChildAccountScreen() {
   const child = children[selectedIndex];
   const isOnline = child?.is_foreground || (child?.last_seen_at && (Date.now() - new Date(child.last_seen_at).getTime() < 120000));
   const lastSeenText = isOnline ? 'Online' : child?.last_seen_at ? `Last seen ${formatTimeAgo(new Date(child.last_seen_at).getTime())}` : 'Offline';
-  const pairedDate = child?.created_at ? new Date(child.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const pairedDate = child?.created_at ? new Date(child.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ', ';
   const hasMultiple = children.length > 1;
 
   return (

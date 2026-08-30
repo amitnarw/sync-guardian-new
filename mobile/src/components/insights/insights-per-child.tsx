@@ -21,7 +21,6 @@ export function InsightsPerChild({ entries }: InsightsPerChildProps) {
     <InsightCard
       title="Activity by child"
       subtitle="Comparison across all paired devices"
-      icon="people-outline"
     >
       <View style={s.list}>
         {sorted.map((entry) => {

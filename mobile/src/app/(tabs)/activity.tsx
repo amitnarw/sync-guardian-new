@@ -3,6 +3,12 @@ import { StyleSheet, View, Text, RefreshControl, TouchableOpacity, ScrollView, T
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  interpolateColor,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { ThemedView } from '@/components/themed-view';
 import { EdgeFadeScrollView } from '@/components/ui/edge-fade';
 import { usePairData } from '@/hooks/use-pair-data';
@@ -47,6 +53,13 @@ type Group = {
   items: AggregatedNotification[];
 };
 
+type SegmentDescriptor = {
+  id: string;
+  top: number;
+  height: number;
+  colors: [string, string];
+};
+
 export default function ActivityScreen() {
   const { allChildren, refresh, isRefreshing: pairIsRefreshing } = usePairData();
   const selectedChildId = useAuthStore((s) => s.selectedChildId);
@@ -60,7 +73,14 @@ export default function ActivityScreen() {
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<MoreNotificationsCursor | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [scrollY, setScrollY] = useState(0);
+
+  // Native-driven scroll offset (UI thread). The EdgeFadeScrollView writes to
+  // this SharedValue on every scroll frame, and downstream animations read it
+  // without causing React re-renders.
+  const scrollY = useSharedValue(0);
+  // Native-driven viewport height for the scroll view. Used to pin the timeline
+  // playhead to the middle of the visible area.
+  const viewportHeight = useSharedValue(0);
 
   const allChildrenKey = allChildren.map((c) => c.childUserId).join(',');
   const mountedRef = useRef(true);
@@ -119,8 +139,6 @@ export default function ActivityScreen() {
         selectedChildId: expectedSelection,
         cursor: nextCursor,
       });
-      // Discard stale result if the user switched selection while the
-      // request was in flight.
       if (requestId !== loadMoreRequestIdRef.current) return;
       if (!mountedRef.current) return;
       const currentSelection = useAuthStore.getState().selectedChildId;
@@ -164,6 +182,38 @@ export default function ActivityScreen() {
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
   const [customStartTime, setCustomStartTime] = useState('00:00');
   const [customEndTime, setCustomEndTime] = useState('23:59');
+
+  // Icon positions reported by each ChildGroupSection, keyed by groupKey.
+  // Stored in a SharedValue so updates do NOT cause React re-renders of
+  // ActivityScreen. The PlayheadBead reads it directly inside its worklets.
+  const groupPositionsRef = useRef<Map<string, IconPosition[]>>(new Map());
+  const iconPositionsValue = useSharedValue<BeadPositions>({
+    positions: [],
+    colors: [],
+    maxIconY: null,
+  });
+
+  const handleIconPositions = useCallback(
+    (groupKey: string, positions: IconPosition[] | null) => {
+      const map = groupPositionsRef.current;
+      if (positions === null) {
+        if (map.has(groupKey)) {
+          map.delete(groupKey);
+        }
+      } else {
+        map.set(groupKey, positions);
+      }
+      const flat: IconPosition[] = [];
+      map.forEach((arr) => arr.forEach((p) => flat.push(p)));
+      flat.sort((a, b) => a.y - b.y);
+      iconPositionsValue.value = {
+        positions: flat.map((p) => p.y),
+        colors: flat.map((p) => p.accent),
+        maxIconY: flat.length > 0 ? flat[flat.length - 1].y : null,
+      };
+    },
+    [iconPositionsValue],
+  );
 
   const openAppDropdown = () => {
     setShowAppSelector(true);
@@ -304,12 +354,19 @@ export default function ActivityScreen() {
       <EdgeFadeScrollView
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
-        onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
+        scrollOffset={scrollY}
+        viewportHeight={viewportHeight}
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={isRefreshing || pairIsRefreshing} onRefresh={doRefresh} colors={[C.primary]} tintColor={C.primary} />
         }
       >
+        <PlayheadBead
+          scrollY={scrollY}
+          viewportHeight={viewportHeight}
+          iconPositionsValue={iconPositionsValue}
+        />
+
         <View style={s.heroSection}>
           <LinearGradient
             colors={[C.primaryDeep, C.primary]}
@@ -632,20 +689,26 @@ export default function ActivityScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <View>
-            {groups.map((group) => (
-              <ChildGroupSection
-                key={group.child?.pairId ?? 'single'}
-                group={group}
-                firstIconY={group === groups[0] ? firstIconY : null}
-                lastIconY={group === groups[groups.length - 1] ? lastIconY : null}
-                setFirstIconY={group === groups[0] ? setFirstIconY : () => undefined}
-                setLastIconY={group === groups[groups.length - 1] ? setLastIconY : () => undefined}
-                isFirstGroup={group === groups[0]}
-                isLastGroup={group === groups[groups.length - 1]}
-                scrollY={scrollY}
-              />
-            ))}
+          <React.Fragment>
+            {groups.map((group) => {
+              const groupKey = group.child?.pairId ?? 'single';
+              return (
+                <ChildGroupSection
+                  key={groupKey}
+                  group={group}
+                  groupKey={groupKey}
+                  firstIconY={group === groups[0] ? firstIconY : null}
+                  lastIconY={group === groups[groups.length - 1] ? lastIconY : null}
+                  setFirstIconY={group === groups[0] ? setFirstIconY : () => undefined}
+                  setLastIconY={group === groups[groups.length - 1] ? setLastIconY : () => undefined}
+                  isFirstGroup={group === groups[0]}
+                  isLastGroup={group === groups[groups.length - 1]}
+                  scrollY={scrollY}
+                  viewportHeight={viewportHeight}
+                  onIconPositions={handleIconPositions}
+                />
+              );
+            })}
             {hasMore && (!selectedPackage || filtered.length >= 50) ? (
               <View style={s.loadMoreSection}>
                 <TouchableOpacity
@@ -672,7 +735,7 @@ export default function ActivityScreen() {
                 </View>
               </View>
             ) : null}
-          </View>
+          </React.Fragment>
         )}
 
         <View style={s.bottomSpacer} />
@@ -689,34 +752,27 @@ interface ChildGroupSectionProps {
   setLastIconY: (y: number | null) => void;
   isFirstGroup: boolean;
   isLastGroup: boolean;
-  scrollY: number;
+  scrollY: SharedValue<number>;
+  viewportHeight: SharedValue<number>;
+  onIconPositions: (
+    groupKey: string,
+    positions: { y: number; accent: string }[] | null,
+  ) => void;
+  groupKey: string;
 }
 
-function interpolateRgb(hex1: string, hex2: string, ratio: number): string {
-  const f = Math.max(0, Math.min(1, ratio));
-  const parseHex = (hex: string) => {
-    let clean = hex.replace('#', '');
-    if (clean.length === 3) {
-      clean = clean.split('').map((c) => c + c).join('');
-    }
-    const num = parseInt(clean, 16);
-    if (isNaN(num)) return { r: 47, g: 74, b: 55 };
-    return {
-      r: (num >> 16) & 255,
-      g: (num >> 8) & 255,
-      b: num & 255,
-    };
-  };
-
-  const c1 = parseHex(hex1);
-  const c2 = parseHex(hex2);
-  const r = Math.round(c1.r + (c2.r - c1.r) * f);
-  const g = Math.round(c1.g + (c2.g - c1.g) * f);
-  const b = Math.round(c1.b + (c2.b - c1.b) * f);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-function ChildGroupSection({
+/**
+ * A native-driven timeline renderer.
+ *
+ * - The colored fill extends from the first icon up to the playhead position
+ *   (the vertical center of the viewport). The clip container's height is
+ *   animated on the UI thread.
+ * - The bead is rendered as a single global overlay by `ActivityScreen`, not
+ *   per-group, so it stays pinned at the middle of the screen even when
+ *   multiple groups are present.
+ * - All scroll-driven updates run on the UI thread for 60fps motion.
+ */
+const ChildGroupSection = React.memo(function ChildGroupSection({
   group,
   firstIconY,
   lastIconY,
@@ -725,168 +781,165 @@ function ChildGroupSection({
   isFirstGroup,
   isLastGroup,
   scrollY,
+  viewportHeight,
+  onIconPositions,
+  groupKey,
 }: ChildGroupSectionProps) {
   const { items } = group;
-  const [iconYMap, setIconYMap] = useState<Record<number, number>>({});
+  // Live icon Y map kept in a ref to avoid record allocation on each layout.
+  const iconYMapRef = useRef<Record<number, number>>({});
+  // Bump a tiny counter when layouts settle so colored segments and the
+  // parent callback can re-run without copying the whole record.
+  const [layoutVersion, setLayoutVersion] = useState(0);
+  const pendingLayoutRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
 
-  // Active scroll tracking & bead position
-  const activeData = useMemo(() => {
-    if (items.length === 0) return null;
-    const firstY = iconYMap[0] ?? (firstIconY ?? 22);
-    const lastY = iconYMap[items.length - 1] ?? (lastIconY ?? 22);
+  // Resolved first/last icon centers within this group's timeline container.
+  const resolvedFirstIconY = firstIconY ?? 22;
+  const resolvedLastIconY = lastIconY ?? null;
 
-    // Initial position before user scrolls: bead stays precisely at first icon
-    const scrollDistance = Math.max(0, scrollY);
-    const clampedBeamY = Math.min(lastY, firstY + scrollDistance);
+  // Native-driven Y position of this group's OUTER view relative to the
+  // scroll content. The outer group View is rendered as a direct child of
+  // the EdgeFadeScrollView content, so its layout.y IS the scroll-content
+  // coordinate we need for the playhead math.
+  const groupTopY = useSharedValue(0);
+  const groupTopYStateRef = useRef(0);
 
-    // Find the segment [i, i+1] that currently contains clampedBeamY
-    let currentColor = getSourceTheme(items[0]?.source_package).accent;
-
-    for (let i = 0; i < items.length - 1; i++) {
-      const y1 = iconYMap[i];
-      const y2 = iconYMap[i + 1];
-      if (y1 !== undefined && y2 !== undefined && y2 > y1) {
-        if (clampedBeamY >= y1 && clampedBeamY <= y2) {
-          const ratio = (clampedBeamY - y1) / (y2 - y1);
-          const c1 = getSourceTheme(items[i].source_package).accent;
-          const c2 = getSourceTheme(items[i + 1].source_package).accent;
-          currentColor = interpolateRgb(c1, c2, ratio);
-          break;
-        } else if (clampedBeamY > y2) {
-          currentColor = getSourceTheme(items[i + 1]?.source_package).accent;
-        }
-      }
+  const reportPositions = useCallback(() => {
+    const top = groupTopYStateRef.current;
+    const localMap = iconYMapRef.current;
+    const positions: { y: number; accent: string }[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const local = localMap[i];
+      if (local === undefined) continue;
+      positions.push({
+        y: local + top,
+        accent: getSourceTheme(items[i].source_package).accent,
+      });
     }
+    positions.sort((a, b) => a.y - b.y);
+    onIconPositions(groupKey, positions.length > 0 ? positions : null);
+  }, [items, groupKey, onIconPositions]);
 
-    return {
-      beamY: clampedBeamY,
-      firstY,
-      lastY,
-      currentColor,
-      isScrolled: scrollDistance > 4,
-    };
-  }, [items, iconYMap, scrollY, firstIconY, lastIconY]);
+  // Schedule a single layout-pass commit per frame. Many item onLayout
+  // callbacks can fire in the same frame; we coalesce them into one state
+  // update and one parent notification per frame.
+  const scheduleLayoutCommit = useCallback(() => {
+    if (pendingLayoutRef.current) return;
+    pendingLayoutRef.current = true;
+    rafRef.current = requestAnimationFrame(() => {
+      pendingLayoutRef.current = false;
+      rafRef.current = null;
+      setLayoutVersion((v) => v + 1);
+      reportPositions();
+    });
+  }, [reportPositions]);
 
-  // Compute filled connecting segments (ONLY above the bead)
-  const filledSegments = useMemo(() => {
-    if (items.length < 2 || !activeData || !activeData.isScrolled) return [];
-    const segs: {
-      key: string;
-      top: number;
-      height: number;
-      colors: [string, string];
-    }[] = [];
-
-    const { beamY } = activeData;
-
+  // Static segments (the colored fill between consecutive icons). Rendered
+  // with full extent and clipped by the parent Animated.View whose height
+  // is driven natively. Recomputed only when layout commits settle.
+  const coloredSegments: SegmentDescriptor[] = useMemo(() => {
+    if (items.length < 2) return [];
+    const segs: SegmentDescriptor[] = [];
+    const localMap = iconYMapRef.current;
     for (let i = 0; i < items.length - 1; i++) {
-      const y1 = iconYMap[i];
-      const y2 = iconYMap[i + 1];
+      const y1 = localMap[i];
+      const y2 = localMap[i + 1];
       if (y1 === undefined || y2 === undefined || y2 <= y1) continue;
-
-      // If beam hasn't reached this segment yet, keep it muted (do not render colored overlay)
-      if (beamY <= y1) break;
-
       const c1 = getSourceTheme(items[i].source_package).accent;
       const c2 = getSourceTheme(items[i + 1].source_package).accent;
-
-      if (beamY >= y2) {
-        // Fully passed segment: full height from y1 to y2
-        segs.push({
-          key: `seg-full-${items[i].id}-${items[i + 1].id}`,
-          top: y1,
-          height: y2 - y1,
-          colors: [c1, c2],
-        });
-      } else {
-        // Partially passed segment containing the bead: fill from y1 up to beamY
-        const ratio = (beamY - y1) / (y2 - y1);
-        const interpolatedColor = interpolateRgb(c1, c2, ratio);
-        segs.push({
-          key: `seg-partial-${items[i].id}-${items[i + 1].id}`,
-          top: y1,
-          height: beamY - y1,
-          colors: [c1, interpolatedColor],
-        });
-        break; // Everything below beamY stays completely muted
-      }
+      segs.push({
+        id: `seg-${items[i].id}-${items[i + 1].id}`,
+        top: y1,
+        height: y2 - y1,
+        colors: [c1, c2],
+      });
     }
-
     return segs;
-  }, [items, iconYMap, activeData]);
+    // layoutVersion triggers recompute; we read iconYMapRef.current inside.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, layoutVersion]);
+
+  // Animated style: the colored fill container extends from the top of the
+  // timeline container down to the current playhead position. The clip
+  // container is at top: 0, so its height is exactly the playhead's local Y
+  // (clamped to [0, lastIconY]). Static segments inside start at their own
+  // icon Y, so the visible colored line naturally begins at the first icon
+  // and ends exactly at the playhead.
+  const fillAnimatedStyle = useAnimatedStyle(() => {
+    const last = resolvedLastIconY;
+    if (last === null) {
+      return { height: 0 };
+    }
+    const playheadY = scrollY.value + viewportHeight.value * 0.5;
+    const localPlayhead = playheadY - groupTopY.value;
+    const fillHeight = Math.max(0, Math.min(last, localPlayhead));
+    return {
+      height: fillHeight,
+    };
+  }, [resolvedLastIconY]);
+
+  // Cancel any pending RAF when this section unmounts.
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
 
   return (
-    <View>
+    <View
+      onLayout={(e) => {
+        const y = e.nativeEvent.layout.y;
+        groupTopY.value = y;
+        groupTopYStateRef.current = y;
+        scheduleLayoutCommit();
+      }}
+    >
       <View style={stylesLocal.timelineContainer}>
         {/* Subtle base track line (always visible & muted by default) */}
         {items.length > 1 && (
           <View
             style={[
               stylesLocal.timelineBaseTrack,
-              isFirstGroup && firstIconY !== null && isLastGroup && lastIconY !== null
-                ? { top: firstIconY, height: lastIconY - firstIconY }
-                : isFirstGroup && firstIconY !== null && !isLastGroup
-                  ? { top: firstIconY, height: undefined, bottom: 26 }
-                  : !isFirstGroup && isLastGroup && lastIconY !== null
-                    ? { top: 26, bottom: undefined, height: lastIconY }
-                    : { top: 26, bottom: 26 },
+              resolvedLastIconY !== null
+                ? { top: resolvedFirstIconY, height: resolvedLastIconY - resolvedFirstIconY }
+                : { top: 22, bottom: 22 },
             ]}
           />
         )}
 
-        {/* Multi-brand colored liquid segments (ONLY above the bead) */}
-        {filledSegments.map((seg) => (
-          <View
-            key={seg.key}
-            style={[
-              stylesLocal.timelineSegment,
-              {
-                top: seg.top,
-                height: seg.height,
-              },
-            ]}
+        {/* Colored fill: animated clip container. Children are static colored
+            segments rendered at full extent; the wrapper clips them based on
+            the current playhead position via `fillAnimatedStyle`. */}
+        {items.length > 1 && (
+          <Animated.View
+            style={[stylesLocal.timelineFillClip, fillAnimatedStyle]}
             pointerEvents="none"
           >
-            <LinearGradient
-              colors={seg.colors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-          </View>
-        ))}
-
-        {/* Scroll-driven bead & top trailing glow (only when scrolled) */}
-        {activeData && items.length > 1 && activeData.isScrolled && (
-          <View
-            style={[
-              stylesLocal.beadContainer,
-              {
-                top: activeData.beamY - 6,
-              },
-            ]}
-            pointerEvents="none"
-          >
-            {/* Soft trailing upward light beam (no glow below) */}
-            <LinearGradient
-              colors={['transparent', activeData.currentColor]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={stylesLocal.beadTrailGlow}
-            />
-            {/* Glowing Bead */}
-            <View
-              style={[
-                stylesLocal.beadCircle,
-                {
-                  backgroundColor: activeData.currentColor,
-                  shadowColor: activeData.currentColor,
-                },
-              ]}
-            >
-              <View style={stylesLocal.beadInnerDot} />
-            </View>
-          </View>
+            {coloredSegments.map((seg) => (
+              <View
+                key={seg.id}
+                style={[
+                  stylesLocal.timelineSegment,
+                  {
+                    top: seg.top,
+                    height: seg.height,
+                  },
+                ]}
+                pointerEvents="none"
+              >
+                <LinearGradient
+                  colors={seg.colors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+              </View>
+            ))}
+          </Animated.View>
         )}
 
         {items.map((n, idx) => {
@@ -903,12 +956,7 @@ function ChildGroupSection({
             n.source_package &&
             (n.source_package.includes('facebook') || n.source_package.includes('orca'));
           const theme = getSourceTheme(n.source_package);
-          const itemY = iconYMap[idx];
-          const isNearBead =
-            activeData &&
-            activeData.isScrolled &&
-            itemY !== undefined &&
-            Math.abs(activeData.beamY - itemY) < 24;
+          const isNearBead = false;
 
           return (
             <React.Fragment key={n.id}>
@@ -946,7 +994,11 @@ function ChildGroupSection({
                 style={stylesLocal.activityRow}
                 onLayout={(e) => {
                   const y = e.nativeEvent.layout.y + 22;
-                  setIconYMap((prev) => (prev[idx] === y ? prev : { ...prev, [idx]: y }));
+                  if (iconYMapRef.current[idx] !== y) {
+                    // Mutate the ref directly to avoid record allocation.
+                    iconYMapRef.current[idx] = y;
+                    scheduleLayoutCommit();
+                  }
                   if (isFirstInList) setFirstIconY(y);
                   if (isLastInList) setLastIconY(y);
                 }}
@@ -976,7 +1028,114 @@ function ChildGroupSection({
       </View>
     </View>
   );
+});
+
+interface IconPosition {
+  y: number;
+  accent: string;
 }
+
+interface BeadPositions {
+  positions: number[];
+  colors: string[];
+  maxIconY: number | null;
+}
+
+interface PlayheadBeadProps {
+  scrollY: SharedValue<number>;
+  viewportHeight: SharedValue<number>;
+  iconPositionsValue: SharedValue<BeadPositions>;
+}
+
+/**
+ * Global playhead bead overlay, rendered outside the ScrollView so it stays
+ * pinned to the vertical center of the screen regardless of scroll position.
+ * Color is interpolated across all icons in the timeline based on the icon
+ * nearest the playhead.
+ *
+ * The bead is hidden (instantly) once the playhead scrolls past the last
+ * icon, so it never floats in empty space below the timeline.
+ */
+function PlayheadBead({ scrollY, viewportHeight, iconPositionsValue }: PlayheadBeadProps) {
+  // Container style: pins the bead to the vertical center of the viewport
+  // and snaps its opacity to 0 the instant the playhead scrolls past the
+  // last icon (so the bead never appears below the timeline).
+  const containerAnimatedStyle = useAnimatedStyle(() => {
+    const center = viewportHeight.value * 0.5;
+    const translateY = scrollY.value + center - 7;
+    const playheadY = scrollY.value + center;
+    const maxIconY = iconPositionsValue.value.maxIconY;
+    const visible =
+      maxIconY === null || playheadY <= maxIconY + 8;
+    return {
+      transform: [{ translateY }],
+      opacity: visible ? 1 : 0,
+    };
+  });
+
+  // Circle style: only animates backgroundColor / shadowColor. Reads
+  // positions/colors directly from the SharedValue each frame; no React state
+  // involvement.
+  const circleAnimatedStyle = useAnimatedStyle(() => {
+    const center = viewportHeight.value * 0.5;
+    const playheadY = scrollY.value + center;
+    const { positions, colors } = iconPositionsValue.value;
+    const color =
+      positions.length > 0
+        ? interpolateColor(playheadY, positions, colors)
+        : C.primary;
+    return {
+      backgroundColor: color,
+      shadowColor: color,
+    };
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[playheadStyles.container, containerAnimatedStyle]}
+    >
+      <Animated.View style={[playheadStyles.circle, circleAnimatedStyle]}>
+        <View style={playheadStyles.innerDot} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+const playheadStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    // Timeline line center sits at ~34px from screen left
+    // (24 scroll content padding + 8 timelineContainer margin + 2 line offset).
+    // Bead width is 14, so left: 27 centers it on the line.
+    top: 0,
+    left: 27,
+    width: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  circle: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.95,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  innerDot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: '#ffffff',
+  },
+});
 
 const stylesLocal = StyleSheet.create({
   timelineContainer: {
@@ -991,8 +1150,16 @@ const stylesLocal = StyleSheet.create({
     bottom: 0,
     width: 2,
     backgroundColor: C.surfaceContainerHigh,
-    zIndex: 0,
+    zIndex: 1,
     borderRadius: 1,
+  },
+  timelineFillClip: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    zIndex: 1,
+    overflow: 'hidden',
   },
   timelineSegment: {
     position: 'absolute',
@@ -1256,7 +1423,9 @@ const s = StyleSheet.create({
     color: C.primary,
   },
   bottomSpacer: {
-    height: 160,
+    // Extra padding so the last notification icon can be scrolled up to
+    // the viewport middle (where the playhead bead is fixed).
+    height: 267,
   },
 
   /* Load More Section - Flat, Sleek, Minimalist */

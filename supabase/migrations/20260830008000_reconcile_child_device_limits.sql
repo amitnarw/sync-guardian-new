@@ -9,7 +9,7 @@
 -- enforcement can be silently skipped under contention.
 --
 -- This migration adds:
---   1. reconcile_child_device_limits() — bulk re-enforcement for
+--   1. reconcile_child_device_limits() ,  bulk re-enforcement for
 --      every parent who currently has any active/pending pair.
 --   2. A scheduled invocation via pg_cron (every 10 minutes) when
 --      the extension is enabled. In Supabase projects where

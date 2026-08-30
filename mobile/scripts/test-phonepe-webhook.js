@@ -150,7 +150,7 @@ async function main() {
   if (res3.status !== 401 || /UNAUTHORIZED_NO_AUTH_HEADER/.test(await res3.clone().text().catch(() => ''))) {
     // We sent a payload so status is now 400 (missing identifier), proving
     // the JWT check is bypassed.
-    console.log('   \x1b[32mOK\x1b[0m (JWT check bypassed — webhook reachable without Authorization)\n');
+    console.log('   \x1b[32mOK\x1b[0m (JWT check bypassed ,  webhook reachable without Authorization)\n');
   } else {
     console.log('   \x1b[31mFAIL\x1b[0m (still rejecting without Authorization)\n');
   }

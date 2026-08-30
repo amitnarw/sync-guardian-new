@@ -11,7 +11,7 @@ const HEADLESS_TASK_NAME = 'RNAndroidNotificationListenerHeadlessJs';
 
 // Expand a parsed notification into 0..N message lines to mirror.
 // Group-summary notifications are expanded per line (via text_lines).
-// Group children still carry individual message content — don't skip them,
+// Group children still carry individual message content ,  don't skip them,
 // because many apps (Gmail, WhatsApp) only re-post the summary for the first
 // notification; subsequent arrivals only trigger child notifications.
 // The content-hash dedup key naturally collapses true duplicates that
@@ -60,7 +60,7 @@ async function sha256Hex(input: string): Promise<string> {
 //
 // Why content-based and not the Android notification instance key:
 //   Apps like WhatsApp / Gmail / Telegram emit the same message in two
-//   different Android notifications — a group summary whose text_lines
+//   different Android notifications ,  a group summary whose text_lines
 //   contain the message, and an individual child notification for the same
 //   message. Each has a different `StatusBarNotification.key` and the
 //   `parsed.time` fields can differ by 1-15ms. Instance-based dedup keys
@@ -190,7 +190,7 @@ async function processNotification(json: string): Promise<void> {
     // BUFFER the notification so it can be replayed once the state
     // resolves. This prevents a data-loss window between auth hydration
     // and subscription hydration. If access is definitively false
-    // (trial expired / subscription cancelled) we drop — the server
+    // (trial expired / subscription cancelled) we drop ,  the server
     // makes the same call authoritatively and a buffered row would
     // just be rejected later anyway.
     //

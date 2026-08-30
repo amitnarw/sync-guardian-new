@@ -523,7 +523,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Hidden developer diagnostics — tap version 7× */}
+            {/* Hidden developer diagnostics ,  tap version 7× */}
             {showDevPanel ? (
               <DevInfoPanel role="parent" />
             ) : (

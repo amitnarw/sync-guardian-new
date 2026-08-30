@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { AuthColors, AuthFonts, AuthRadius, AuthShadows, AuthSpacing } from '@/constants/auth-theme';
 import { AppIcon } from '@/components/app-icon';
 import type { SocialMediaStats, SleepDisruptionStats } from '@/lib/notification-analytics';
@@ -25,9 +24,6 @@ export function InsightsSocialSleep({ social, sleep }: InsightsSocialSleepProps)
     <View style={s.row}>
       <View style={[s.tile, s.tileLeft]}>
         <View style={s.tileHeader}>
-          <View style={s.tileIconWrap}>
-            <Ionicons name="people-outline" size={16} color={AuthColors.primary} />
-          </View>
           <Text style={s.tileTitle}>Social</Text>
         </View>
         <Text style={s.tileValue}>{social.socialCount}</Text>
@@ -53,9 +49,6 @@ export function InsightsSocialSleep({ social, sleep }: InsightsSocialSleepProps)
 
       <View style={[s.tile, s.tileRight]}>
         <View style={s.tileHeader}>
-          <View style={[s.tileIconWrap, { backgroundColor: AuthColors.secondaryContainer }]}>
-            <Ionicons name="moon-outline" size={16} color={AuthColors.secondary} />
-          </View>
           <Text style={s.tileTitle}>Sleep</Text>
         </View>
         <Text style={s.tileValue}>{sleep.lateNightCount}</Text>

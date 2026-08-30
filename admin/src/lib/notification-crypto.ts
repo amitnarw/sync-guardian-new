@@ -63,7 +63,7 @@ async function encryptPlaintext(
 /**
  * Thrown when AES-GCM decryption fails. Mirrors the edge function's
  * `DecryptionError` so dashboard callers can decide whether to skip the
- * row or fail the request — we never silently leak "nv1:..." blobs to
+ * row or fail the request ,  we never silently leak "nv1:..." blobs to
  * the admin UI.
  */
 export class DecryptionError extends Error {

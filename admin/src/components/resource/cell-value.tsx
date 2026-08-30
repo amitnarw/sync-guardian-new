@@ -40,7 +40,7 @@ function CopyButton({ value }: { value: string }) {
 }
 
 export function BooleanBadge({ value }: { value: unknown }) {
-  if (value === null || value === undefined) return <span className="text-muted-foreground">—</span>;
+  if (value === null || value === undefined) return <span className="text-muted-foreground">, </span>;
   const on = Boolean(value);
   return (
     <Badge variant="outline" className={on ? "border-emerald-300 text-emerald-700" : "text-muted-foreground"}>
@@ -50,7 +50,7 @@ export function BooleanBadge({ value }: { value: unknown }) {
   );
 }
 
-/** Distinct solid badges per role — recognizable by icon + color at a glance. */
+/** Distinct solid badges per role ,  recognizable by icon + color at a glance. */
 const ROLE_META: Record<string, { className: string; Icon: LucideIcon }> = {
   parent: { className: "bg-primary text-primary-foreground", Icon: UserRound },
   child: { className: "bg-[#c9eea9] text-[#0b2000]", Icon: Baby },
@@ -69,7 +69,7 @@ function RoleBadge({ label, meta }: { label: string; meta: { className: string; 
 export function SelectBadge({ field, row }: { field: FieldConfig; row: Record<string, unknown> }) {
   const raw = row[field.name];
   if (raw === null || raw === undefined || raw === "") {
-    return <span className="text-muted-foreground">—</span>;
+    return <span className="text-muted-foreground">, </span>;
   }
   const value = String(raw);
   const label = field.options?.find((o) => o.value === value)?.label ?? value;
@@ -100,7 +100,7 @@ export function CellValue({
     case "select":
       return <SelectBadge field={field} row={row} />;
     case "datetime": {
-      if (!value) return <span className="text-muted-foreground">—</span>;
+      if (!value) return <span className="text-muted-foreground">, </span>;
       return (
         <span title={formatRelative(value as string)}>{formatDate(value as string)}</span>
       );
@@ -108,11 +108,11 @@ export function CellValue({
     case "money-paise":
       return <span className="tabular-nums">{formatPaise(value as number)}</span>;
     case "number":
-      if (value === null || value === undefined) return <span className="text-muted-foreground">—</span>;
+      if (value === null || value === undefined) return <span className="text-muted-foreground">, </span>;
       return <span className="tabular-nums">{Number(value).toLocaleString()}</span>;
     case "textarea": {
       const text = value == null || value === "" ? "" : String(value);
-      if (!text) return <span className="text-muted-foreground">—</span>;
+      if (!text) return <span className="text-muted-foreground">, </span>;
       if (compact) {
         return (
           <span className="block max-w-[280px] truncate text-muted-foreground" title={text}>
@@ -124,7 +124,7 @@ export function CellValue({
     }
     case "json": {
       const json = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-      if (!json || json === "null") return <span className="text-muted-foreground">—</span>;
+      if (!json || json === "null") return <span className="text-muted-foreground">, </span>;
       if (compact) return <code className="font-mono text-xs">{shortId(json)}</code>;
       return (
         <pre className="max-h-[420px] overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
@@ -138,7 +138,7 @@ export function CellValue({
 
   // Plain text-ish fields
   const str = value == null || value === "" ? null : String(value);
-  if (!str) return <span className="text-muted-foreground">—</span>;
+  if (!str) return <span className="text-muted-foreground">, </span>;
 
   if (str.startsWith("nv1:")) {
     return (

@@ -9,7 +9,7 @@ export function shortId(id?: string | null): string {
 }
 
 export function formatDate(value?: string | null): string {
-  if (!value) return "—";
+  if (!value) return ", ";
   const d = dayjs(value);
   return d.isValid() ? d.format("MMM D, YYYY HH:mm") : String(value);
 }
@@ -21,7 +21,7 @@ export function formatRelative(value?: string | null): string {
 }
 
 export function formatPaise(paise?: number | null): string {
-  if (paise === null || paise === undefined) return "—";
+  if (paise === null || paise === undefined) return ", ";
   return `₹${(paise / 100).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

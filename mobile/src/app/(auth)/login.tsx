@@ -202,7 +202,7 @@ export default function LoginScreen() {
     }
     // Stale-row immunity: a pairs row only exists after a token claim, so
     // its presence at a pre-pairing step means the onboarding_state row went
-    // stale — never funnel an already-paired user back into /pairing.
+    // stale ,  never funnel an already-paired user back into /pairing.
     const stalePrePairingStep =
       !!state.has_active_pair &&
       ['role_selection', 'permissions', 'pairing'].includes(state.onboarding_step);

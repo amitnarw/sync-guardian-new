@@ -8,27 +8,28 @@ const { withProjectBuildGradle } = require('@expo/config-plugins');
 
 const PHONEPE_MAVEN = `        maven { url 'https://phonepe.mycloudrepo.io/public/repositories/phonepe-intentsdk-android' }`;
 
-function addPhonePeMavenRepo(buildGradle) {
-  if (buildGradle.modResults.contents.includes('phonepe-intentsdk-android')) {
-    return buildGradle;
+function addPhonePeMavenRepo(contents) {
+  if (contents.includes('phonepe-intentsdk-android')) {
+    return contents;
   }
 
   // Insert into the `allprojects { repositories { ... } }` block after
   // mavenCentral(), mirroring what the PhonePe docs instruct.
-  const contents = buildGradle.modResults.contents.replace(
-    /(allprojects\s*\{\s*repositories\s*\{\s*mavenCentral\(\))/,
-    `$1\n${PHONEPE_MAVEN}`,
-  );
+  if (contents.includes('allprojects')) {
+    return contents.replace(
+      /(allprojects\s*\{\s*repositories\s*\{[\s\S]*?mavenCentral\(\))/,
+      `$1\n${PHONEPE_MAVEN}`,
+    );
+  }
 
-  buildGradle.modResults.contents = contents;
-  return buildGradle;
+  return contents;
 }
 
 module.exports = function withPhonePe(config) {
-  return withProjectBuildGradle(config, (config) => {
-    if (config.modResults.language === 'groovy') {
-      config.modResults = addPhonePeMavenRepo(config);
+  return withProjectBuildGradle(config, (modConfig) => {
+    if (modConfig.modResults.language === 'groovy') {
+      modConfig.modResults.contents = addPhonePeMavenRepo(modConfig.modResults.contents);
     }
-    return config;
+    return modConfig;
   });
 };

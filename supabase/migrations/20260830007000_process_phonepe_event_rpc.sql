@@ -5,7 +5,7 @@
 -- subscription_events row keyed by idempotency_key, then applied
 -- subscription updates. If the update failed mid-flight (DB blip,
 -- code bug, network), the sentinel remained and future retries
--- were silently ignored — leaving the subscription in the wrong
+-- were silently ignored ,  leaving the subscription in the wrong
 -- state forever.
 --
 -- This migration adds a processed_at column and a transactional
@@ -23,7 +23,7 @@ ALTER TABLE subscription_events
 -- query can quickly find work that's stuck mid-flight (e.g. the
 -- server crashed between INSERT and UPDATE on a previous attempt
 -- that did NOT use this RPC). For old webhook rows inserted before
--- this migration, processed_at is NULL — they are treated as
+-- this migration, processed_at is NULL ,  they are treated as
 -- unprocessed for diagnostic purposes.
 CREATE INDEX IF NOT EXISTS idx_subscription_events_unprocessed
   ON subscription_events (idempotency_key)

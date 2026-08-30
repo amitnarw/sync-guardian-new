@@ -40,7 +40,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
       // buffers during the cold-start hydration window instead of dropping.
       // A previous `false` default caused any notification captured before
       // the first foreground refresh to be silently lost. The server is the
-      // only authority on access — leaving this undefined until refresh()
+      // only authority on access ,  leaving this undefined until refresh()
       // resolves is strictly safer than assuming denial.
       hasAccess: undefined,
       reason: null,
@@ -97,7 +97,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
     {
       name: 'subscription-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      // Only persist display hints — never the access decision itself.
+      // Only persist display hints ,  never the access decision itself.
       // hasAccess MUST be re-derived from the server on every cold start.
       partialize: (state) => ({
         reason: state.reason,

@@ -1,7 +1,7 @@
 -- ============================================================
 -- Enforce child-device tier limits in claim_pairing_token
 --
--- Product rules (locked) — must mirror
+-- Product rules (locked) ,  must mirror
 -- `supabase/functions/_shared/subscription-entitlement.ts`:
 --   - Free tier (no active trial and no entitled subscription):
 --       0 child devices allowed. No pairs can be created.

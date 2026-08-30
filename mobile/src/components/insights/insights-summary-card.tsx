@@ -24,8 +24,8 @@ function TrendIcon({ direction }: { direction: 'up' | 'down' | 'flat' }) {
 
 export function InsightsSummaryCard({ stats, childLabel }: InsightsSummaryCardProps) {
   const subjectLabel = childLabel ? `${childLabel}'s activity` : 'Across all children';
-  const topAppName = stats.topApp?.name ?? '—';
-  const peakLabel = stats.peakBucket?.label ?? '—';
+  const topAppName = stats.topApp?.name ?? ', ';
+  const peakLabel = stats.peakBucket?.label ?? ', ';
 
   return (
     <View style={s.card}>

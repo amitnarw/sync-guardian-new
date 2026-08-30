@@ -40,7 +40,7 @@ const usingServiceRole = !!serviceKey;
 
 if (!usingServiceRole) {
   console.warn(
-    '\n  SUPABASE_SERVICE_ROLE_KEY not set — running with anon key.\n' +
+    '\n  SUPABASE_SERVICE_ROLE_KEY not set ,  running with anon key.\n' +
       '  RPCs that require admin privileges will fail. To enable all checks:\n' +
       '    $env:SUPABASE_SERVICE_ROLE_KEY = "..." ; npm run verify:deployment\n',
   );
@@ -102,7 +102,7 @@ async function main() {
   await check('process_phonepe_event RPC', async () => {
     // Use a sentinel key that we know is unique to this run so we
     // don't actually apply any state. Pass a non-existent subscription
-    // id so the RPC raises if the row is missing — confirming the
+    // id so the RPC raises if the row is missing ,  confirming the
     // 0-row check works.
     const sentinelKey = `verify-${Date.now()}-${Math.random()}`;
     const { data, error } = await admin.rpc('process_phonepe_event', {
@@ -114,9 +114,9 @@ async function main() {
       p_received_at: new Date().toISOString(),
       p_subscription_updates: { status: 'active' },
     });
-    // We expect either a 0-row raise (P0002) — that means the RPC IS
+    // We expect either a 0-row raise (P0002) ,  that means the RPC IS
     // checking ROW_COUNT and is hardened. Or the function may have
-    // run silently — that's a failure.
+    // run silently ,  that's a failure.
     if (error) {
       if (error.code === 'P0002' || /not found/i.test(error.message ?? '')) {
         ok('RPC raises on missing subscription row (P0002)');
@@ -124,7 +124,7 @@ async function main() {
         bad(`unexpected RPC error: ${error.message} (${error.code})`);
       }
     } else {
-      bad('RPC did NOT raise on missing subscription row — 0-row check is broken!');
+      bad('RPC did NOT raise on missing subscription row ,  0-row check is broken!');
     }
   });
 
@@ -167,7 +167,7 @@ async function main() {
         bad(`unexpected claim error: ${msg}`);
       }
     } else {
-      bad('claim_pairing_token accepted invalid token — broken');
+      bad('claim_pairing_token accepted invalid token ,  broken');
     }
   });
 

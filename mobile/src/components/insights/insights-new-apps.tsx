@@ -19,7 +19,6 @@ export function InsightsNewApps({ newApps }: InsightsNewAppsProps) {
           ? 'No new apps detected'
           : `${newApps.length} new app${newApps.length === 1 ? '' : 's'} surfaced for the first time`
       }
-      icon="sparkles-outline"
     >
       {newApps.length === 0 ? (
         <View style={s.empty}>

@@ -17,7 +17,6 @@ export function InsightsTopApps({ apps, childLabel }: InsightsTopAppsProps) {
     <InsightCard
       title="Top apps"
       subtitle={`Most-notifying apps for ${subject}`}
-      icon="apps-outline"
     >
       {apps.length === 0 ? (
         <View style={s.empty}>
@@ -48,8 +47,8 @@ export function InsightsTopApps({ apps, childLabel }: InsightsTopAppsProps) {
                     style={[
                       s.barFill,
                       {
-                        width: `${Math.max((app.count / Math.max(apps[0].count, 1)) * 100, 4)}%`,
-                        backgroundColor: CATEGORY_COLORS[app.category],
+                        width: `${Math.max((app.count / Math.max(apps[0].count, 1)) * 100, 6)}%`,
+                        backgroundColor: i === 0 ? AuthColors.primary : CATEGORY_COLORS[app.category],
                       },
                     ]}
                   />
@@ -74,7 +73,7 @@ function hexToBg(hex: string): string {
 
 const s = StyleSheet.create({
   list: {
-    gap: 12,
+    gap: 14,
   },
   row: {
     flexDirection: 'row',
@@ -117,14 +116,14 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
   },
   barBg: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: AuthColors.surfaceContainer,
+    height: 9,
+    width: '100%',
+    justifyContent: 'center',
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 9999,
   },
   countWrap: {
     width: 48,

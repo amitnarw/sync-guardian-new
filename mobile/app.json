@@ -65,7 +65,8 @@
             }
           }
         }
-      ]
+      ],
+      "./plugins/with-firebase-manifest"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -56,7 +56,7 @@ serve(async (req) => {
 
     const now = new Date().toISOString()
     // Scope by both id AND user_id. The earlier select already filters by
-    // user_id, but service_role bypasses RLS — so a forged request could
+    // user_id, but service_role bypasses RLS ,  so a forged request could
     // (in theory) name a subscription id owned by someone else. Adding the
     // user_id guard makes the mutation atomic and ownership-checked.
     const { error: updateError } = await adminClient

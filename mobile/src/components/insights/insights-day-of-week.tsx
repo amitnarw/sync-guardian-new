@@ -36,7 +36,6 @@ export function InsightsDayOfWeek({ buckets }: InsightsDayOfWeekProps) {
           ? `${buckets[mostActiveIndex].label} is the busiest · ${total} pings`
           : 'No activity recorded yet'
       }
-      icon="calendar-outline"
     >
       <View style={s.chartContainer}>
         <View style={s.barsRow}>
@@ -99,7 +98,6 @@ const s = StyleSheet.create({
   capsuleTrack: {
     width: 34,
     height: 110,
-    backgroundColor: C.trackBg,
     borderRadius: 9999,
     justifyContent: 'flex-end',
     alignItems: 'center',
@@ -108,7 +106,7 @@ const s = StyleSheet.create({
   fillPill: {
     width: '100%',
     borderRadius: 9999,
-    minHeight: 20,
+    minHeight: 18,
   },
   dayLabel: {
     ...AuthFonts.labelMedium,

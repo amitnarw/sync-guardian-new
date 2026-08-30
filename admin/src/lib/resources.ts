@@ -289,7 +289,7 @@ export const RESOURCES: ResourceConfig[] = [
       // `push_sent_at` is the durable signal that the FCM push for this
       // notification has been attempted. The ingest edge function checks
       // this column to skip duplicate pushes. It is read-only here to
-      // preserve that guarantee — manually editing it would re-arm a push
+      // preserve that guarantee ,  manually editing it would re-arm a push
       // on the next ingest.
       { name: "push_sent_at", label: "Push Sent At", type: "datetime", readOnly: true },
       ...createdFields().map((f) => ({ ...f, hiddenInList: true })),
@@ -477,7 +477,7 @@ export const RESOURCES: ResourceConfig[] = [
     label: "User Trials",
     group: "Monetization",
     description:
-      "7-day trials for parent users only — children never hold trials or see billing. Expand a row to see the children paired to that parent.",
+      "7-day trials for parent users only ,  children never hold trials or see billing. Expand a row to see the children paired to that parent.",
     table: "user_trials",
     readTable: "admin_parent_trials",
     primaryKey: "user_id",

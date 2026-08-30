@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Sync Guardian — "Digital Sanctuary" admin theme
+ * Sync Guardian ,  "Digital Sanctuary" admin theme
  * Ported from mobile/src/constants/auth-theme.ts (AuthColors).
  * Light-only by design (matches app.json userInterfaceStyle).
  */
@@ -69,18 +69,18 @@
 
   --primary: #486730; /* forest green */
   --primary-foreground: #ffffff;
-  --secondary: #eaead1; /* surfaceContainerHigh — tonal buttons */
+  --secondary: #eaead1; /* surfaceContainerHigh ,  tonal buttons */
   --secondary-foreground: #213d0b; /* onPrimaryContainer */
 
   --muted: #f5f5dc; /* surfaceContainerLow */
   --muted-foreground: #43483d; /* onSurfaceVariant */
-  --accent: #efefd7; /* surfaceContainer — hover fills */
+  --accent: #efefd7; /* surfaceContainer ,  hover fills */
   --accent-foreground: #1b1d0e;
 
   --destructive: #ba1a1a;
   --destructive-foreground: #ffffff;
 
-  /* Soft tinted hairlines — warm outlineVariant, not gray */
+  /* Soft tinted hairlines ,  warm outlineVariant, not gray */
   --border: rgb(116 121 108 / 0.28);
   --input: rgb(116 121 108 / 0.38);
   --ring: #486730;

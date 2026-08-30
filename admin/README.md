@@ -1,4 +1,4 @@
-# Sync Guardian — Admin Panel
+# Sync Guardian ,  Admin Panel
 
 Next.js 16 (App Router) admin panel for the Sync Guardian Supabase backend.
 Full CRUD over all platform tables, with server-side decryption of mirrored

@@ -260,7 +260,7 @@ export const flushBuffer = async () => {
           }
           logger.info('Flush batch re-buffered: pair inactive');
         } else if (data && (data as any).reason === 'no_access') {
-          // Parent's trial/subscription has lapsed. Terminal drop — do not
+          // Parent's trial/subscription has lapsed. Terminal drop ,  do not
           // re-buffer. Once renewed, new notifications resume; these ones
           // are intentionally lost (per product decision: stop capture
           // entirely while access is expired).

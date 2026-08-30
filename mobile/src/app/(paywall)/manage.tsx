@@ -119,7 +119,7 @@ export default function ManageSubscriptionScreen() {
   };
 
   const formatDate = (iso: string | null) => {
-    if (!iso) return '—';
+    if (!iso) return ', ';
     return new Date(iso).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
@@ -187,7 +187,7 @@ export default function ManageSubscriptionScreen() {
               <Animated.View entering={FadeInDown.duration(500).delay(220)}>
                 <View style={s.priceRow}>
                   <Text style={s.priceValue}>
-                    {activePlan ? formatPaise(activePlan.amount_paise) : '—'}
+                    {activePlan ? formatPaise(activePlan.amount_paise) : ', '}
                   </Text>
                   <Text style={s.priceUnit}>
                     /{activePlan?.frequency === 'monthly' ? 'mo' : 'yr'}

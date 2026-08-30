@@ -73,7 +73,6 @@ export function InsightsHeatmap({ notifications }: InsightsHeatmapProps) {
           ? 'Weekly notification density across mornings, noons, and evenings'
           : 'Weekly activity distribution'
       }
-      icon="grid-outline"
     >
       <View style={s.cardBody}>
         {/* Days Header */}

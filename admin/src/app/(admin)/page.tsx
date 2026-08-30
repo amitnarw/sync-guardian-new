@@ -242,10 +242,10 @@ export default function DashboardPage() {
                   {recentNotifications.map((n) => (
                     <TableRow key={n.id}>
                       <TableCell className="max-w-[180px] truncate font-medium">
-                        {n.notification_title ?? "—"}
+                        {n.notification_title ?? ", "}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {n.source_app_name ?? n.notification_title?.slice(0, 24) ?? "—"}
+                        {n.source_app_name ?? n.notification_title?.slice(0, 24) ?? ", "}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {formatDate(n.notification_posted_at)}

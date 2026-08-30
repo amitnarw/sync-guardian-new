@@ -1,82 +1,74 @@
-import React, { useRef, useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ScrollView,
   FlatList,
   View,
   StyleSheet,
-  Animated,
-  type NativeSyntheticEvent,
-  type NativeScrollEvent,
   type ScrollViewProps,
   type FlatListProps,
   type LayoutChangeEvent,
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useAnimatedScrollHandler,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 type Direction = 'vertical' | 'horizontal';
 
-export interface EdgeFadeScrollViewProps extends ScrollViewProps {
+export interface EdgeFadeScrollViewProps extends Omit<ScrollViewProps, 'onScroll'> {
   direction?: Direction;
   fadeColor?: string;
   fadeSize?: number;
+  /**
+   * Optional Reanimated SharedValue that is updated natively with the current
+   * scroll offset on every scroll frame. When provided, the scroll handler
+   * runs entirely on the UI thread so downstream animations can be driven
+   * natively for buttery-smooth updates.
+   */
+  scrollOffset?: SharedValue<number>;
+  /**
+   * Optional Reanimated SharedValue that is updated with the scroll view's
+   * measured viewport height. Use this to compute fixed-viewport positions
+   * (e.g. a playhead pinned to the middle of the screen) on the UI thread.
+   */
+  viewportHeight?: SharedValue<number>;
 }
 
-export interface EdgeFadeFlatListProps<T> extends Omit<FlatListProps<T>, 'onScroll' | 'onContentSizeChange'> {
+export interface EdgeFadeFlatListProps<T> extends Omit<FlatListProps<T>, 'onScroll' | 'onContentSizeChange' | 'onRefresh'> {
   direction?: Direction;
   fadeColor?: string;
   fadeSize?: number;
-  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  scrollOffset?: SharedValue<number>;
 }
 
 const DEFAULT_FADE_COLOR = '#fff8f0';
 const DEFAULT_FADE_SIZE = 32;
 const THRESHOLD = 8;
+const FADE_DURATION = 150;
 
-function useEdgeFade(direction: Direction, fadeColor: string, fadeSize: number) {
+const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
+
+function useEdgeFade(
+  direction: Direction,
+  fadeColor: string,
+  fadeSize: number,
+  sharedScrollOffset: SharedValue<number>,
+) {
   const isHorizontal = direction === 'horizontal';
 
-  const [scrollOffset, setScrollOffset] = useState(0);
   const [contentSize, setContentSize] = useState(0);
   const [layoutSize, setLayoutSize] = useState(0);
 
-  const startOpacity = useRef(new Animated.Value(0)).current;
-  const endOpacity = useRef(new Animated.Value(0)).current;
+  const startProgress = useSharedValue(0);
+  const endProgress = useSharedValue(0);
 
   const isScrollable = contentSize > layoutSize + 1;
-  const maxOffset = Math.max(0, contentSize - layoutSize);
-
-  useEffect(() => {
-    if (!isScrollable) {
-      startOpacity.setValue(0);
-      endOpacity.setValue(0);
-      return;
-    }
-
-    const showStart = scrollOffset > THRESHOLD;
-    const showEnd = scrollOffset < maxOffset - THRESHOLD;
-
-    Animated.parallel([
-      Animated.timing(startOpacity, {
-        toValue: showStart ? 1 : 0,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(endOpacity, {
-        toValue: showEnd ? 1 : 0,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [scrollOffset, isScrollable, maxOffset, startOpacity, endOpacity]);
-
-  const handleScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const offset = isHorizontal ? e.nativeEvent.contentOffset.x : e.nativeEvent.contentOffset.y;
-      setScrollOffset(offset);
-    },
-    [isHorizontal],
-  );
 
   const handleContentSizeChange = useCallback(
     (w: number, h: number) => {
@@ -85,10 +77,13 @@ function useEdgeFade(direction: Direction, fadeColor: string, fadeSize: number) 
     [isHorizontal],
   );
 
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    setLayoutSize(isHorizontal ? width : height);
-  }, [isHorizontal]);
+  const handleLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const { width, height } = e.nativeEvent.layout;
+      setLayoutSize(isHorizontal ? width : height);
+    },
+    [isHorizontal],
+  );
 
   const overlayBase: ViewStyle = {
     position: 'absolute',
@@ -101,54 +96,84 @@ function useEdgeFade(direction: Direction, fadeColor: string, fadeSize: number) 
     if (isHorizontal) {
       return (
         <>
-          <Animated.View pointerEvents="none" style={[{ left: 0, top: 0, bottom: 0, width: fadeSize, opacity: startOpacity }, overlayBase]}>
-            <LinearGradient
-              colors={[fadeColor, 'transparent']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-          <Animated.View pointerEvents="none" style={[{ right: 0, top: 0, bottom: 0, width: fadeSize, opacity: endOpacity }, overlayBase]}>
-            <LinearGradient
-              colors={['transparent', fadeColor]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
+          <FadeOverlay
+            style={[{ left: 0, top: 0, bottom: 0, width: fadeSize }, overlayBase]}
+            progress={startProgress}
+            colors={[fadeColor, 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
+          <FadeOverlay
+            style={[{ right: 0, top: 0, bottom: 0, width: fadeSize }, overlayBase]}
+            progress={endProgress}
+            colors={['transparent', fadeColor]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
         </>
       );
     }
 
     return (
       <>
-        <Animated.View pointerEvents="none" style={[{ top: 0, left: 0, right: 0, height: fadeSize, opacity: startOpacity }, overlayBase]}>
-          <LinearGradient
-            colors={[fadeColor, 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
-        <Animated.View pointerEvents="none" style={[{ bottom: 0, left: 0, right: 0, height: fadeSize, opacity: endOpacity }, overlayBase]}>
-          <LinearGradient
-            colors={['transparent', fadeColor]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
+        <FadeOverlay
+          style={[{ top: 0, left: 0, right: 0, height: fadeSize }, overlayBase]}
+          progress={startProgress}
+          colors={[fadeColor, 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        <FadeOverlay
+          style={[{ bottom: 0, left: 0, right: 0, height: fadeSize }, overlayBase]}
+          progress={endProgress}
+          colors={['transparent', fadeColor]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
       </>
     );
   };
 
   return {
-    handleScroll,
     handleContentSizeChange,
     handleLayout,
     renderOverlays,
+    isHorizontal,
+    contentSize,
+    layoutSize,
+    isScrollable,
+    startProgress,
+    endProgress,
   };
+}
+
+function FadeOverlay({
+  style,
+  progress,
+  colors,
+  start,
+  end,
+}: {
+  style: ViewStyle[];
+  progress: SharedValue<number>;
+  colors: [string, string];
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+}) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+  }));
+
+  return (
+    <Animated.View pointerEvents="none" style={[style, animatedStyle]}>
+      <LinearGradient
+        colors={colors}
+        start={start}
+        end={end}
+        style={StyleSheet.absoluteFill}
+      />
+    </Animated.View>
+  );
 }
 
 const EdgeFadeScrollView = React.forwardRef<ScrollView, EdgeFadeScrollViewProps>(
@@ -157,23 +182,51 @@ const EdgeFadeScrollView = React.forwardRef<ScrollView, EdgeFadeScrollViewProps>
       direction = 'vertical',
       fadeColor = DEFAULT_FADE_COLOR,
       fadeSize = DEFAULT_FADE_SIZE,
-      onScroll,
       onContentSizeChange,
       onLayout,
       scrollEventThrottle,
+      scrollOffset: externalScrollOffset,
+      viewportHeight: externalViewportHeight,
       ...scrollProps
     } = props;
 
-    const { handleScroll, handleContentSizeChange, handleLayout, renderOverlays } =
-      useEdgeFade(direction, fadeColor, fadeSize);
+    const internalOffset = useSharedValue(0);
+    const sharedScrollOffset = externalScrollOffset ?? internalOffset;
+    const internalViewportHeight = useSharedValue(0);
+    const sharedViewportHeight = externalViewportHeight ?? internalViewportHeight;
 
-    const composedOnScroll = useCallback(
-      (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-        handleScroll(e);
-        onScroll?.(e);
+    const {
+      handleContentSizeChange,
+      handleLayout,
+      renderOverlays,
+      isHorizontal,
+      contentSize,
+      layoutSize,
+      isScrollable,
+      startProgress,
+      endProgress,
+    } = useEdgeFade(direction, fadeColor, fadeSize, sharedScrollOffset);
+
+    const maxOffset = Math.max(0, contentSize - layoutSize);
+    const scrollable = isScrollable;
+
+    const scrollHandler = useAnimatedScrollHandler({
+      onScroll: (e) => {
+        'worklet';
+        const offset = isHorizontal ? e.contentOffset.x : e.contentOffset.y;
+        sharedScrollOffset.value = offset;
+
+        if (!scrollable) {
+          startProgress.value = 0;
+          endProgress.value = 0;
+        } else {
+          const showStart = offset > THRESHOLD;
+          const showEnd = offset < maxOffset - THRESHOLD;
+          startProgress.value = withTiming(showStart ? 1 : 0, { duration: FADE_DURATION });
+          endProgress.value = withTiming(showEnd ? 1 : 0, { duration: FADE_DURATION });
+        }
       },
-      [onScroll, handleScroll],
-    );
+    });
 
     const composedOnContentSizeChange = useCallback(
       (w: number, h: number) => {
@@ -186,17 +239,19 @@ const EdgeFadeScrollView = React.forwardRef<ScrollView, EdgeFadeScrollViewProps>
     const composedOnLayout = useCallback(
       (e: LayoutChangeEvent) => {
         handleLayout(e);
+        const dim = e.nativeEvent.layout;
+        sharedViewportHeight.value = isHorizontal ? dim.width : dim.height;
         onLayout?.(e);
       },
-      [onLayout, handleLayout],
+      [onLayout, handleLayout, sharedViewportHeight, isHorizontal],
     );
 
     return (
       <View style={wrapperStyle}>
-        <ScrollView
-          ref={ref}
+        <AnimatedScrollView
+          ref={ref as any}
           {...scrollProps}
-          onScroll={composedOnScroll}
+          onScroll={scrollHandler}
           onContentSizeChange={composedOnContentSizeChange}
           onLayout={composedOnLayout}
           scrollEventThrottle={scrollEventThrottle ?? 16}
@@ -214,26 +269,51 @@ function EdgeFadeFlatList<T>(props: EdgeFadeFlatListProps<T>) {
     direction = 'vertical',
     fadeColor = DEFAULT_FADE_COLOR,
     fadeSize = DEFAULT_FADE_SIZE,
-    onScroll,
+    scrollOffset: externalScrollOffset,
     ...flatListProps
   } = props;
 
-  const { handleScroll, handleContentSizeChange, handleLayout, renderOverlays } =
-    useEdgeFade(direction, fadeColor, fadeSize);
+  const internalOffset = useSharedValue(0);
+  const sharedScrollOffset = externalScrollOffset ?? internalOffset;
 
-  const composedOnScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      handleScroll(e);
-      onScroll?.(e);
+  const {
+    handleContentSizeChange,
+    handleLayout,
+    renderOverlays,
+    isHorizontal,
+    contentSize,
+    layoutSize,
+    isScrollable,
+    startProgress,
+    endProgress,
+  } = useEdgeFade(direction, fadeColor, fadeSize, sharedScrollOffset);
+
+  const maxOffset = Math.max(0, contentSize - layoutSize);
+  const scrollable = isScrollable;
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      'worklet';
+      const offset = isHorizontal ? e.contentOffset.x : e.contentOffset.y;
+      sharedScrollOffset.value = offset;
+
+      if (!scrollable) {
+        startProgress.value = 0;
+        endProgress.value = 0;
+      } else {
+        const showStart = offset > THRESHOLD;
+        const showEnd = offset < maxOffset - THRESHOLD;
+        startProgress.value = withTiming(showStart ? 1 : 0, { duration: FADE_DURATION });
+        endProgress.value = withTiming(showEnd ? 1 : 0, { duration: FADE_DURATION });
+      }
     },
-    [onScroll, handleScroll],
-  );
+  });
 
   return (
     <View style={wrapperStyle}>
-      <FlatList<T>
-        {...flatListProps}
-        onScroll={composedOnScroll}
+      <AnimatedFlatList
+        {...(flatListProps as any)}
+        onScroll={scrollHandler as any}
         onContentSizeChange={handleContentSizeChange}
         onLayout={handleLayout}
         scrollEventThrottle={16}

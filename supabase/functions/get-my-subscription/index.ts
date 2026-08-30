@@ -11,7 +11,7 @@ import { logger, mapError } from '../_shared/logger.ts'
 // - Parents/admins: access derives from their own trial + subscription.
 // - Children: trials and billing never belong to them. Their access
 //   derives from the PAIRED PARENT's trial/subscription. The response
-//   for a child carries no subscription row or merchant data at all —
+//   for a child carries no subscription row or merchant data at all , 
 //   only hasAccess/reason plus who manages their access.
 //
 // Access / max-child limits use the single shared entitlement module

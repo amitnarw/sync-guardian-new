@@ -373,7 +373,7 @@ serve(async (req) => {
         // Log push delivery attempts to push_delivery_logs. Use the per-id
         // deliveryResults map so the recorded status reflects what actually
         // happened, not the stale `delivery_mode` from the upsert return.
-        // Skip entirely when the parent has no push token — we don't want
+        // Skip entirely when the parent has no push token ,  we don't want
         // the table to fill up with pending rows for parents who never
         // registered for push.
         if (freshIds.length > 0 && pushToken) {

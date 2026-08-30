@@ -40,7 +40,7 @@ export const authProvider: AuthProvider = {
 
   check: async () => {
     try {
-      // Local session read — no network. Server-side verification still
+      // Local session read ,  no network. Server-side verification still
       // happens on every request (proxy.ts + API route handlers), which is
       // the real gatekeeper; this only drives UI state.
       const { data } = await supabase().auth.getSession();
@@ -62,7 +62,7 @@ export const authProvider: AuthProvider = {
   },
 
   getIdentity: async () => {
-    // Local session read — avoids a /auth/v1/user round-trip on every mount.
+    // Local session read ,  avoids a /auth/v1/user round-trip on every mount.
     const { data } = await supabase().auth.getSession();
     const user = data.session?.user;
     if (!user) return null;

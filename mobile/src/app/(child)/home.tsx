@@ -57,7 +57,7 @@ export default function ChildHome() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
   // Parent-managed access state (server-derived; children never see
-  // billing UI — only a gentle paused indicator on their dashboard).
+  // billing UI ,  only a gentle paused indicator on their dashboard).
   const subHasAccess = useSubscriptionStore((s) => s.hasAccess);
   const subError = useSubscriptionStore((s) => s.error);
   const [accessChecked, setAccessChecked] = useState(false);
@@ -71,7 +71,7 @@ export default function ChildHome() {
   );
 
   // True only once the server has confirmed the paired parent's access has
-  // lapsed — never shown while loading or on transient errors.
+  // lapsed ,  never shown while loading or on transient errors.
   const accessLapsed =
     pairStatus === 'active' &&
     setupCompleted === true &&
@@ -382,7 +382,7 @@ export default function ChildHome() {
           <BlurView intensity={80} tint="light" style={s.loadingCard}>
             <Text style={s.loadingTitle}>Almost there</Text>
             <Text style={s.loadingDesc}>
-              One moment — finishing your setup…
+              One moment ,  finishing your setup…
             </Text>
           </BlurView>
         </View>

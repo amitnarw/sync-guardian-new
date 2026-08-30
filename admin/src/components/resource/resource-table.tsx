@@ -213,7 +213,7 @@ export function ResourceTable({ cfg }: { cfg: ResourceConfig }) {
   const { mutate: deleteOne } = useDelete();
   const [deleting, setDeleting] = useState(false);
 
-  // Skip the initial run so mounting doesn't trigger a redundant refetch —
+  // Skip the initial run so mounting doesn't trigger a redundant refetch , 
   // useTable already performs the first fetch with default state.
   const isFirstFiltersRun = useRef(true);
 

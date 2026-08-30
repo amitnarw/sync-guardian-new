@@ -480,7 +480,7 @@ function UserDetail({
                   <Row k="Next charge" v={formatDate(billing.subscription.next_charge_at)} />
                   {billing.subscription.source === "gift" ? (
                     <>
-                      <Row k="Granted by" v={billing.subscription.gifted_by ? shortId(billing.subscription.gifted_by) : "—"} />
+                      <Row k="Granted by" v={billing.subscription.gifted_by ? shortId(billing.subscription.gifted_by) : ", "} />
                       <Row k="Granted at" v={formatDate(billing.subscription.gifted_at)} />
                       {billing.subscription.notes ? (
                         <Row k="Notes" v={<span className="whitespace-pre-wrap">{billing.subscription.notes}</span>} />
@@ -605,7 +605,7 @@ function GiftTrialDialog({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Acting on <span className="font-mono">{user?.email ?? user?.id ?? "—"}</span>
+            Acting on <span className="font-mono">{user?.email ?? user?.id ?? ", "}</span>
           </p>
         </div>
         <DialogFooter>
@@ -712,7 +712,7 @@ function GiftSubscriptionDialog({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Acting on <span className="font-mono">{user?.email ?? user?.id ?? "—"}</span>
+            Acting on <span className="font-mono">{user?.email ?? user?.id ?? ", "}</span>
           </p>
         </div>
         <DialogFooter>

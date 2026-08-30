@@ -46,7 +46,7 @@ export function InsightsHighlightsCarousel({
         decelerationRate="fast"
         snapToInterval={CARD_WIDTH + 14}
       >
-        {/* Card 1: Soft Mint — Time Recovered */}
+        {/* Card 1: Soft Mint ,  Time Recovered */}
         <View style={[s.card, s.cardMint, { width: CARD_WIDTH }]}>
           <View style={s.topRow}>
             <View style={s.iconCircle}>
@@ -64,7 +64,7 @@ export function InsightsHighlightsCarousel({
           <View pointerEvents="none" style={s.decorativeCircleMint} />
         </View>
 
-        {/* Card 2: Warm Sand — App Variety */}
+        {/* Card 2: Warm Sand ,  App Variety */}
         <View style={[s.card, s.cardSand, { width: CARD_WIDTH }]}>
           <View style={s.topRow}>
             <View style={s.iconCircle}>
@@ -90,7 +90,7 @@ export function InsightsHighlightsCarousel({
           </View>
         </View>
 
-        {/* Card 3: Blush Coral — Distraction Reduction */}
+        {/* Card 3: Blush Coral ,  Distraction Reduction */}
         <View style={[s.card, s.cardBlush, { width: CARD_WIDTH }]}>
           <View style={s.topRow}>
             <View style={s.iconCircle}>

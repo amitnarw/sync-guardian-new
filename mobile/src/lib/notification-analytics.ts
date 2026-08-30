@@ -575,7 +575,7 @@ export function generateNarrative(
     parts.push(`Activity is down ${Math.abs(stats.trend.deltaPercent)}% versus the prior window.`);
   }
   if (stats.sleep.lateNightPercent >= 25) {
-    parts.push(`${stats.sleep.lateNightPercent}% arrived after 10 PM — a gentle check-in moment.`);
+    parts.push(`${stats.sleep.lateNightPercent}% arrived after 10 PM ,  a gentle check-in moment.`);
   }
   return parts.join(' ');
 }

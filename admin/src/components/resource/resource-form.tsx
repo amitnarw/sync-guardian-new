@@ -152,7 +152,7 @@ function FieldControl({
             <SelectValue placeholder="Select…" />
           </SelectTrigger>
           <SelectContent>
-            {!field.required ? <SelectItem value="__null__">— none —</SelectItem> : null}
+            {!field.required ? <SelectItem value="__null__">,  none , </SelectItem> : null}
             {(field.options ?? []).map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}

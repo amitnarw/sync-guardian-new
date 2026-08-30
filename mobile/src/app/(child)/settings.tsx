@@ -314,7 +314,7 @@ export default function ChildSettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Hidden developer diagnostics — tap version 7× */}
+            {/* Hidden developer diagnostics ,  tap version 7× */}
             {showDevPanel ? (
               <DevInfoPanel role="child" />
             ) : (

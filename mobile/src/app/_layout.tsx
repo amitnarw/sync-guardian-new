@@ -157,7 +157,7 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, [setUserId, setIsAuthenticated, setEmail, setProfileImage, setDisplayName, setPairId, setDeviceId, setSessionChecked]);
 
-  // Device-id recovery — runs after hydration so the persisted deviceId is
+  // Device-id recovery ,  runs after hydration so the persisted deviceId is
   // loaded, and after the user role is known so we can recover either a
   // parent deviceId (default) or a child deviceId.
   useEffect(() => {
