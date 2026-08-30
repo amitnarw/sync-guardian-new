@@ -317,7 +317,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AuthColors.background,
-    marginVertical: 30
   },
   header: {
     flexDirection: 'row',

@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -28,6 +27,7 @@ import { listPlans, type Plan } from '@/services/subscription-api';
 import { logger } from '@/services/logger';
 import { useAuthStore } from '@/hooks/use-auth-store';
 import { useCheckoutSheet } from '@/components/paywall/checkout-sheet-controller';
+import { ScreenHeader } from '@/components/ui/screen-header';
 
 type Frequency = 'monthly' | 'yearly';
 
@@ -345,26 +345,16 @@ export default function PlansScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[s.root, s.center]} edges={['bottom']}>
+      <SafeAreaView style={[s.root, s.center]} edges={['top', 'bottom']}>
         <ActivityIndicator color={C.primary} size="large" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={s.root} edges={['bottom']}>
+    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       {canGoBack ? (
-        <View style={s.appBar}>
-          <TouchableOpacity
-            onPress={handleBack}
-            hitSlop={10}
-            style={s.appBarButton}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-          >
-            <Ionicons name="chevron-back" size={22} color={C.onSurface} />
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader onBack={handleBack} />
       ) : null}
       <View style={s.scrollContent}>
         <Animated.View entering={FadeInUp.duration(550)} style={s.hero}>
@@ -448,25 +438,10 @@ function formatPaise(paise: number): string {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.surface, marginTop: 50 },
+  root: { flex: 1, backgroundColor: C.surface },
   center: { alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingBottom: 48 },
 
-  appBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 4 : 0,
-    paddingBottom: 0,
-  },
-  appBarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   accessNotice: {
     flexDirection: 'row',
     alignItems: 'center',

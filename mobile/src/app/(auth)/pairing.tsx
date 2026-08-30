@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   header: {
-    paddingTop: 40,
+    paddingTop: 0,
     paddingHorizontal: 24,
     alignItems: 'center',
     marginBottom: 40,
@@ -680,7 +680,7 @@ const styles = StyleSheet.create({
   headerRow: {
     width: '100%',
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 24 : 44,
+    paddingTop: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',

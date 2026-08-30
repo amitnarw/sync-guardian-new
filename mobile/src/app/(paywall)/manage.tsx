@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -34,6 +33,7 @@ import {
   listPlans,
   type Plan,
 } from '@/services/subscription-api';
+import { ScreenHeader } from '@/components/ui/screen-header';
 
 type ManageOrigin = 'settings' | 'plans' | undefined;
 
@@ -321,24 +321,20 @@ export default function ManageSubscriptionScreen() {
 
 function AppBar({ origin, onClose }: { origin: ManageOrigin; onClose: () => void }) {
   const showBack = origin === 'settings';
+  const donePill = (
+    <TouchableOpacity onPress={onClose} hitSlop={6} style={s.appBarPill}>
+      <Text style={s.appBarPillText}>Done</Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={s.appBar}>
-      {showBack ? (
-        <TouchableOpacity onPress={onClose} hitSlop={10} style={s.appBarButton}>
-          <Ionicons name="chevron-back" size={22} color={C.onSurface} />
-        </TouchableOpacity>
-      ) : (
-        <View style={s.appBarButtonSpacer} />
-      )}
-      <Text style={s.appBarTitle}>Nurturing Atelier</Text>
-      {showBack ? (
-        <View style={s.appBarButtonSpacer} />
-      ) : (
-        <TouchableOpacity onPress={onClose} hitSlop={6} style={s.appBarPill}>
-          <Text style={s.appBarPillText}>Done</Text>
-        </TouchableOpacity>
-      )}
-    </View>
+    <ScreenHeader
+      variant="title-centered"
+      title="Nurturing Atelier"
+      onBack={showBack ? onClose : undefined}
+      rightSlot={showBack ? undefined : donePill}
+      paddingTop={8}
+    />
   );
 }
 
@@ -346,27 +342,6 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.surface },
   center: { alignItems: 'center', justifyContent: 'center' },
 
-  appBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 14 : 6,
-    paddingBottom: 12,
-  },
-  appBarTitle: {
-    ...AuthFonts.titleMedium,
-    color: C.onSurface,
-    fontWeight: '700',
-  },
-  appBarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  appBarButtonSpacer: { width: 40, height: 40 },
   appBarPill: {
     minWidth: 40,
     height: 40,

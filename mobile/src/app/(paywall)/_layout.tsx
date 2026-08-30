@@ -9,7 +9,7 @@ export default function PaywallLayout() {
   const colors = useAuthTheme();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={[]}>
       <StatusBar style="dark" backgroundColor={colors.background} />
       <Stack
         screenOptions={{

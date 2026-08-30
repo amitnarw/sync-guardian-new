@@ -77,35 +77,71 @@ function countTodayNotifications(notifs: { notification_posted_at: string }[]): 
 }
 
 type HealthStatus = 'healthy' | 'connected' | 'issue';
+type SyncSource = 'device' | 'notification';
+
+const SYNC_RECENT_MS = 30 * 60 * 1000;
+
+/**
+ * Combine the child's device heartbeat (`last_seen_at`) with the latest
+ * notification time (`notification_posted_at`) to compute the effective
+ * last sync. The device heartbeat is updated by the child's foreground
+ * `sync-device` calls and goes stale quickly when the app is killed, but
+ * the native Android notification listener can still upload notifications
+ * to Supabase in the background. Using only `last_seen_at` then makes
+ * the parent's home card show "Check connection" while monitoring is in
+ * fact still working. The notification timestamp is used as a fallback
+ * signal when the heartbeat is stale.
+ */
+function getEffectiveLastSync(
+  childDevice: { last_seen_at: string | null } | null,
+  latestNotification: { notification_posted_at: string } | null,
+): { lastSyncAt: number | null; source: SyncSource | null } {
+  const deviceTs = childDevice?.last_seen_at
+    ? new Date(childDevice.last_seen_at).getTime()
+    : null;
+  const notifTs = latestNotification?.notification_posted_at
+    ? new Date(latestNotification.notification_posted_at).getTime()
+    : null;
+
+  const validDevice = deviceTs && !isNaN(deviceTs) ? deviceTs : null;
+  const validNotif = notifTs && !isNaN(notifTs) ? notifTs : null;
+
+  if (validDevice && validNotif) {
+    return validDevice >= validNotif
+      ? { lastSyncAt: validDevice, source: 'device' }
+      : { lastSyncAt: validNotif, source: 'notification' };
+  }
+  if (validDevice) return { lastSyncAt: validDevice, source: 'device' };
+  if (validNotif) return { lastSyncAt: validNotif, source: 'notification' };
+  return { lastSyncAt: null, source: null };
+}
 
 function computeHealthStatus({
-  childDevice,
-  isOnline,
+  lastSyncAt,
   todayCount,
 }: {
-  childDevice: { last_seen_at: string | null; push_token: string | null } | null;
-  isOnline: boolean;
+  lastSyncAt: number | null;
   todayCount: number;
 }): HealthStatus {
-  if (!childDevice) return 'issue';
-  const lastSeen = childDevice.last_seen_at ? Date.now() - new Date(childDevice.last_seen_at).getTime() : Infinity;
-  if (isOnline && todayCount > 0) return 'healthy';
-  if (lastSeen < 30 * 60 * 1000) return 'connected';
+  if (!lastSyncAt) return 'issue';
+  const isRecent = Date.now() - lastSyncAt < SYNC_RECENT_MS;
+  if (isRecent) return todayCount > 0 ? 'healthy' : 'connected';
   return 'issue';
 }
 
 function MonitoringHealthCard({
   childDevice,
-  isOnline,
   todayCount,
   latestNotification,
 }: {
   childDevice: { last_seen_at: string | null; push_token: string | null } | null;
-  isOnline: boolean;
   todayCount: number;
   latestNotification: { source_app_name: string | null; notification_posted_at: string } | null;
 }) {
-  const status = computeHealthStatus({ childDevice, isOnline, todayCount });
+  const { lastSyncAt, source } = getEffectiveLastSync(childDevice, latestNotification);
+  const isEffectivelyRecent = lastSyncAt !== null && Date.now() - lastSyncAt < SYNC_RECENT_MS;
+  const showSyncSource = source === 'notification' && isEffectivelyRecent;
+  const status = computeHealthStatus({ lastSyncAt, todayCount });
 
   const statusConfig = {
     healthy: { label: 'All systems Ok', dotColor: '#2f4a37', pillBg: '#c5eccc', pillText: '#1b3223' },
@@ -113,8 +149,8 @@ function MonitoringHealthCard({
     issue: { label: 'Check connection', dotColor: '#a83836', pillBg: '#ffdad3', pillText: '#7a2020' },
   }[status];
 
-  const lastSyncText = childDevice?.last_seen_at
-    ? formatTimeAgo(new Date(childDevice.last_seen_at).getTime())
+  const lastSyncText = lastSyncAt
+    ? formatTimeAgo(lastSyncAt)
     : 'Never';
 
   const latestApp = latestNotification?.source_app_name || null;
@@ -181,7 +217,7 @@ function MonitoringHealthCard({
           <Text style={[s.healthStatusPill, { color: statusConfig.pillText, backgroundColor: statusConfig.pillBg }]}>
             {statusConfig.label}
           </Text>
-          <Text style={s.healthStatusSyncText}>Last sync · {lastSyncText}</Text>
+          <Text style={s.healthStatusSyncText}>Last sync · {lastSyncText}{showSyncSource ? ' · via notification' : ''}</Text>
         </View>
 
         {/* Right: today's count stat ,  full activity hero treatment */}
@@ -219,16 +255,16 @@ function MonitoringHealthCard({
       <Animated.View style={[s.healthPillStack, pillAnimStyle]}>
         {/* Real-time sync status */}
         <View style={s.healthPillRow}>
-          <View style={[s.healthPillIcon, { backgroundColor: isOnline ? C.primaryContainer : C.surfaceContainerHighest }]}>
-            <Ionicons name="sync-outline" size={15} color={isOnline ? C.primary : C.onSurfaceVariant} />
+          <View style={[s.healthPillIcon, { backgroundColor: isEffectivelyRecent ? C.primaryContainer : C.surfaceContainerHighest }]}>
+            <Ionicons name="sync-outline" size={15} color={isEffectivelyRecent ? C.primary : C.onSurfaceVariant} />
           </View>
           <View style={s.healthPillText}>
             <Text style={s.healthPillLabel}>Real-time sync</Text>
-            <Text style={[s.healthPillValue, { color: isOnline ? C.primary : C.onSurfaceVariant }]}>
-              {isOnline ? 'Active & connected' : 'Listening in background'}
+            <Text style={[s.healthPillValue, { color: isEffectivelyRecent ? C.primary : C.onSurfaceVariant }]}>
+              {isEffectivelyRecent ? 'Active & connected' : 'Listening in background'}
             </Text>
           </View>
-          <View style={[s.healthPillDot, { backgroundColor: isOnline ? '#31A24C' : C.outline }]} />
+          <View style={[s.healthPillDot, { backgroundColor: isEffectivelyRecent ? '#31A24C' : C.outline }]} />
         </View>
 
         {/* Latest received */}
@@ -319,7 +355,7 @@ function getGreeting(): string {
 }
 
 export default function HomeScreen() {
-  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isOnline, isLoading, isRefreshing, refresh, allChildren, error: pairError } = usePairData();
+  const { childDevice, childName: childNameFromPair, latestNotification, notifications, isLoading, isRefreshing, refresh, allChildren, error: pairError } = usePairData();
   const { showModal } = useAppModal();
   const { loading: setupLoading, hasPair, setupComplete, incompletePairId } = useSetupStatus();
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
@@ -349,15 +385,36 @@ export default function HomeScreen() {
     [effectiveNotifications],
   );
 
+  const heroEffectiveLatestNotification = isAllChildren && aggregateNotifications.length > 0
+    ? aggregateNotifications[0]
+    : latestNotification;
+  const { lastSyncAt: heroLastSyncAt } = getEffectiveLastSync(
+    isAllChildren
+      ? allChildren.reduce<{ last_seen_at: string | null } | null>((acc, c) => {
+          const candidates = [c.lastSeenAt, acc?.last_seen_at ?? null].filter(
+            (v): v is string => !!v,
+          );
+          const latest = candidates.length === 0
+            ? null
+            : candidates.reduce((a, b) =>
+                new Date(a).getTime() > new Date(b).getTime() ? a : b,
+              );
+          return { last_seen_at: latest };
+        }, null)
+      : childDevice,
+    heroEffectiveLatestNotification,
+  );
+  const isEffectivelyOnline = heroLastSyncAt !== null && Date.now() - heroLastSyncAt < SYNC_RECENT_MS;
+
   const heroDescription = (() => {
     if (allChildren.length === 0) return childNameFromPair ? `Connecting to ${childName}...` : '';
     if (isAllChildren) {
       if (allChildren.length === 1) {
-        return `You're keeping an eye on ${childName}. They're ${isOnline ? 'online' : 'away'} right now.`;
+        return `You're keeping an eye on ${childName}. They're ${isEffectivelyOnline ? 'online' : 'away'} right now.`;
       }
       return `You're keeping an eye on all ${allChildren.length} connected children.`;
     }
-    return `You're keeping an eye on ${childName}. They're ${isOnline ? 'online' : 'away'} right now.`;
+    return `You're keeping an eye on ${childName}. They're ${isEffectivelyOnline ? 'online' : 'away'} right now.`;
   })();
 
   const isFocused = useIsFocused();
@@ -824,7 +881,6 @@ export default function HomeScreen() {
             return (
               <MonitoringHealthCard
                 childDevice={aggregateChildDevice}
-                isOnline={isAllChildren ? allChildren.some((c) => c.isOnline) : isOnline}
                 todayCount={todayCount}
                 latestNotification={
                   isAllChildren && aggregateNotifications.length > 0
