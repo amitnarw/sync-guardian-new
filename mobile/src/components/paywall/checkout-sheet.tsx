@@ -41,7 +41,7 @@ import {
   useCheckoutSheetStore,
 } from '@/components/paywall/checkout-sheet-controller';
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
+const SCREEN_HEIGHT = Dimensions.get('screen').height;
 const SNAP_Y = SCREEN_HEIGHT * 0.12;
 const SHEET_HEIGHT = SCREEN_HEIGHT - SNAP_Y;
 const DISMISS_THRESHOLD = SCREEN_HEIGHT * 0.28;
@@ -207,7 +207,7 @@ function CheckoutSheetBody() {
         stack: e instanceof Error ? e.stack : undefined,
       });
       const clipped = message.length > 180 ? `${message.slice(0, 180)}…` : message;
-      setError(`We couldn't start your subscription. (${clipped})`);
+      setError(`We couldn't start your subscription. Please try again or contact support if this continues. (${clipped})`);
       setErrorBoxShown(true);
       refreshSubscription().catch(() => undefined);
     } finally {

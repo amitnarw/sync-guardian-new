@@ -12,7 +12,7 @@ import { PermissionStatusRow } from '@/components/permission-status-row';
 import { NotifListenerRequestModal } from '@/components/notif-listener-request-modal';
 import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
 import { NotificationDiagnosticPanel } from '@/components/notification-diagnostic-panel';
-import { DevInfoPanel } from '@/components/dev-info-panel';
+import { DevOptionsModal } from '@/components/dev-options-modal';
 import * as NotificationAccess from 'notification-access';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
@@ -55,6 +55,13 @@ export default function ChildSettingsScreen() {
   const [pairStatus, setPairStatus] = useState<'active' | 'revoked' | 'pending' | null>(null);
   const [devTapCount, setDevTapCount] = useState(0);
   const [showDevPanel, setShowDevPanel] = useState(false);
+  const openDevPanel = useCallback(() => {
+    setDevTapCount(0);
+    setShowDevPanel(true);
+  }, []);
+  const closeDevPanel = useCallback(() => {
+    setShowDevPanel(false);
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -315,28 +322,23 @@ export default function ChildSettingsScreen() {
             </View>
 
             {/* Hidden developer diagnostics ,  tap version 7× */}
-            {showDevPanel ? (
-              <DevInfoPanel role="child" />
-            ) : (
-              <TouchableOpacity
-                style={s.versionTapArea}
-                onPress={() => {
-                  const next = devTapCount + 1;
-                  if (next >= 7) {
-                    setDevTapCount(0);
-                    setShowDevPanel(true);
-                  } else {
-                    setDevTapCount(next);
-                  }
-                }}
-                activeOpacity={0.6}
-              >
-                <Text style={s.versionText}>Sync Guardian v1.0.0</Text>
-                {devTapCount > 0 && devTapCount < 7 ? (
-                  <Text style={s.versionHint}>{7 - devTapCount} more tap(s)</Text>
-                ) : null}
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={s.versionTapArea}
+              onPress={() => {
+                const next = devTapCount + 1;
+                if (next >= 7) {
+                  openDevPanel();
+                } else {
+                  setDevTapCount(next);
+                }
+              }}
+              activeOpacity={0.6}
+            >
+              <Text style={s.versionText}>Sync Guardian v1.0.0</Text>
+              {devTapCount > 0 && devTapCount < 7 ? (
+                <Text style={s.versionHint}>{7 - devTapCount} more tap(s)</Text>
+              ) : null}
+            </TouchableOpacity>
 
             {/* Bottom spacing */}
             <View style={s.bottomSpacer} />
@@ -349,6 +351,11 @@ export default function ChildSettingsScreen() {
             onClose={closeNotifListenerModal}
           />
           {recentlyGrantedNotifListener && <NotifListenerSuccessBanner />}
+        <DevOptionsModal
+          visible={showDevPanel}
+          onClose={closeDevPanel}
+          role="child"
+        />
       </Animated.View>
     </ThemedView>
   );

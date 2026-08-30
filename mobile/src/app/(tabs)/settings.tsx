@@ -15,7 +15,7 @@ import { NotifListenerRequestModal } from '@/components/notif-listener-request-m
 import { NotifListenerSuccessBanner } from '@/components/notif-listener-success-banner';
 import * as NotificationAccess from 'notification-access';
 import { ChildAppsModal } from '@/components/ui/child-apps-modal';
-import { DevInfoPanel } from '@/components/dev-info-panel';
+import { DevOptionsModal } from '@/components/dev-options-modal';
 import { supabase } from '@/lib/supabase';
 import { isValidUUID } from '@/lib/uuid';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
@@ -153,6 +153,13 @@ export default function SettingsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [devTapCount, setDevTapCount] = useState(0);
   const [showDevPanel, setShowDevPanel] = useState(false);
+  const openDevPanel = useCallback(() => {
+    setDevTapCount(0);
+    setShowDevPanel(true);
+  }, []);
+  const closeDevPanel = useCallback(() => {
+    setShowDevPanel(false);
+  }, []);
   const { deviceId } = useAuthStore();
   const { showModal, updateModal } = useAppModal();
 
@@ -524,28 +531,23 @@ export default function SettingsScreen() {
             </View>
 
             {/* Hidden developer diagnostics ,  tap version 7× */}
-            {showDevPanel ? (
-              <DevInfoPanel role="parent" />
-            ) : (
-              <TouchableOpacity
-                style={s.versionTapArea}
-                onPress={() => {
-                  const next = devTapCount + 1;
-                  if (next >= 7) {
-                    setDevTapCount(0);
-                    setShowDevPanel(true);
-                  } else {
-                    setDevTapCount(next);
-                  }
-                }}
-                activeOpacity={0.6}
-              >
-                <Text style={s.versionText}>Sync Guardian v1.0.0</Text>
-                {devTapCount > 0 && devTapCount < 7 ? (
-                  <Text style={s.versionHint}>{7 - devTapCount} more tap(s)</Text>
-                ) : null}
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={s.versionTapArea}
+              onPress={() => {
+                const next = devTapCount + 1;
+                if (next >= 7) {
+                  openDevPanel();
+                } else {
+                  setDevTapCount(next);
+                }
+              }}
+              activeOpacity={0.6}
+            >
+              <Text style={s.versionText}>Sync Guardian v1.0.0</Text>
+              {devTapCount > 0 && devTapCount < 7 ? (
+                <Text style={s.versionHint}>{7 - devTapCount} more tap(s)</Text>
+              ) : null}
+            </TouchableOpacity>
 
             {/* Bottom spacing */}
             <View style={s.bottomSpacer} />
@@ -564,6 +566,11 @@ export default function SettingsScreen() {
           childDeviceId={appsModalChild?.childDeviceId ?? ''}
           childName={appsModalChild?.name}
           onClose={() => setAppsModalChild(null)}
+        />
+        <DevOptionsModal
+          visible={showDevPanel}
+          onClose={closeDevPanel}
+          role="parent"
         />
       </Animated.View>
     </ThemedView>

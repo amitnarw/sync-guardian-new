@@ -35,6 +35,18 @@ serve(async (req) => {
     const user = await verifyAuth(req.headers.get('Authorization'))
     const adminClient = getAdminClient()
 
+    const missingSecrets: string[] = []
+    if (!Deno.env.get('PHONEPE_ENV')) missingSecrets.push('PHONEPE_ENV')
+    if (!Deno.env.get('PHONEPE_CLIENT_ID')) missingSecrets.push('PHONEPE_CLIENT_ID')
+    if (!Deno.env.get('PHONEPE_CLIENT_VERSION')) missingSecrets.push('PHONEPE_CLIENT_VERSION')
+    if (!Deno.env.get('PHONEPE_CLIENT_SECRET')) missingSecrets.push('PHONEPE_CLIENT_SECRET')
+    if (!Deno.env.get('PHONEPE_MERCHANT_ID')) missingSecrets.push('PHONEPE_MERCHANT_ID')
+    if (missingSecrets.length > 0) {
+      logger.warn('create-autopay-subscription', 'missing required PhonePe secrets', {
+        missing: missingSecrets,
+      })
+    }
+
     const body = await req.json()
     const { plan_id } = requireBody(body, ['plan_id'])
     if (!isValidString(plan_id, 64)) {
